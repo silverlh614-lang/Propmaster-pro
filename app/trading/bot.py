@@ -342,22 +342,30 @@ class TradingManager:
 
     def prop_tick(self) -> None:
         """One rule-engine mark (called each closed bar by any SymbolBot):
-        equity/target judgement first, then the conduct scan over the
-        recent journal window."""
+        equity/target judgement, conduct scan, then the guardian buffer —
+        at the hard tier open positions are flattened BEFORE the real
+        floor can terminate the account (the account itself survives)."""
         self.prop.on_mark(*self.prop_mark_inputs())
         self.prop.check_conduct(self.journal.tail(80))
+        g = self.prop.guard_level()
+        if g and g["level"] == "hard":
+            self._flatten_all(f"prop guard buffer ({g['ratio']:.0%} left)")
 
-    def _on_prop_breach(self, reason: str) -> None:
-        """Rule breach = account terminated: trip the kill switch (blocks all
-        future entries) and flatten every open paper position now."""
-        self.risk.trip(f"prop breach: {reason}")
+    def _flatten_all(self, reason: str) -> None:
+        """Close every open paper position at the last price."""
         for b in self.bots.values():
             pm = b.pm
             if pm and pm.pos and pm.pos.state.value == "OPEN":
                 px = b.collector.last_price()
                 if px is not None:
-                    pm._close(px, f"prop breach: {reason}", time.time())
+                    pm._close(px, reason, time.time())
                     b._persist_pos()
+
+    def _on_prop_breach(self, reason: str) -> None:
+        """Rule breach = account terminated: trip the kill switch (blocks all
+        future entries) and flatten every open paper position now."""
+        self.risk.trip(f"prop breach: {reason}")
+        self._flatten_all(f"prop breach: {reason}")
 
     def candles(self, symbol: str, tf: str = "entry", limit: int = 120) -> dict:
         bot = self.bots.get(symbol.upper())

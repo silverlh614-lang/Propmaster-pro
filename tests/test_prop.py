@@ -376,6 +376,37 @@ def test_prop_budget_sizing_and_gates():
     print("ok  prop budget sizing (shrinks with losses) + daily discipline gates")
 
 
+def test_guardian_buffer_tiers():
+    """Guardian: soft tier warns, hard tier locks entries BEFORE the real
+    floor — the account itself stays alive (env-tunable thresholds)."""
+    from app.trading.config import TradingConfig
+    from app.trading.risk import RiskManager
+    from app.trading.store import BotState, Journal
+
+    led = _Ledger(10_000.0)
+    d = _desk(led)
+    d.buy_challenge("1step_turbo", 10_000)       # DD 3% -> budget 300, floor 9700
+    risk = RiskManager(TradingConfig(), Journal(), BotState())
+    risk.attach_prop(d)
+
+    assert d.guard_level()["level"] == "ok"      # fresh: 100% of budget left
+    led.set(9_790.0)                             # dd room 90/300 = 30% <= 35%
+    g = d.guard_level()
+    assert g["level"] == "soft" and abs(g["ratio"] - 0.30) < 1e-6
+    assert d.entries_allowed()[0]                # soft warns, never blocks
+    led.set(9_740.0)                             # dd room 40/300 ≈ 13% <= 15%
+    g = d.guard_level()
+    assert g["level"] == "hard"
+    ok, why = d.entries_allowed()
+    assert not ok and "guard buffer" in why
+    ok, why = risk.allow_entry(0, 0.0, 5.0, equity_usd=9_740)
+    assert not ok and "guard buffer" in why      # single permission point
+    assert d.active().status == "evaluation"     # account survives the lock
+    led.set(9_900.0)                             # budget recovers -> unlocked
+    assert d.guard_level()["level"] == "ok" and d.entries_allowed()[0]
+    print("ok  guardian buffer (soft warn / hard entry-lock, account alive)")
+
+
 def test_desk_persistence_roundtrip():
     led = _Ledger()
     store, pay = PropStore(), PayoutStore()
@@ -404,5 +435,6 @@ if __name__ == "__main__":
     test_conduct_monitor()
     test_funded_scaling()
     test_prop_budget_sizing_and_gates()
+    test_guardian_buffer_tiers()
     test_desk_persistence_roundtrip()
     print("\nall prop tests passed ✅")

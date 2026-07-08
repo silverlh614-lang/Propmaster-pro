@@ -296,6 +296,7 @@
           <div class="wrbar"><div class="cap"><span>일일손실 소진 <span class="muted" id="propDailyFloor"></span></span><span id="propDailyPct">–</span></div>
             <div class="tr"><i id="propDailyBar" style="background:var(--yel)"></i></div></div>
           <div class="subline" id="propBreach" style="display:none;color:var(--dn);margin-top:8px"></div>
+          <div class="subline" id="propGuard" style="display:none;margin-top:6px"></div>
           <div class="subline" id="propConduct" style="display:none;color:var(--yel);margin-top:6px"></div>
           <div id="propPayoutBox" style="display:none;margin-top:10px">
             <div class="row"><span class="l">인출 가능 수익</span><span class="v" id="propProfit">–</span></div>
@@ -869,7 +870,7 @@ function flashResult(r){const f=$("flash");const win=r.result==="WIN"||Number(r.
   f.classList.remove("show");void f.offsetWidth;f.classList.add("show");}
 
 // ---- 프롭 챌린지 패널 ----
-let PROP_PLANS=null,_propPrev=null,_propVioN=null,_propScaleLv=null;
+let PROP_PLANS=null,_propPrev=null,_propVioN=null,_propScaleLv=null,_propGuardLv=null;
 async function loadPropPlans(){
   try{PROP_PLANS=await api("/api/prop/plans");}catch(e){return;}
   const ps=$("propPlanSel");ps.innerHTML="";
@@ -931,6 +932,16 @@ function renderProp(pr){
   const failed=a.status==="failed";
   $("propBreach").style.display=failed?"block":"none";
   if(failed)$("propBreach").textContent="⛔ "+(a.breach_reason||"룰 위반")+" — 재도전은 새 챌린지 구매";
+  const g=pr.guard;
+  if(g&&g.level!=="ok"){$("propGuard").style.display="block";
+    $("propGuard").style.color=g.level==="hard"?"var(--dn)":"var(--yel)";
+    $("propGuard").textContent=(g.level==="hard"
+      ?"🛑 가디언 하드락 — 잔여 예산 "+(g.ratio*100).toFixed(0)+"% ≤ "+(g.hard*100).toFixed(0)+"%: 진입 잠금·포지션 청산"
+      :"🛡 가디언 경고 — 잔여 예산 "+(g.ratio*100).toFixed(0)+"% ≤ "+(g.soft*100).toFixed(0)+"%: 사이즈 자동 축소 중");
+    if(_propGuardLv&&_propGuardLv!==g.level&&g.level==="hard")
+      notify("warn","가디언 하드락","플로어 도달 전 선제 청산 — 내일 예산 리셋까지 대기");
+    _propGuardLv=g.level;
+  }else{$("propGuard").style.display="none";_propGuardLv=g?g.level:null;}
   const vio=a.violations||[];
   if(vio.length){$("propConduct").style.display="block";
     $("propConduct").textContent="⚠ 행위 경고 "+vio.length+"건 · 최근: "+vio[vio.length-1].detail;

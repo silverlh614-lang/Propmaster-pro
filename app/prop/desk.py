@@ -165,6 +165,28 @@ class PropDesk:
         return {"daily_room": max(0.0, bal - acct.daily_floor()),
                 "dd_room": max(0.0, bal - acct.dd_floor())}
 
+    def guard_level(self) -> dict | None:
+        """Equity-guardian tiers (MT5 drawdown-guard pattern): ratio =
+        remaining room / full budget, min over the daily and DD rules.
+        <= soft -> warn only; <= hard -> entry lock + flatten, BEFORE the
+        real floor can terminate the account. Env: PROP_GUARD_SOFT /
+        PROP_GUARD_HARD (fractions; 0 disables a tier)."""
+        b = self.risk_budget()
+        acct = self.active()
+        if b is None or acct is None:
+            return None
+        daily_budget = acct.day_anchor * acct.plan.daily_loss_pct / 100.0
+        dd_budget = acct.size * acct.plan.max_dd_pct / 100.0
+        ratio = min(
+            (b["daily_room"] / daily_budget) if daily_budget > 0 else 1.0,
+            (b["dd_room"] / dd_budget) if dd_budget > 0 else 1.0)
+        soft = float(os.getenv("PROP_GUARD_SOFT", "0.35"))
+        hard = float(os.getenv("PROP_GUARD_HARD", "0.15"))
+        level = ("hard" if (hard > 0 and ratio <= hard)
+                 else "soft" if (soft > 0 and ratio <= soft) else "ok")
+        return {"level": level, "ratio": round(ratio, 4),
+                "soft": soft, "hard": hard}
+
     def entries_allowed(self) -> tuple[bool, str]:
         """Consulted by RiskManager.allow_entry (single permission
         point). No active account = engine runs standalone (allowed)."""
@@ -173,6 +195,10 @@ class PropDesk:
             return True, ""
         if acct.status == FAILED:
             return False, f"account failed ({acct.breach_reason})"
+        g = self.guard_level()
+        if g and g["level"] == "hard":
+            return False, (f"guard buffer: remaining budget {g['ratio']:.0%} "
+                           f"<= {g['hard']:.0%} — entries locked")
         return True, ""
 
     # ------------------------------------------------------------ payouts
@@ -239,6 +265,7 @@ class PropDesk:
         acct = self.active()
         return {
             "active": (acct.snapshot(equity_mark, balance) if acct else None),
+            "guard": self.guard_level(),
             "accounts": [a.snapshot() for a in self.accounts.values()],
             "payouts": self.payouts.load()[-20:][::-1],
         }
