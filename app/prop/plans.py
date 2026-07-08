@@ -13,9 +13,10 @@ Rule mechanics (official docs):
   - Daily loss re-anchors every day at 00:30 UTC from the balance then.
   - Same rules in evaluation and funded; breach = account forfeited.
 Fees are the published one-time prices where confirmed; missing tiers fall
-back to fee_rate * size. Base profit split is 80% (90% is a paid upgrade —
-model later). PROP_FEE_MULT scales all fees; PROP_MIN_PAYOUT overrides the
-payout minimum (sources conflict: "no minimum" vs ~$100 after split).
+back to fee_rate * size. Base profit split is 80%; the 90% split is a
+checkout add-on (+20% fee) and the evaluation fee refunds with the first
+funded payout. PROP_FEE_MULT scales all fees; PROP_MIN_PAYOUT overrides
+the payout minimum (sources conflict: "no minimum" vs ~$100 after split).
 """
 from __future__ import annotations
 
@@ -72,16 +73,25 @@ PLANS: dict[str, PropPlan] = {
 
 ACCOUNT_SIZES = (5_000, 10_000, 25_000, 50_000, 100_000, 200_000)
 
+# 90% profit-split upgrade: checkout add-on, ~+20% on the evaluation fee,
+# permanent for the account's life (Breakout-style). Base split stays 80%.
+SPLIT_UPGRADE_PCT = 90.0
+SPLIT_UPGRADE_FEE_MULT = 1.2
+
 
 def min_payout_usd() -> float:
     return float(os.getenv("PROP_MIN_PAYOUT", "50"))
 
 
-def evaluation_fee(plan: PropPlan, size: float) -> float:
+def evaluation_fee(plan: PropPlan, size: float,
+                   split_upgrade: bool = False) -> float:
     """One-time evaluation fee: published price when known, else the plan's
-    fallback rate. PROP_FEE_MULT scales everything (deployment knob)."""
+    fallback rate. The 90%-split add-on costs +20%. PROP_FEE_MULT scales
+    everything (deployment knob)."""
     mult = float(os.getenv("PROP_FEE_MULT", "1.0"))
     base = plan.fee_table.get(int(size), size * plan.fee_rate)
+    if split_upgrade:
+        base *= SPLIT_UPGRADE_FEE_MULT
     return round(base * mult, 2)
 
 
@@ -90,6 +100,8 @@ def catalog() -> dict:
     return {
         "sizes": list(ACCOUNT_SIZES),
         "min_payout_usd": min_payout_usd(),
+        "split_upgrade": {"split_pct": SPLIT_UPGRADE_PCT,
+                          "fee_mult": SPLIT_UPGRADE_FEE_MULT},
         "plans": [
             {**p.as_dict(),
              "fees": {str(s): evaluation_fee(p, s)

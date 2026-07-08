@@ -23,8 +23,8 @@ import time
 
 from .account import (BREACH_DAILY, BREACH_MAX_DD, EVALUATION, FAILED, FUNDED,
                       TARGET_REACHED, ChallengeAccount)
-from .plans import (ACCOUNT_SIZES, PLANS, catalog, evaluation_fee,
-                    min_payout_usd)
+from .plans import (ACCOUNT_SIZES, PLANS, SPLIT_UPGRADE_PCT, catalog,
+                    evaluation_fee, min_payout_usd)
 from .store import PayoutStore, PropStore
 
 BREACH_LABEL = {BREACH_MAX_DD: "max drawdown", BREACH_DAILY: "daily loss"}
@@ -64,7 +64,8 @@ class PropDesk:
 
     # ----------------------------------------------------------- purchase
 
-    def buy_challenge(self, plan_key: str, size: float) -> dict:
+    def buy_challenge(self, plan_key: str, size: float,
+                      split_upgrade: bool = False) -> dict:
         if plan_key not in PLANS:
             return {"ok": False, "error": f"unknown plan '{plan_key}'"}
         if size not in ACCOUNT_SIZES:
@@ -82,7 +83,10 @@ class PropDesk:
         acct_id = f"{plan_key}-{int(size / 1000)}k-{len(self.accounts) + 1}"
         acct = ChallengeAccount(
             id=acct_id, plan_key=plan_key, size=float(size),
-            fee_paid=evaluation_fee(plan, size), created_ts=time.time())
+            fee_paid=evaluation_fee(plan, size, split_upgrade),
+            created_ts=time.time(),
+            profit_split_pct=(SPLIT_UPGRADE_PCT if split_upgrade
+                              else plan.profit_split_pct))
         self.accounts[acct_id] = acct
         self.active_id = acct_id
         self._reset_stake(acct)
@@ -148,16 +152,20 @@ class PropDesk:
             return {"ok": False,
                     "error": f"amount ${amount:.2f} exceeds withdrawable "
                              f"profit ${max(profit, 0):.2f}"}
-        split = acct.plan.profit_split_pct
-        trader_usd = round(amount * split / 100.0, 2)
+        split = acct.profit_split_pct
+        # first funded payout refunds the evaluation fee (Breakout-style)
+        refund = 0.0 if acct.fee_refunded else acct.fee_paid
+        trader_usd = round(amount * split / 100.0 + refund, 2)
         self.ledger.set(self.ledger.equity - amount)
         acct.withdrawn_usd = round(acct.withdrawn_usd + amount, 2)
+        acct.fee_refunded = True
         # payout resets the daily anchor baseline down with the balance so a
         # withdrawal is never judged as a "loss" by the daily rule
         acct.day_anchor = max(acct.dd_floor(), acct.day_anchor - amount)
         self._persist()
         rec = {"ts": time.time(), "account": acct.id, "amount_usd": amount,
-               "split_pct": split, "trader_usd": trader_usd,
+               "split_pct": split, "fee_refund_usd": refund,
+               "trader_usd": trader_usd,
                "currency": "USDC (simulated)", "status": "paid"}
         self.payouts.append(rec)
         return {"ok": True, **rec, "balance_after": round(self.ledger.equity, 2)}

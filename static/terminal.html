@@ -310,6 +310,8 @@
           <div class="note" id="propBuyNote">활성 챌린지 없음 — 평가 계좌를 구매하면 원장이 계좌 크기로 리셋됩니다.</div>
           <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;align-items:center">
             <select id="propPlanSel"></select><select id="propSizeSel"></select>
+            <label class="subline" style="display:flex;gap:4px;align-items:center;cursor:pointer">
+              <input type="checkbox" id="propUpgrade" onchange="renderPropFee()">90% 분할 (+20%)</label>
             <button class="go" onclick="buyChallenge()">챌린지 구매</button>
           </div>
           <div class="subline muted" id="propFee" style="margin-top:5px">–</div>
@@ -928,9 +930,12 @@ function renderSizeSel(){
 }
 function renderPropFee(){
   const p=PROP_PLANS&&PROP_PLANS.plans.find(x=>x.key===$("propPlanSel").value);if(!p)return;
-  const fee=p.fees[String($("propSizeSel").value)];
-  $("propFee").textContent="평가 수수료(시뮬) "+money(fee)+" · 목표 "+p.phase_targets.join("%→")+"%"
-    +" · DD "+p.max_dd_pct+"% "+(p.dd_mode==="trailing"?"추적":"정적")+" · 일일 "+p.daily_loss_pct+"%";
+  const up=$("propUpgrade").checked,uc=PROP_PLANS.split_upgrade||{fee_mult:1.2,split_pct:90};
+  let fee=p.fees[String($("propSizeSel").value)];if(up&&fee!=null)fee=Math.round(fee*uc.fee_mult*100)/100;
+  $("propFee").textContent="평가 수수료(시뮬) "+money(fee)+" · 분할 "+(up?uc.split_pct:p.profit_split_pct)+"%"
+    +" · 목표 "+p.phase_targets.join("%→")+"%"
+    +" · DD "+p.max_dd_pct+"% "+(p.dd_mode==="trailing"?"추적":"정적")+" · 일일 "+p.daily_loss_pct+"%"
+    +" · 첫 페이아웃 시 수수료 환불";
 }
 const clamp100=x=>Math.max(0,Math.min(100,x));
 function renderProp(pr){
@@ -953,7 +958,8 @@ function renderProp(pr){
   }else if(a.status==="funded"){
     $("propTgtCap").textContent="수익 목표 없음 (펀디드)";
     $("propTgtPct").textContent="∞";$("propTgtBar").style.width="100%";
-    $("propPhaseLine").textContent="회사 자본 계좌 · 분할 "+plan.profit_split_pct+"% · 온디맨드 인출";
+    $("propPhaseLine").textContent="회사 자본 계좌 · 분할 "+(a.profit_split_pct||plan.profit_split_pct)
+      +"% · 온디맨드 인출"+(a.fee_refunded?"":" · 첫 인출 시 수수료 "+money(a.fee_paid)+" 환불");
   }else{
     $("propTgtCap").textContent="수익 목표";$("propTgtPct").textContent="–";$("propTgtBar").style.width="0%";
     $("propPhaseLine").textContent="계좌 종료 (phase "+a.phase+"에서 위반)";
@@ -973,7 +979,7 @@ function renderProp(pr){
   if(a.status==="funded"){
     const profit=(a.balance!=null?a.balance:a.size)-a.size;
     $("propProfit").textContent=money(Math.max(0,profit));
-    $("propWd").textContent=money(a.withdrawn_usd||0)+" / "+plan.profit_split_pct+"%";
+    $("propWd").textContent=money(a.withdrawn_usd||0)+" / "+(a.profit_split_pct||plan.profit_split_pct)+"%";
   }
   $("propBuyBox").style.display=failed?"block":"none";
   if(failed)$("propBuyNote").textContent="계좌 종료됨 — 새 평가 챌린지로 재시작하세요.";
@@ -988,10 +994,11 @@ function renderProp(pr){
 async function buyChallenge(){
   const plan=$("propPlanSel").value,size=Number($("propSizeSel").value);
   if(!plan||!size){alert("플랜/크기를 선택하세요");return;}
-  if(!confirm(plan+" · $"+(size/1000)+"K 챌린지를 구매할까요?\n(페이퍼 원장이 계좌 크기로 리셋됩니다)"))return;
+  const split_upgrade=$("propUpgrade").checked;
+  if(!confirm(plan+" · $"+(size/1000)+"K"+(split_upgrade?" · 90% 분할":"")+" 챌린지를 구매할까요?\n(페이퍼 원장이 계좌 크기로 리셋됩니다)"))return;
   try{await api("/api/prop/challenge",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({plan,size})});
-    notify("brand","챌린지 시작",plan+" · $"+(size/1000)+"K");}catch(e){alert(e.message);}
+    body:JSON.stringify({plan,size,split_upgrade})});
+    notify("brand","챌린지 시작",plan+" · $"+(size/1000)+"K"+(split_upgrade?" · 분할 90%":""));}catch(e){alert(e.message);}
   refresh();
 }
 async function requestPayout(){
@@ -999,7 +1006,8 @@ async function requestPayout(){
   if(!amount||amount<=0){alert("금액을 입력하세요 (최소 $50)");return;}
   try{const r=await api("/api/prop/payout",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({amount})});
-    notify("win","페이아웃 완료",money(r.trader_usd)+" 수령 ("+r.split_pct+"% 분할)");$("poAmt").value="";}
+    notify("win","페이아웃 완료",money(r.trader_usd)+" 수령 ("+r.split_pct+"% 분할"
+      +((r.fee_refund_usd||0)>0?" + 수수료 환불 "+money(r.fee_refund_usd):"")+")");$("poAmt").value="";}
   catch(e){alert(e.message);}
   refresh();
 }

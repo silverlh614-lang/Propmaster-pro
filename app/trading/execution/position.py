@@ -107,7 +107,7 @@ class PositionManager:
         stop = self._round_price(sig.stop_price)
         qty, risk_usd, why = size_position(
             self.equity, self.cfg.risk_per_trade_pct, entry, stop,
-            self.spec, self.cfg.leverage_max)
+            self.spec, self.spec.effective_leverage_max(self.cfg.leverage_max))
         if qty <= 0:
             self.note = f"size skip: {why}"
             return False
@@ -151,7 +151,7 @@ class PositionManager:
         stop = self._round_price(sig.stop_price)
         qty, risk_usd, why = size_position(
             self.equity, self.cfg.risk_per_trade_pct, entry, stop,
-            self.spec, self.cfg.leverage_max)
+            self.spec, self.spec.effective_leverage_max(self.cfg.leverage_max))
         if qty <= 0:
             return False
         open_n, open_risk = self._exposure()

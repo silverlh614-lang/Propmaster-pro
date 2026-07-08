@@ -134,12 +134,21 @@ class SymbolSpec:
     qty_step: float             # base-asset quantity rounding step
     min_qty: float              # exchange minimum order quantity
     tick_size: float            # price rounding step
+    leverage_cap: float = 5.0   # prop rule: majors 5x, alts 2x (Breakout-style)
+
+    def effective_leverage_max(self, global_cap: float) -> float:
+        """Binding leverage ceiling for this symbol = the tighter of the
+        global hard cap and the symbol class cap."""
+        return min(global_cap, self.leverage_cap)
 
 
 SYMBOL_SPECS: dict[str, SymbolSpec] = {
-    "BTC": SymbolSpec("BTC", "BTCUSDT", qty_step=0.001, min_qty=0.001, tick_size=0.1),
-    "ETH": SymbolSpec("ETH", "ETHUSDT", qty_step=0.01, min_qty=0.01, tick_size=0.01),
-    "SOL": SymbolSpec("SOL", "SOLUSDT", qty_step=0.1, min_qty=0.1, tick_size=0.001),
+    "BTC": SymbolSpec("BTC", "BTCUSDT", qty_step=0.001, min_qty=0.001,
+                      tick_size=0.1, leverage_cap=5.0),
+    "ETH": SymbolSpec("ETH", "ETHUSDT", qty_step=0.01, min_qty=0.01,
+                      tick_size=0.01, leverage_cap=5.0),
+    "SOL": SymbolSpec("SOL", "SOLUSDT", qty_step=0.1, min_qty=0.1,
+                      tick_size=0.001, leverage_cap=2.0),
 }
 
 # Phase 1 default: BTC only (verify the logic on one symbol, then widen with

@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/prop", tags=["prop"])
 class ChallengeRequest(BaseModel):
     plan: str = "1step_classic"
     size: float = 10_000
+    split_upgrade: bool = False      # 90% split add-on (+20% fee)
 
 
 class PayoutRequest(BaseModel):
@@ -36,7 +37,7 @@ def buy_challenge(req: ChallengeRequest):
     _mark, _bal, flat = MANAGER.prop_mark_inputs()
     if not flat:
         raise HTTPException(409, "close open positions before buying a challenge")
-    res = MANAGER.prop.buy_challenge(req.plan, req.size)
+    res = MANAGER.prop.buy_challenge(req.plan, req.size, req.split_upgrade)
     if not res.get("ok"):
         raise HTTPException(409, res.get("error", "purchase failed"))
     return res

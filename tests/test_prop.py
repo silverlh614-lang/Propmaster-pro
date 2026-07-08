@@ -174,7 +174,9 @@ def test_desk_payouts():
     assert d.request_payout(49)["ok"] is False   # min $50
     assert d.request_payout(900)["ok"] is False  # > profit
     r = d.request_payout(500)
-    assert r["ok"] and r["trader_usd"] == 400.0  # 80% split
+    # 80% split + first-payout evaluation-fee refund ($110 for Classic 10K)
+    assert r["ok"] and r["fee_refund_usd"] == 110.0
+    assert r["trader_usd"] == 500 * 0.8 + 110.0
     assert led.equity == 10_300.0
     assert d.active().withdrawn_usd == 500.0
     # evaluation accounts can never withdraw
@@ -182,6 +184,32 @@ def test_desk_payouts():
     d2.buy_challenge("1step_classic", 10_000)
     assert d2.request_payout(100)["ok"] is False
     print("ok  payouts: funded-only, min $50, profit-capped, split applied")
+
+
+def test_split_upgrade_and_fee_refund():
+    from app.prop.plans import SPLIT_UPGRADE_PCT
+    # +20% fee on the published price
+    assert evaluation_fee(PLANS["1step_classic"], 10_000, split_upgrade=True) == 132.0
+    led = _Ledger()
+    d = _desk(led)
+    r = d.buy_challenge("1step_classic", 10_000, split_upgrade=True)
+    assert r["ok"] and r["account"]["profit_split_pct"] == SPLIT_UPGRADE_PCT
+    assert r["account"]["fee_paid"] == 132.0
+    led.set(11_000.0)
+    d.on_mark(11_000.0, 11_000.0, True, DAY1)    # -> FUNDED, ledger 10000
+    led.set(10_800.0)
+    # first payout: 90% split + full evaluation-fee refund
+    p1 = d.request_payout(500)
+    assert p1["ok"] and p1["split_pct"] == 90.0
+    assert p1["fee_refund_usd"] == 132.0 and p1["trader_usd"] == 582.0
+    # second payout: split only, refund is once per account
+    p2 = d.request_payout(100)
+    assert p2["ok"] and p2["fee_refund_usd"] == 0.0 and p2["trader_usd"] == 90.0
+    assert d.active().fee_refunded is True
+    # catalog advertises the upgrade
+    c = catalog()
+    assert c["split_upgrade"] == {"split_pct": 90.0, "fee_mult": 1.2}
+    print("ok  90% split upgrade (+20% fee) and first-payout fee refund")
 
 
 def test_desk_persistence_roundtrip():
@@ -208,5 +236,6 @@ if __name__ == "__main__":
     test_desk_two_step_progression_to_funded()
     test_desk_breach_blocks_entries_and_allows_rebuy()
     test_desk_payouts()
+    test_split_upgrade_and_fee_refund()
     test_desk_persistence_roundtrip()
     print("\nall prop tests passed ✅")

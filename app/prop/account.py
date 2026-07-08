@@ -61,12 +61,16 @@ class ChallengeAccount:
     breach_reason: str = ""
     withdrawn_usd: float = 0.0       # lifetime payouts (gross, funded only)
     created_ts: float = 0.0
+    profit_split_pct: float = 0.0    # account's split (upgrade overrides plan)
+    fee_refunded: bool = False       # evaluation fee refunds with 1st payout
 
     def __post_init__(self):
         if self.highwater <= 0:
             self.highwater = self.size
         if self.day_anchor <= 0:
             self.day_anchor = self.size
+        if self.profit_split_pct <= 0:
+            self.profit_split_pct = self.plan.profit_split_pct
 
     # ------------------------------------------------------------- plan
 

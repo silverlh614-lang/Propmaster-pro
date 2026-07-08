@@ -69,6 +69,23 @@ def test_sizing():
     print("ok  sizing (risk %, leverage cap, min qty)")
 
 
+def test_symbol_leverage_caps():
+    """Prop rule: majors 5x, alts 2x — the symbol class cap binds when it is
+    tighter than the global hard cap (SOL clamps at 2x notional)."""
+    sol = SYMBOL_SPECS["SOL"]
+    assert BTC.effective_leverage_max(5.0) == 5.0
+    assert sol.effective_leverage_max(5.0) == 2.0
+    assert sol.effective_leverage_max(1.5) == 1.5   # global cap can be tighter
+    # same trade, same equity: SOL notional clamps to equity*2, BTC to *5
+    q_sol, _, _ = size_position(100, 50.0, 100, 99, sol,
+                                sol.effective_leverage_max(5.0))
+    assert abs(q_sol * 100 - 200) < 1e-6, (q_sol, "SOL notional should clamp to 200")
+    q_btc, _, _ = size_position(100, 50.0, 100, 99, BTC,
+                                BTC.effective_leverage_max(5.0))
+    assert abs(q_btc * 100 - 500) < 1e-6, (q_btc, "BTC notional should clamp to 500")
+    print("ok  per-symbol leverage caps (BTC/ETH 5x, alts 2x)")
+
+
 # ------------------------------------------------------------- risk gate
 
 def test_risk_gate():
@@ -455,6 +472,7 @@ def test_state_persistence():
 if __name__ == "__main__":
     test_indicators()
     test_sizing()
+    test_symbol_leverage_caps()
     test_risk_gate()
     test_risk_caps_follow_compounded_equity()
     test_fsm_stop_loss()
