@@ -14,7 +14,6 @@
 - `app/prop/` — 프롭 코어: 플랜 카탈로그(plans) · 챌린지 계좌 룰 엔진(account) ·
   데스크 수명주기(desk) · 영속화(store) · REST(api)
 - `app/trading/` — 집행 엔진: kline 수집 → 전략 시그널 → 포지션 FSM → 리스크 관문
-- `app/` (ensemble·fsm·chain) — BTC 사이클 분석 사이드카 (프롭 규칙과 무관)
 - `scripts/` — 정적 가드 (complexity·responsibility), pre-commit 배선
 - `tests/` — 오프라인 테스트 (네트워크 금지)
 - `docs/` · `knowledge/` — 설계 문서·지식 베이스
@@ -35,9 +34,9 @@ Breakout Prop 공개 구조를 본뜬 시뮬레이션 파라미터일 뿐 실제
 3. **전략-집행 분리** — Strategy 는 `TradeSignal` 방출만 한다. 주문·리스크·정산은 포지션
    FSM (`app/trading/execution/position.py`) 소유다 (`strategies/base.py` 프로토콜).
    새 전략은 `app/trading/strategies/` 레지스트리 추가로만 — 엔진 본체 수정 금지.
-4. **시세·앵커 단일 통로** — 현물가는 `app/price_feed.py` 폴백 체인
-   (CoinGecko→Coinbase→Binance→스냅샷)만 경유. `[SNAPSHOT]` 앵커 값은 env
-   (`REALIZED_PRICE` 등)로만 갱신하고 코드에 하드코딩하지 않는다 (`app/snapshot.py`).
+4. **시세 단일 통로** — 캔들·현재가는 `app/trading/collectors/kline.py`
+   (Binance→OKX 폴백)만 경유하고, 장기 히스토리는 `backtest/history.py`
+   (vision 아카이브)만 경유한다. 가격을 다른 경로로 들여오지 않는다.
 5. **레버리지·리스크 규율 + hand-tune 금지** — 레버리지 ≤ 5x(심볼 클래스 캡 우선),
    ATR 기반 스탑을 유지한다. 사이징은 **프롭 예산 기반**(잔여 일일/DD 예산의 고정 분율,
    `risk_per_trade_pct` 는 상한 캡; 프롭 계좌 없으면 고정 비율 폴백) — 복리단타의
@@ -93,7 +92,6 @@ python scripts/install_git_hooks.py  # pre-commit 훅 설치 (clone 후 1회)
 | 도메인 개요 · API 목록 · 실행 주기 · 배포 | `README.md` |
 | 프롭 규칙 상세 · 플랜 파라미터 · 수명주기 설계 | `docs/prop_system.md` |
 | 트레이딩 봇 설계 · Phase 2 백테스트 · 배포 런북 | `docs/engine_phase2_runbook.md` |
-| BTC 사이클·바닥 방법론 (렌즈·FSM 근거) | `knowledge/btc_analysis_knowledge.md` |
 | 가설 등록·판정 · 파라미터 채택 · Phase 승격 기준 | `knowledge/hypothesis_registry.md` |
 | 에이전트 팀 · 스킬 오케스트레이션 | `.claude/agents/` · `.claude/skills/` |
 

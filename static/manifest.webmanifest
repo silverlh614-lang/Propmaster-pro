@@ -1,7 +1,7 @@
 {
   "name": "Propmaster Pro — 프롭 트레이딩 관제탑",
   "short_name": "Propmaster",
-  "description": "Breakout 스타일 프롭 트레이딩 관제탑 (페이퍼) + BTC 사이클 바닥 모델",
+  "description": "Breakout 스타일 프롭 트레이딩 관제탑 (페이퍼 시뮬레이션)",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

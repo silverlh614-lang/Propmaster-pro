@@ -23,17 +23,13 @@
 - 진입 차단은 리스크 단일 관문(`RiskManager.allow_entry`)에 통합, 룰 판정은
   매 마감봉마다 `ChallengeAccount.evaluate()` 단일 지점에서 수행됩니다.
 
-## 구성 (집행 엔진 + 분석 사이드카)
+## 구성
 
 | 파트 | 역할 | 실행 주기 |
 |---|---|---|
-| **Part 1 — 앙상블** (`app/ensemble.py`) | 6개 렌즈 삼각분포의 mixture-of-experts 몬테카를로 → 바닥 가격 분포 | 오프라인/주간 배치 (스냅샷 갱신 시 재계산) |
-| **Part 2 — FSM** (`app/fsm.py`) | WATCH → CAP_WATCH → ACCUMULATE → CONFIRM → TREND 상태기계 → 일별 deploy fraction | 온라인/일별 (상태는 `data/fsm_state.json`에 영속) |
-| **Part 3 — 풀사이클 체인** (`app/chain.py`) | 바닥 앙상블 → 회복 배수 → 2028 반감기 가격 → ROI regime 혼합(랠리 소멸 30%) → 2029 고점 가격·시점 | 오프라인 (파라미터 = 명시적 판단) |
 | **트레이딩 엔진** (`app/trading/`) | 프롭 최적화 자동매매: kline 수집 → Donchian 돌파+HTF 추세 시그널(`prop_breakout` 기본) → ATR 스탑·2:1 R:R → 부분청산·트레일링. 사이징은 잔여 프롭 예산 기반(일일예산 25%·DD예산 10%), 당일 3패 시 정지, 애드업 OFF (Phase 1 = 페이퍼 전용, `TRADING_*`로 조정) | 온라인/상시 (봇 start 시, 저널은 `data/trades.csv`) |
-| **대시보드** (`static/index.html`) | `/model` — 스냅샷 앵커·분포 차트·P(바닥<레벨)·FSM 조작 UI | — |
-| **관제탑** (`static/terminal.html`) | `/` — 레버리지 봇 상태·포지션·캔들, 수동 개입(L/S/X), 트레이드 저널 | — |
-| **지식 베이스** (`knowledge/`) | 방법론·데이터·원칙 원문 (`/api/knowledge`로 서빙) | living document |
+| **프롭 데스크** (`app/prop/`) | 챌린지 수명주기·룰 엔진·행위 감시·스케일링·페이아웃 + 통과 확률 몬테카를로 | 매 마감봉 판정 |
+| **관제탑** (`static/terminal.html`) | `/` — 프롭 패널·봇 상태·포지션·캔들·백테스트·트레이드 저널 | — |
 
 ## API
 
@@ -44,22 +40,9 @@
 | `GET /api/prop/account` | 활성 챌린지 계좌 상태 (플로어·여유·진행률) |
 | `POST /api/prop/payout` | 온디맨드 페이아웃 요청 `{amount}` (펀디드 전용) |
 | `GET /api/prop/payouts` | 페이아웃 이력 |
+| `POST /api/prop/simulate` | 챌린지 통과 확률 몬테카를로 (플랜 스윕 / budget vs fixed 사이징) |
 | `GET /` | 프롭 트레이딩 관제탑 (랜딩) |
-| `GET /model` | BTC 사이클 바닥 모델 대시보드 |
 | `GET /healthz` | 헬스체크 (Railway healthcheckPath) |
-| `GET /api/snapshot` | 온체인 스냅샷 앵커 |
-| `GET /api/price` | **최신 현물가 자동 갱신** — CoinGecko → Coinbase → Binance 폴백, TTL 캐시, 전부 실패 시 스냅샷 값 (`live: false`) |
-| `GET /api/simulate` | 기본 300k 시뮬레이션 요약 + 히스토그램 (캐시) |
-| `POST /api/simulate` | 커스텀 렌즈/가중치로 민감도 실험 |
-| `GET /api/distribution.png` | 분포 차트 (matplotlib 렌더) |
-| `GET /api/chain` | 풀사이클 체인 기본 300k 시뮬레이션 (바닥/반감기/고점 percentile, 확률표, 고점 시점) |
-| `POST /api/chain` | 커스텀 파라미터 (회복 배수, 랠리 소멸 확률, ROI 삼각분포, 렌즈) 실험 |
-| `GET /api/chain.png` | 반감기·고점 분포 2패널 차트 |
-| `GET /api/fsm/state` | FSM 현재 상태 |
-| `POST /api/fsm/update` | 일별 온체인 입력 주입 → phase + deploy fraction |
-| `POST /api/fsm/reset` | FSM 초기화 (`?ladder_tranches=5`) |
-| `GET /api/fsm/demo` | 합성 하락→회복 경로 데모 (상태 비파괴) |
-| `GET /api/knowledge` | 지식 베이스 마크다운 원문 |
 | `GET /terminal` | 트레이딩 관제탑 UI (`/`와 동일) |
 | `GET /api/trading/status` | 봇 상태 (포지션 FSM·캔들·리스크·오늘 성과) |
 | `POST /api/trading/start` | 봇 시작 `{mode: "paper", strategy: "prop_breakout"}` |
@@ -81,24 +64,15 @@
 
 1. 이 리포를 Railway 프로젝트에 연결하면 `railway.json`이 Dockerfile 빌드를 지정합니다.
 2. 헬스체크는 `/healthz`, 포트는 Railway가 주입하는 `PORT`를 사용합니다.
-3. **[SNAPSHOT] 값 갱신은 코드 수정 없이 환경변수로**:
+3. 주요 환경변수:
 
    | 변수 | 기본값 | 의미 |
    |---|---|---|
-   | `REALIZED_PRICE` | 53600 | 실현가격 (결정적 선) |
-   | `MA_200W` | 61800 | 200주 이동평균 |
-   | `SPOT` | 61500 | 현물가 |
-   | `ATH` | 126198 | 사상 최고가 |
-   | `SNAPSHOT_DATE` | 2026-07-03 | 스냅샷 기준일 |
-   | `DATA_DIR` | `./data` | FSM 상태/차트/트레이딩 데이터 저장 경로 (볼륨 마운트 시 지정). 봇 가동 중 봇 상태·kline 캐시·저널(`trades.csv`)이 여기 쌓임 — Phase 2 백테스트 재료 |
-   | `PRICE_TTL_SECONDS` | 60 | 실시간 현물가 캐시 수명 |
-   | `PRICE_FEED_DISABLED` | (없음) | `1`이면 실시간 피드 끄고 항상 스냅샷 값 사용 |
+   | `DATA_DIR` | `./data` | 프롭 계좌·봇 상태·저널·히스토리 캐시 저장 경로 (볼륨 마운트 시 지정) |
+   | `TRADING_*` | — | 엔진 설정 오버라이드 (`docs/engine_phase2_runbook.md` 표 참조) |
+   | `PROP_*` | — | 프롭 설정: `PROP_MIN_PAYOUT`·`PROP_FEE_MULT`·`PROP_SCALE_MAX`·`PROP_CONDUCT_ENFORCE` |
 
-   현물가는 `/api/price`가 자동 갱신하므로 `SPOT`은 실시간 피드 불가 시의 폴백입니다.
-   실현가격·200주선은 무료 공개 API가 없는 온체인 집계값이라 env 기반을 유지합니다
-   (`/refresh-snapshot` 파이프라인으로 재검증).
-
-4. FSM 상태를 재배포 간에 유지하려면 Railway Volume을 붙이고 `DATA_DIR`를 마운트 경로로 지정하세요.
+4. 상태를 재배포 간에 유지하려면 Railway Volume을 붙이고 `DATA_DIR`를 마운트 경로로 지정하세요 (필수).
 
 ### 로컬 실행
 
@@ -113,7 +87,7 @@ uvicorn app.main:app --reload
 ```
 ├── app/prop/           # 프롭 코어: plans / account(룰 엔진) / desk / store / api
 ├── app/trading/  # 집행 엔진: 수집·전략·포지션 FSM·리스크 관문·백테스트
-├── app/                # 분석 사이드카 (ensemble / fsm / chain / snapshot / main)
+├── app/main.py         # FastAPI 조립 (프롭 + 트레이딩 라우터)
 ├── static/terminal.html   # 관제탑 UI (프롭 패널은 다음 단계)
 ├── knowledge/          # 분석 지식 베이스 원문
 ├── docs/               # prop_system.md (프롭 SSOT) · engine_phase2_runbook.md
