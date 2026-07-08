@@ -177,9 +177,38 @@ def test_replay_windowed_equals_full():
     print("ok  windowed replay covers full lookback (series < window)")
 
 
+def test_backtest_fetch_fallback():
+    """Live-mode backtest fetch must fall back Binance -> OKX (geo-block)
+    and raise a diagnosis (not an auth hint) when both are down."""
+    import app.trading.backtest.engine as E
+
+    def okx_only(url, params):
+        if "binance" in url:
+            raise RuntimeError("403 forbidden (geo)")
+        rows = [[str(1_700_000_000_000 + i * 900_000), "100", "101", "99",
+                 "100.5", "10", "0", "0", "1"] for i in range(60)]
+        return {"code": "0", "data": list(reversed(rows))}
+
+    orig = E._get_json
+    E._get_json = okx_only
+    try:
+        cs = E.fetch_klines("BTCUSDT", "15")
+        assert len(cs) == 59 and cs[0].ts_ms < cs[-1].ts_ms
+        E._get_json = lambda u, p: (_ for _ in ()).throw(RuntimeError("blocked"))
+        try:
+            E.fetch_klines("BTCUSDT", "15")
+            assert False, "should raise"
+        except RuntimeError as e:
+            assert "months>=1" in str(e)
+    finally:
+        E._get_json = orig
+    print("ok  backtest fetch falls back binance->okx with clear diagnosis")
+
+
 if __name__ == "__main__":
     test_kline_source_failover()
     test_kline_cross_validation()
     test_history_archive()
     test_replay_windowed_equals_full()
+    test_backtest_fetch_fallback()
     print("\nall data-feed/history tests passed ✅")

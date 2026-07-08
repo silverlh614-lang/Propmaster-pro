@@ -27,22 +27,58 @@ def _interval_min(interval: str) -> int:
     return table.get(interval, int(interval))
 
 
-def fetch_klines(symbol: str, interval: str, limit: int = 1000) -> list[Candle]:
-    """Public Binance USDⓈ-M klines, oldest→newest, forming bar dropped."""
+OKX_REST = "https://www.okx.com/api/v5/market/candles"
+_OKX_IV = {"1": "1m", "3": "3m", "5": "5m", "15": "15m", "30": "30m",
+           "60": "1H", "120": "2H", "240": "4H", "360": "6H",
+           "720": "12H", "D": "1D", "W": "1W"}
+
+
+def _get_json(url: str, params: dict):
+    """One GET (separated so offline tests can stub the network)."""
     import httpx    # lazy: keeps the module importable in offline tests
+    with httpx.Client(timeout=15, headers={"User-Agent": "propmaster-pro"}) as c:
+        r = c.get(url, params=params)
+        r.raise_for_status()
+        return r.json()
+
+
+def fetch_klines(symbol: str, interval: str, limit: int = 1000) -> list[Candle]:
+    """Public klines, oldest→newest, forming bar dropped. Binance USDⓈ-M
+    first (1000 bars); regions that geo-block fapi fall back to OKX swaps
+    (max 300 bars — enough for a direction check, use months= for depth).
+    No API key on either path."""
+    errors: list[str] = []
+    out: list[Candle] = []
     iv = _BINANCE_IV.get(interval)
     if iv is None:
         raise ValueError(f"unsupported interval {interval}")
-    params = {"symbol": symbol, "interval": iv, "limit": min(limit, 1000)}
-    with httpx.Client(timeout=15, headers={"User-Agent": "propmaster-pro"}) as c:
-        r = c.get(KLINES_REST, params=params)
-        r.raise_for_status()
-        rows = r.json()
-    if not isinstance(rows, list):
-        raise ValueError(str(rows)[:120])
-    out = [Candle(ts_ms=int(x[0]), open=float(x[1]), high=float(x[2]),
-                  low=float(x[3]), close=float(x[4]), volume=float(x[5]))
-           for x in rows]
+    try:
+        rows = _get_json(KLINES_REST, {"symbol": symbol, "interval": iv,
+                                       "limit": min(limit, 1000)})
+        if not isinstance(rows, list):
+            raise ValueError(str(rows)[:120])
+        out = [Candle(ts_ms=int(x[0]), open=float(x[1]), high=float(x[2]),
+                      low=float(x[3]), close=float(x[4]), volume=float(x[5]))
+               for x in rows]
+    except Exception as e:                    # noqa: BLE001 — try next venue
+        errors.append(f"binance: {type(e).__name__}: {str(e)[:80]}")
+    if not out:
+        try:
+            base = symbol[:-4] if symbol.endswith("USDT") else symbol
+            d = _get_json(OKX_REST, {"instId": f"{base}-USDT-SWAP",
+                                     "bar": _OKX_IV[interval],
+                                     "limit": min(limit, 300)})
+            if str(d.get("code", "0")) != "0":
+                raise ValueError(f"code {d.get('code')}: {d.get('msg')}")
+            out = [Candle(ts_ms=int(x[0]), open=float(x[1]), high=float(x[2]),
+                          low=float(x[3]), close=float(x[4]), volume=float(x[5]))
+                   for x in d.get("data", [])]
+        except Exception as e:                # noqa: BLE001
+            errors.append(f"okx: {type(e).__name__}: {str(e)[:80]}")
+    if not out:
+        raise RuntimeError("no kline source reachable — " + " | ".join(errors)
+                           + " (API 키 문제 아님: 리전 차단이면 months>=1 아카이브 "
+                             "모드를 쓰거나 리전을 SG/EU로)")
     out.sort(key=lambda c: c.ts_ms)
     return out[:-1] if out else out          # drop the still-forming bar
 
