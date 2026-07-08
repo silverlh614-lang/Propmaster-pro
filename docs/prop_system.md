@@ -62,6 +62,22 @@ Breakout Prop(breakoutprop.com, 2025-09 Kraken 인수)의 공개 구조를 본�
 - 레버리지: **심볼 클래스 캡** — 메이저(BTC/ETH) 5x, 알트(SOL 등) 2x
   (`SymbolSpec.leverage_cap`, 전역 `leverage_max`와 둘 중 타이트한 쪽이 바인딩).
 
+### 수익화 방법 (데스크 수익 원장, `app/prop/revenue.py`)
+
+데스크가 돈을 버는 스트림 4종을 돈이 움직이는 순간(구매·페이아웃)에
+append-only 기록하고 집계한다 (`RevenueLedger`, 영속화 `prop_revenue.json`):
+
+| 스트림 | 발생 시점 | 금액 |
+|---|---|---|
+| `challenge_fee` | 챌린지 구매 (실패 후 재도전 = 새 판매) | 공표 평가 수수료 (기본가) |
+| `split_addon` | 90% 분할 업그레이드 선택 구매 | 수수료의 +20% 부분 |
+| `payout_spread` | 펀디드 페이아웃 | 인출액 × (100% − 분할%) |
+| `fee_refund` | 첫 펀디드 페이아웃 (계좌당 1회) | −평가 수수료 (비용, 음수 기록) |
+
+- `summary()` = 스트림별 합계 + gross(수익 스트림 합) + refunds + **net**.
+- API `GET /api/prop/revenue`, `GET /api/prop/account` 응답의 `revenue` 필드.
+- 원장은 재계산 없는 현금 기록 — 계좌 상태에서 역산하지 않는다.
+
 ### 리서치에서 확인된 상충 (보류 항목)
 
 1. 1-Step Classic 일일손실 3% vs **4%** — 공식 FAQ 예시(105,000−4%)를 채택.
@@ -88,6 +104,7 @@ Breakout Prop(breakoutprop.com, 2025-09 Kraken 인수)의 공개 구조를 본�
 | `GET /api/prop/account` | 활성 계좌 상태 (플로어·여유·진행률, 마크 반영) |
 | `POST /api/prop/payout` | 페이아웃 요청 `{amount}` (펀디드 전용) |
 | `GET /api/prop/payouts` | 페이아웃 이력 |
+| `GET /api/prop/revenue` | 데스크 수익화 원장 (스트림별 합계 + 최근 이벤트) |
 
 `GET /api/trading/status`의 `prop` 필드에도 동일 상태가 실린다 (관제탑 폴링용).
 

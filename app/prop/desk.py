@@ -14,6 +14,10 @@ into the active account's rule engine, and executes the consequences:
   payout  -> funded only, on-demand, min $50, capped at realized profit
              above size; trader receives amount * profit split.
 
+Every purchase and payout also books the desk's side of the money into
+the RevenueLedger (challenge fee, split add-on, payout spread, refund) —
+the monetization record lives here because the desk is where money moves.
+
 The desk never places or blocks orders itself — RiskManager consults
 entries_allowed() inside allow_entry() (the single permission point).
 """
@@ -28,7 +32,9 @@ from .account import (BREACH_DAILY, BREACH_MAX_DD, EVALUATION, FAILED, FUNDED,
 from .plans import (ACCOUNT_SIZES, PLANS, SCALE_MIN_PAYOUTS,
                     SCALE_MIN_PROFIT_PCT, SCALE_STEP_MULT, SPLIT_UPGRADE_PCT,
                     catalog, evaluation_fee, min_payout_usd, scale_max_usd)
-from .store import PayoutStore, PropStore
+from .revenue import (STREAM_CHALLENGE_FEE, STREAM_FEE_REFUND,
+                      STREAM_PAYOUT_SPREAD, STREAM_SPLIT_ADDON, RevenueLedger)
+from .store import PayoutStore, PropStore, RevenueStore
 
 BREACH_LABEL = {BREACH_MAX_DD: "max drawdown", BREACH_DAILY: "daily loss"}
 
@@ -36,9 +42,11 @@ BREACH_LABEL = {BREACH_MAX_DD: "max drawdown", BREACH_DAILY: "daily loss"}
 class PropDesk:
     def __init__(self, store: PropStore | None = None,
                  payouts: PayoutStore | None = None,
-                 ledger=None, on_breach=None):
+                 ledger=None, on_breach=None,
+                 revenue: RevenueStore | None = None):
         self.store = store or PropStore()
         self.payouts = payouts or PayoutStore()
+        self.revenue = RevenueLedger(revenue)
         self.ledger = ledger          # shared AccountLedger (None in unit tests)
         self.on_breach = on_breach    # callable(reason) -> None
         blob = self.store.load()
@@ -94,6 +102,15 @@ class PropDesk:
         self.active_id = acct_id
         self._reset_stake(acct)
         self._persist()
+        # book the sale: base evaluation fee, plus the 90%-split add-on
+        # margin as its own stream (fee_paid = base * 1.2 when upgraded)
+        base_fee = evaluation_fee(plan, size, split_upgrade=False)
+        self.revenue.record(STREAM_CHALLENGE_FEE, base_fee, acct_id,
+                            note=plan.name, ts=acct.created_ts)
+        if split_upgrade:
+            self.revenue.record(STREAM_SPLIT_ADDON,
+                                round(acct.fee_paid - base_fee, 2), acct_id,
+                                note="90% split add-on", ts=acct.created_ts)
         return {"ok": True, "account": acct.snapshot()}
 
     # ---------------------------------------------------------- mark tick
@@ -238,6 +255,14 @@ class PropDesk:
         if scaled_to:
             rec["scaled_to"] = scaled_to
         self.payouts.append(rec)
+        # book the desk's side: the split spread earns, the one-time
+        # evaluation-fee refund costs (negative stream)
+        self.revenue.record(STREAM_PAYOUT_SPREAD,
+                            round(amount * (100.0 - split) / 100.0, 2),
+                            acct.id, ts=rec["ts"])
+        if refund:
+            self.revenue.record(STREAM_FEE_REFUND, -refund, acct.id,
+                                note="first-payout fee refund", ts=rec["ts"])
         return {"ok": True, **rec, "balance_after": round(self.ledger.equity, 2)}
 
     def _maybe_scale(self, acct: ChallengeAccount) -> float | None:
@@ -268,6 +293,7 @@ class PropDesk:
             "guard": self.guard_level(),
             "accounts": [a.snapshot() for a in self.accounts.values()],
             "payouts": self.payouts.load()[-20:][::-1],
+            "revenue": self.revenue.summary(),
         }
 
     @staticmethod

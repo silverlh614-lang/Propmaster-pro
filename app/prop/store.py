@@ -1,8 +1,9 @@
-"""@responsibility 프롭 상태 영속화 — 챌린지 계좌·페이아웃 기록 JSON 단일 통로 (DATA_DIR)
+"""@responsibility 프롭 상태 영속화 — 챌린지 계좌·페이아웃·수익화 기록 JSON 단일 통로 (DATA_DIR)
 
 JSON persistence for the prop desk: challenge accounts (+ which one is
-active) and the payout ledger. Same DATA_DIR volume convention as the
-trading stores so everything survives restarts/redeploys together.
+active), the payout ledger and the desk revenue (monetization) ledger.
+Same DATA_DIR volume convention as the trading stores so everything
+survives restarts/redeploys together.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))
 ACCOUNTS_JSON = DATA_DIR / "prop_accounts.json"
 PAYOUTS_JSON = DATA_DIR / "prop_payouts.json"
+REVENUE_JSON = DATA_DIR / "prop_revenue.json"
 
 _lock = threading.Lock()
 
@@ -55,3 +57,18 @@ class PayoutStore:
         rows = self.load()
         rows.append(rec)
         _write(PAYOUTS_JSON, rows)
+
+
+class RevenueStore:
+    """Append-only desk monetization events (list of dicts)."""
+
+    def load(self) -> list[dict]:
+        return _read(REVENUE_JSON, [])
+
+    def append(self, rec: dict) -> None:
+        rows = self.load()
+        rows.append(rec)
+        _write(REVENUE_JSON, rows)
+
+    def save(self, rows: list[dict]) -> None:
+        _write(REVENUE_JSON, rows)

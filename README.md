@@ -40,6 +40,7 @@
 | `GET /api/prop/account` | 활성 챌린지 계좌 상태 (플로어·여유·진행률) |
 | `POST /api/prop/payout` | 온디맨드 페이아웃 요청 `{amount}` (펀디드 전용) |
 | `GET /api/prop/payouts` | 페이아웃 이력 |
+| `GET /api/prop/revenue` | 데스크 수익화 원장 (수수료·애드온·분할 스프레드·환불 집계) |
 | `POST /api/prop/simulate` | 챌린지 통과 확률 몬테카를로 (플랜 스윕 / budget vs fixed 사이징) |
 | `GET /` | 프롭 트레이딩 관제탑 (랜딩) |
 | `GET /healthz` | 헬스체크 (Railway healthcheckPath) |

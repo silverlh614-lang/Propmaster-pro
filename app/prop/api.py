@@ -1,4 +1,4 @@
-"""@responsibility 프롭 데스크 REST API — /api/prop/* 플랜·챌린지 구매·계좌 상태·페이아웃
+"""@responsibility 프롭 데스크 REST API — /api/prop/* 플랜·챌린지 구매·계좌 상태·페이아웃·수익화 원장
 
 REST API for the prop desk (/api/prop/*). The desk instance is owned by
 TradingManager so the challenge account, the risk gate and the shared
@@ -62,6 +62,14 @@ def payout(req: PayoutRequest):
 @router.get("/payouts")
 def payouts():
     return {"payouts": MANAGER.prop.payouts.load()[::-1]}
+
+
+@router.get("/revenue")
+def revenue():
+    """Desk monetization ledger: per-stream totals (challenge fees, split
+    add-ons, payout spreads, fee refunds) + recent events."""
+    return {"summary": MANAGER.prop.revenue.summary(),
+            "events": MANAGER.prop.revenue.events(50)}
 
 
 class SimulateRequest(BaseModel):

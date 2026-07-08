@@ -13,7 +13,8 @@ from app.prop.account import (BREACH_DAILY, BREACH_MAX_DD, FAILED, FUNDED,  # no
                               TARGET_REACHED, ChallengeAccount)
 from app.prop.desk import PropDesk                        # noqa: E402
 from app.prop.plans import PLANS, catalog, evaluation_fee  # noqa: E402
-from app.prop.store import PayoutStore, PropStore          # noqa: E402
+from app.prop.store import (PayoutStore, PropStore,        # noqa: E402
+                            RevenueStore)
 from app.trading.config import TradingConfig           # noqa: E402
 from app.trading.risk import RiskManager        # noqa: E402
 from app.trading.store import BotState, Journal      # noqa: E402
@@ -107,9 +108,11 @@ def test_target_needs_flat_and_realized_balance():
 
 def _desk(ledger=None, on_breach=None):
     """Fresh desk on a WIPED store — tests share one DATA_DIR."""
-    store, pay = PropStore(), PayoutStore()
+    store, pay, rev = PropStore(), PayoutStore(), RevenueStore()
     store.save({"active_id": None, "accounts": {}})
-    return PropDesk(store, pay, ledger=ledger, on_breach=on_breach)
+    rev.save([])
+    return PropDesk(store, pay, ledger=ledger, on_breach=on_breach,
+                    revenue=rev)
 
 
 def test_desk_purchase_and_one_active():
@@ -210,6 +213,42 @@ def test_split_upgrade_and_fee_refund():
     c = catalog()
     assert c["split_upgrade"] == {"split_pct": 90.0, "fee_mult": 1.2}
     print("ok  90% split upgrade (+20% fee) and first-payout fee refund")
+
+
+def test_revenue_streams():
+    led = _Ledger()
+    d = _desk(led)
+    # purchase with the add-on books two streams: base fee + add-on margin
+    d.buy_challenge("1step_classic", 10_000, split_upgrade=True)
+    s = d.revenue.summary()
+    assert s["streams"]["challenge_fee"] == 110.0      # published price
+    assert s["streams"]["split_addon"] == 22.0         # the +20% portion
+    assert s["net_usd"] == 132.0
+    led.set(11_000.0)
+    d.on_mark(11_000.0, 11_000.0, True, DAY1)          # -> FUNDED, ledger 10000
+    led.set(10_500.0)
+    # payout $500 at 90% split: desk keeps $50, refunds the $132 fee once
+    assert d.request_payout(500)["ok"]
+    s = d.revenue.summary()
+    assert s["streams"]["payout_spread"] == 50.0
+    assert s["streams"]["fee_refund"] == -132.0
+    assert s["gross_usd"] == 182.0 and s["refunds_usd"] == -132.0
+    assert s["net_usd"] == 50.0
+    # second payout: spread only, no refund; events are most-recent-first
+    led.set(10_100.0)
+    assert d.request_payout(100)["ok"]
+    s = d.revenue.summary()
+    assert s["streams"]["payout_spread"] == 60.0 and s["net_usd"] == 60.0
+    ev = d.revenue.events(10)
+    assert ev[0]["stream"] == "payout_spread" and ev[0]["usd"] == 10.0
+    assert s["events"] == len(d.revenue.store.load()) == 5
+    # a failed account keeps its fee — the retry is a fresh sale
+    d.on_mark(9_300.0, 9_300.0, True, DAY2)            # DD floor 9400 breached
+    assert d.active().status == FAILED
+    d.buy_challenge("1step_classic", 10_000)
+    s = d.revenue.summary()
+    assert s["streams"]["challenge_fee"] == 220.0      # two sales booked
+    print("ok  revenue ledger: fee/add-on/spread/refund streams aggregate")
 
 
 def _row(ts_s, event, risk=None, result=""):
@@ -432,6 +471,7 @@ if __name__ == "__main__":
     test_desk_breach_blocks_entries_and_allows_rebuy()
     test_desk_payouts()
     test_split_upgrade_and_fee_refund()
+    test_revenue_streams()
     test_conduct_monitor()
     test_funded_scaling()
     test_prop_budget_sizing_and_gates()
