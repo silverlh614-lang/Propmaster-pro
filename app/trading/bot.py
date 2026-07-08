@@ -172,6 +172,13 @@ class SymbolBot:
 
         self.pm.flatten_if_closed()
         self.pm.manage(bar, atr_val)
+        if self._reset_guard_hits(bar.ts_ms):
+            p = self.pm.pos
+            if p and p.state.value == "OPEN":
+                px = self.collector.last_price() or bar.close
+                self.pm._close(px, "pre-reset flatten (00:30 UTC guard)",
+                               time.time())
+                self._persist_pos()
         if self._prop_tick is not None:
             # judge the challenge account on this bar's mark-to-market equity
             # BEFORE any new entry — a breached account never trades again
@@ -189,6 +196,22 @@ class SymbolBot:
         elif not (p and p.state.value == "OPEN"):
             self.pm.try_open(sig, price, atr_val or 0.0, ctx.now)
         self.note = self.pm.note
+
+    def _reset_guard_hits(self, bar_ts_ms: int) -> bool:
+        """True when this just-closed bar sits inside the flatten window that
+        ends at the next 00:30 UTC daily reset (0 disables). Keeps the
+        challenge from carrying open unrealized loss across the re-anchor."""
+        win = self.cfg.flatten_before_reset_min
+        if win <= 0:
+            return False
+        # minutes-of-day of the bar's CLOSE, relative to the 00:30 boundary
+        import datetime as _dt
+        entry_min = int(self.cfg.entry_interval) if             self.cfg.entry_interval.isdigit() else 1440
+        close_ts = bar_ts_ms / 1000 + entry_min * 60
+        secs = _dt.datetime.fromtimestamp(close_ts, _dt.timezone.utc)
+        mins_since_reset = ((secs.hour * 60 + secs.minute) - 30) % 1440
+        mins_to_reset = (1440 - mins_since_reset) % 1440
+        return mins_to_reset <= win
 
     def _build_ctx(self, entry: list) -> TradingContext:
         return TradingContext(

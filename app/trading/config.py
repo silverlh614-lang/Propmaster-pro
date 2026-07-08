@@ -69,10 +69,18 @@ class TradingConfig:
     risk_dd_budget_frac: float = 0.10     # per-trade risk <= 잔여 DD예산 * frac
     daily_stop_after_losses: int = 3      # 당일 N패 도달 시 그날 진입 정지
     daily_open_risk_frac: float = 0.5     # 오픈리스크 합 <= 잔여 일일예산 * frac
+    # 00:30 UTC 일일리셋 함정 방어: 리셋 N분 전 마감봉에서 열린 포지션 청산
+    # (리셋 순간 미실현 손실을 크게 열어두면 새 일일 플로어를 즉시 위반 — 리포트
+    # $2.87 초과 탈락 사례). 0=off (백테스트 게이트로 켤지 판단).
+    flatten_before_reset_min: int = 0
 
     # --- prop_breakout: Donchian 채널 돌파 + HTF 추세 필터 -------------------
     donchian_lookback: int = 55           # 채널 봉 수 — 게이트 채택값 (터틀 스타일)
     donchian_htf_ema: int = 20            # HTF 추세 필터 EMA 기간
+
+    # --- vbo: 래리 윌리엄스 변동성 돌파 (전기 범위×K, 대체 전략) -------------
+    vbo_k: float = 0.5                    # 돌파 임계 = 시가 + K×전기 범위
+    vbo_range_bars: int = 24              # "전 세션" 범위 산정 봉 수 (1h면 하루)
     # 선택 필터 (기본 OFF — 백테스트 게이트 A/B로만 켠다, hand-tune 금지)
     pump_filter_pct: float = 0.0          # 채널 저점 대비 급등 % 초과 돌파 스킵 (NFI 펌프 필터)
     squeeze_gate: bool = False            # 직전 봉 BB(20,2) ⊂ Keltner(20,1.5ATR) 요구

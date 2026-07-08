@@ -75,11 +75,34 @@ def test_prop_breakout_optional_filters():
     print("ok  prop_breakout optional pump/squeeze filters")
 
 
+def test_vbo_volatility_breakout():
+    """vbo: Larry Williams K-rule — break of open + K*prior-range in the HTF
+    direction, distinct from Donchian's extreme break."""
+    from app.trading.models import Side
+    cfg = TradingConfig(); cfg.vbo_range_bars = 10; cfg.vbo_k = 0.5
+    strat = make_strategy("vbo", cfg)
+    htf = [_c(i * 3600000, 100 + i, 101 + i, 99 + i, 100.5 + i)
+           for i in range(30)]                           # rising -> LONG only
+    # prior 10 bars span range ~10 (110-100); level = open + 0.5*10
+    flat = [_c(i * 900000, 105, 110, 100, 105) for i in range(15)]
+    quiet = flat + [_c(15 * 900000, 106, 108, 105, 107)]  # close 107 < 106+5
+    assert strat.evaluate(_ctx(htf, quiet)) is None
+    burst = flat + [_c(15 * 900000, 106, 118, 105, 117)]  # close 117 > 111
+    sig = strat.evaluate(_ctx(htf, burst))
+    assert sig is not None and sig.side is Side.LONG and sig.signal_type == "VBO"
+    assert sig.stop_price < 117
+    # falling HTF forbids the long
+    htf_dn = [_c(i * 3600000, 130 - i, 131 - i, 129 - i, 130.5 - i)
+              for i in range(30)]
+    assert strat.evaluate(_ctx(htf_dn, burst)) is None
+    print("ok  vbo volatility breakout (K-rule + HTF filter)")
+
+
 def test_registry_and_replay_smoke():
     """The registry is prop-only, rejects unknown names, and every listed
     strategy replays a synthetic series without crashing."""
     from app.trading.backtest.engine import replay
-    assert list(STRATEGIES) == ["prop_breakout"]
+    assert list(STRATEGIES) == ["prop_breakout", "vbo"]
     try:
         make_strategy("trend_breakout", TradingConfig())
         assert False, "legacy strategy should be gone"
@@ -98,5 +121,6 @@ def test_registry_and_replay_smoke():
 if __name__ == "__main__":
     test_prop_breakout_donchian()
     test_prop_breakout_optional_filters()
+    test_vbo_volatility_breakout()
     test_registry_and_replay_smoke()
     print("\nall strategy tests passed ✅")
