@@ -22,7 +22,7 @@ evaluation means a new account (new purchase), never a reset.
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 from .plans import DD_TRAILING, PLANS, PropPlan
 
@@ -63,6 +63,7 @@ class ChallengeAccount:
     created_ts: float = 0.0
     profit_split_pct: float = 0.0    # account's split (upgrade overrides plan)
     fee_refunded: bool = False       # evaluation fee refunds with 1st payout
+    violations: list = field(default_factory=list)  # conduct monitor records
 
     def __post_init__(self):
         if self.highwater <= 0:

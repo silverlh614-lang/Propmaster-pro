@@ -341,8 +341,11 @@ class TradingManager:
         return bal + unreal, bal, flat
 
     def prop_tick(self) -> None:
-        """One rule-engine mark (called each closed bar by any SymbolBot)."""
+        """One rule-engine mark (called each closed bar by any SymbolBot):
+        equity/target judgement first, then the conduct scan over the
+        recent journal window."""
         self.prop.on_mark(*self.prop_mark_inputs())
+        self.prop.check_conduct(self.journal.tail(80))
 
     def _on_prop_breach(self, reason: str) -> None:
         """Rule breach = account terminated: trip the kill switch (blocks all

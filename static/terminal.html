@@ -297,6 +297,7 @@
           <div class="wrbar"><div class="cap"><span>일일손실 소진 <span class="muted" id="propDailyFloor"></span></span><span id="propDailyPct">–</span></div>
             <div class="tr"><i id="propDailyBar" style="background:var(--yel)"></i></div></div>
           <div class="subline" id="propBreach" style="display:none;color:var(--dn);margin-top:8px"></div>
+          <div class="subline" id="propConduct" style="display:none;color:var(--yel);margin-top:6px"></div>
           <div id="propPayoutBox" style="display:none;margin-top:10px">
             <div class="row"><span class="l">인출 가능 수익</span><span class="v" id="propProfit">–</span></div>
             <div class="row"><span class="l">누적 인출 / 분할</span><span class="v" id="propWd">–</span></div>
@@ -913,7 +914,7 @@ function flashResult(r){const f=$("flash");const win=r.result==="WIN"||Number(r.
   f.classList.remove("show");void f.offsetWidth;f.classList.add("show");}
 
 // ---- 프롭 챌린지 패널 ----
-let PROP_PLANS=null,_propPrev=null;
+let PROP_PLANS=null,_propPrev=null,_propVioN=null;
 async function loadPropPlans(){
   try{PROP_PLANS=await api("/api/prop/plans");}catch(e){return;}
   const ps=$("propPlanSel");ps.innerHTML="";
@@ -975,6 +976,13 @@ function renderProp(pr){
   const failed=a.status==="failed";
   $("propBreach").style.display=failed?"block":"none";
   if(failed)$("propBreach").textContent="⛔ "+(a.breach_reason||"룰 위반")+" — 재도전은 새 챌린지 구매";
+  const vio=a.violations||[];
+  if(vio.length){$("propConduct").style.display="block";
+    $("propConduct").textContent="⚠ 행위 경고 "+vio.length+"건 · 최근: "+vio[vio.length-1].detail;
+    if(_propVioN!==null&&vio.length>_propVioN)
+      notify("warn","행위 경고",vio[vio.length-1].detail);
+  }else $("propConduct").style.display="none";
+  _propVioN=vio.length;
   $("propPayoutBox").style.display=a.status==="funded"?"block":"none";
   if(a.status==="funded"){
     const profit=(a.balance!=null?a.balance:a.size)-a.size;

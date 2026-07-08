@@ -19,8 +19,10 @@ entries_allowed() inside allow_entry() (the single permission point).
 """
 from __future__ import annotations
 
+import os
 import time
 
+from . import conduct
 from .account import (BREACH_DAILY, BREACH_MAX_DD, EVALUATION, FAILED, FUNDED,
                       TARGET_REACHED, ChallengeAccount)
 from .plans import (ACCOUNT_SIZES, PLANS, SPLIT_UPGRADE_PCT, catalog,
@@ -125,6 +127,32 @@ class PropDesk:
         self._reset_stake(acct)
         self._persist()
         return {"event": TARGET_REACHED, "note": note, "account": acct.id}
+
+    def check_conduct(self, journal_rows: list[dict]) -> list[dict]:
+        """Scan the trade journal for gambling-style conduct (martingale,
+        oversize, revenge trading). New violations are recorded on the
+        account; with PROP_CONDUCT_ENFORCE=1 a violation terminates it
+        (real desks ban for this — default is record-and-warn)."""
+        acct = self.active()
+        if acct is None or acct.status == FAILED:
+            return []
+        found = conduct.scan(journal_rows, acct.size,
+                             acct.plan.daily_loss_pct)
+        seen = {v.get("key") for v in acct.violations}
+        fresh = [v for v in found if v["key"] not in seen]
+        if not fresh:
+            return []
+        acct.violations.extend(fresh)
+        enforce = os.getenv("PROP_CONDUCT_ENFORCE", "0").strip() in ("1", "true")
+        if enforce:
+            reason = f"conduct violation: {fresh[0]['kind']} — {fresh[0]['detail']}"
+            acct.fail(reason)
+            self._persist()
+            if self.on_breach is not None:
+                self.on_breach(reason)
+        else:
+            self._persist()
+        return fresh
 
     def entries_allowed(self) -> tuple[bool, str]:
         """Consulted by RiskManager.allow_entry (single permission

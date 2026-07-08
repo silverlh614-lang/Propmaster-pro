@@ -212,6 +212,79 @@ def test_split_upgrade_and_fee_refund():
     print("ok  90% split upgrade (+20% fee) and first-payout fee refund")
 
 
+def _row(ts_s, event, risk=None, result=""):
+    import datetime as dt
+    ts = dt.datetime.fromtimestamp(ts_s, dt.timezone.utc).isoformat(timespec="seconds")
+    return {"ts": ts, "event": event, "result": result,
+            "risk_usd": ("" if risk is None else str(risk))}
+
+
+def test_conduct_monitor():
+    from app.prop import conduct
+    T = DAY1
+    # martingale: loss -> x2 risk -> loss -> x2 risk (2 escalations) => flag
+    rows = [
+        _row(T + 0,    "OPEN",  risk=100),
+        _row(T + 600,  "CLOSE", result="LOSS"),
+        _row(T + 1200, "OPEN",  risk=200),
+        _row(T + 1800, "CLOSE", result="LOSS"),
+        _row(T + 2400, "OPEN",  risk=400),
+    ]
+    v = conduct.scan(rows, account_size=10_000, daily_loss_pct=100.0)
+    assert [x["kind"] for x in v] == [conduct.MARTINGALE], v
+    # a WIN in between resets the streak
+    rows[3] = _row(T + 1800, "CLOSE", result="WIN")
+    assert conduct.scan(rows, 10_000, 100.0) == []
+    # oversize: single risk above the whole daily budget (4% of 10k = 400)
+    v = conduct.scan([_row(T, "OPEN", risk=500)], 10_000, 4.0)
+    assert v and v[0]["kind"] == conduct.OVERSIZE
+    assert conduct.scan([_row(T, "OPEN", risk=399)], 10_000, 4.0) == []
+    # revenge: loss -> instant re-entry, three times in a row
+    rows = [_row(T, "OPEN", risk=100)]
+    t = T
+    for _ in range(3):
+        rows += [_row(t + 60, "CLOSE", result="LOSS"),
+                 _row(t + 120, "OPEN", risk=100)]
+        t += 120
+    kinds = {x["kind"] for x in conduct.scan(rows, 10_000, 100.0)}
+    assert conduct.REVENGE in kinds, kinds
+    # slow, disciplined re-entries (gap > cooldown) never flag
+    rows = [_row(T, "OPEN", risk=100)]
+    t = T
+    for _ in range(3):
+        rows += [_row(t + 60, "CLOSE", result="LOSS"),
+                 _row(t + 60 + 900, "OPEN", risk=100)]
+        t += 960
+    assert conduct.scan(rows, 10_000, 100.0) == []
+
+    # desk integration: warn-only by default (records, account survives),
+    # enforce mode terminates
+    led = _Ledger()
+    d = _desk(led)
+    d.buy_challenge("1step_classic", 10_000)
+    mart = [
+        _row(T + 0,    "OPEN",  risk=100),
+        _row(T + 600,  "CLOSE", result="LOSS"),
+        _row(T + 1200, "OPEN",  risk=200),
+        _row(T + 1800, "CLOSE", result="LOSS"),
+        _row(T + 2400, "OPEN",  risk=400),
+    ]
+    fresh = d.check_conduct(mart)
+    assert len(fresh) == 1 and d.active().status == "evaluation"
+    assert d.check_conduct(mart) == []          # idempotent: no re-record
+    assert len(d.active().violations) == 1
+    os.environ["PROP_CONDUCT_ENFORCE"] = "1"
+    try:
+        d2 = _desk(_Ledger())
+        d2.buy_challenge("1step_classic", 10_000)
+        d2.check_conduct(mart)
+        assert d2.active().status == FAILED
+        assert "conduct" in d2.active().breach_reason
+    finally:
+        del os.environ["PROP_CONDUCT_ENFORCE"]
+    print("ok  conduct monitor (martingale/oversize/revenge, warn vs enforce)")
+
+
 def test_desk_persistence_roundtrip():
     led = _Ledger()
     store, pay = PropStore(), PayoutStore()
@@ -237,5 +310,6 @@ if __name__ == "__main__":
     test_desk_breach_blocks_entries_and_allows_rebuy()
     test_desk_payouts()
     test_split_upgrade_and_fee_refund()
+    test_conduct_monitor()
     test_desk_persistence_roundtrip()
     print("\nall prop tests passed ✅")
