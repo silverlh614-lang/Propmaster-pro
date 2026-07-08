@@ -10,12 +10,17 @@ BybitManager  — starts/stops all enabled SymbolBots together; shares one
 
 Phase 1: mode is always "paper" — live mode is refused until the Phase 3
 gate lands (mirrors Part 4's TradingManager). No real order path exists yet.
+
+Prop layer: BybitManager owns the PropDesk. Every closed bar feeds one
+mark-to-market tick into the challenge account's rule engine (prop_tick);
+a breach trips the kill switch and flattens all paper positions.
 """
 from __future__ import annotations
 
 import asyncio
 import time
 
+from ..prop.desk import PropDesk
 from .account import AccountLedger
 from .config import (CONFIG, SYMBOL_SPECS, BybitConfig, SymbolSpec,
                      enabled_symbols)
@@ -32,13 +37,15 @@ from .strategies.base import BybitContext
 class SymbolBot:
     def __init__(self, spec: SymbolSpec, cfg: BybitConfig,
                  journal: Journal, risk: BybitRiskManager,
-                 pos_store: PositionStore, ledger: AccountLedger):
+                 pos_store: PositionStore, ledger: AccountLedger,
+                 prop_tick=None):
         self.spec = spec
         self.cfg = cfg
         self.journal = journal
         self.risk = risk
         self.pos_store = pos_store
         self.ledger = ledger
+        self._prop_tick = prop_tick   # manager callback: one rule-engine mark
         self.collector = KlineCollector(spec.symbol, cfg.entry_interval,
                                         cfg.htf_interval, cfg.warmup_bars,
                                         testnet=cfg.testnet and cfg.live_enabled)
@@ -172,6 +179,10 @@ class SymbolBot:
 
         self.pm.flatten_if_closed()
         self.pm.manage(bar, atr_val)
+        if self._prop_tick is not None:
+            # judge the challenge account on this bar's mark-to-market equity
+            # BEFORE any new entry — a breached account never trades again
+            self._prop_tick()
 
         ctx = self._build_ctx(entry)
         sig = strategy.evaluate(ctx)
@@ -248,9 +259,14 @@ class BybitManager:
                                     legacy_equity=self.pos_store.load("BTC")
                                     .get("equity"))
         self.risk = BybitRiskManager(cfg, self.journal, self.state_store)
+        # 프롭 데스크: 챌린지 계좌 룰 엔진. 원장(잔고)·리스크 관문과 같은
+        # 객체를 공유해야 하므로 여기(단일 조립점)서만 만든다.
+        self.prop = PropDesk(ledger=self.ledger, on_breach=self._on_prop_breach)
+        self.risk.attach_prop(self.prop)
         self.bots: dict[str, SymbolBot] = {
             spec.key: SymbolBot(spec, cfg, self.journal, self.risk,
-                                self.pos_store, self.ledger)
+                                self.pos_store, self.ledger,
+                                prop_tick=self.prop_tick)
             for spec in enabled_symbols()
         }
         self.mode = "paper"
@@ -307,6 +323,40 @@ class BybitManager:
             return {"ok": False, "error": f"symbol '{symbol}' not enabled"}
         return bot.manual(action)
 
+    # ------------------------------------------------------------- prop
+
+    def prop_mark_inputs(self) -> tuple[float, float, bool]:
+        """(equity_mark, balance, flat) for the prop rule engine — equity is
+        the ledger plus every symbol's unrealized PnL (breaches are judged on
+        equity, targets on realized balance while flat)."""
+        unreal = 0.0
+        flat = True
+        for b in self.bots.values():
+            pm = b.pm
+            if pm and pm.pos and pm.pos.state.value == "OPEN":
+                flat = False
+                px = b.collector.last_price()
+                if px is not None:
+                    unreal += pm.pos.unrealized_usd(px)
+        bal = self.ledger.equity
+        return bal + unreal, bal, flat
+
+    def prop_tick(self) -> None:
+        """One rule-engine mark (called each closed bar by any SymbolBot)."""
+        self.prop.on_mark(*self.prop_mark_inputs())
+
+    def _on_prop_breach(self, reason: str) -> None:
+        """Rule breach = account terminated: trip the kill switch (blocks all
+        future entries) and flatten every open paper position now."""
+        self.risk.trip(f"prop breach: {reason}")
+        for b in self.bots.values():
+            pm = b.pm
+            if pm and pm.pos and pm.pos.state.value == "OPEN":
+                px = b.collector.last_price()
+                if px is not None:
+                    pm._close(px, f"prop breach: {reason}", time.time())
+                    b._persist_pos()
+
     def candles(self, symbol: str, tf: str = "entry", limit: int = 120) -> dict:
         bot = self.bots.get(symbol.upper())
         if bot is None:
@@ -335,11 +385,13 @@ class BybitManager:
         }
 
     def status(self) -> dict:
+        mark, bal, _flat = self.prop_mark_inputs()
         return {
             "running": self.running,
             "mode": self.mode,
             "strategy": self.strategy_name,
             "account": self._account_view(),
+            "prop": self.prop.status(equity_mark=mark, balance=bal),
             "note": ("running: " + ",".join(self.bots)) if self.running else "stopped",
             "risk": self.risk.status(),
             "symbols": {k: b.status() for k, b in self.bots.items()},

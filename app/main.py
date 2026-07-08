@@ -1,11 +1,11 @@
-"""@responsibility FastAPI 엔트리포인트 — 대시보드·시뮬레이션·FSM·트레이딩 API 라우팅과 앱 조립
+"""@responsibility FastAPI 엔트리포인트 — 프롭 데스크·트레이딩·모델 API 라우팅과 앱 조립
 
-Coinmaster Pro — BTC cycle-bottom analysis service.
+Propmaster Pro — Breakout-style crypto prop trading platform (simulated).
 
-Part 1 (ensemble) runs as an offline/weekly batch: recompute the distribution
-whenever the snapshot anchors change, then read percentiles to set DCA ladder
-rungs. Part 2 (FSM) runs online/daily: feed on-chain inputs, consume the
-emitted deploy fraction (knowledge base §7.3).
+Prop desk (app/prop/) owns the challenge lifecycle: evaluation -> funded ->
+payout, judged by the rule engine on every closed bar. The Bybit paper
+trading engine (app/trading_bybit/) executes; the BTC cycle-bottom model
+(Parts 1-3) remains as an analysis sidecar.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import chain, ensemble, fsm, price_feed, snapshot
+from .prop.api import router as prop_router
 from .trading_bybit.api import router as bybit_router
 from .trading_bybit.bot import MANAGER as BYBIT_MANAGER
 
@@ -50,13 +51,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Coinmaster Pro — BTC Cycle Bottom Model",
-    description="Monte Carlo ensemble bottom distribution + bottom-detection FSM. "
-                "Structured opinion, not investment advice.",
-    version="1.0.0",
+    title="Propmaster Pro — Crypto Prop Trading (Breakout-style)",
+    description="Evaluation challenge -> funded account -> on-demand payout, "
+                "enforced by an equity-based rule engine over a paper trading "
+                "engine. Simulation only — not investment advice.",
+    version="2.0.0",
     lifespan=lifespan,
 )
 app.include_router(bybit_router)
+app.include_router(prop_router)
 
 _lock = threading.Lock()
 _cache: dict = {}
@@ -84,7 +87,7 @@ def _default_run() -> dict:
 
 @app.get("/healthz")
 def healthz():
-    return {"ok": True, "app_mode": "bybit"}
+    return {"ok": True, "app_mode": "prop"}
 
 
 @app.get("/api/snapshot")

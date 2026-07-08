@@ -58,6 +58,12 @@ class BybitRiskManager:
         self.kill_reason: str = st.get("kill_reason", "")
         self._errors = 0
         self._books: dict[str, object] = {}   # symbol key -> PositionManager
+        self._prop = None                     # optional PropDesk gate
+
+    def attach_prop(self, desk) -> None:
+        """Attach the prop desk so the challenge account's rules join the
+        single permission point — a FAILED account blocks every new entry."""
+        self._prop = desk
 
     # ---------------------------------------------------- global exposure
 
@@ -90,6 +96,10 @@ class BybitRiskManager:
         not the starting stake. Falls back to the config stake if absent."""
         if self.kill_switch:
             return False, f"kill_switch: {self.kill_reason}"
+        if self._prop is not None:
+            ok, why = self._prop.entries_allowed()
+            if not ok:
+                return False, f"prop: {why}"
         t = self.today()
         equity = equity_usd if equity_usd and equity_usd > 0 else self.cfg.equity_usd
         if t["trades"] >= self.cfg.max_trades_per_day:

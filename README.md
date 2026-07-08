@@ -1,14 +1,29 @@
-# Coinmaster Pro — BTC 사이클 바닥 모델 (Railway 앱)
+# Propmaster Pro — Breakout 스타일 크립토 프롭 트레이딩 (시뮬레이션)
 
-비트코인 사이클·바닥 분석 지식 베이스와 몬테카를로 모델(`btc_bottom_model.py`)을
-Railway 배포 가능한 FastAPI 서비스로 이식한 프로젝트입니다.
-**Harness(팀 아키텍처 팩토리) 개념**을 적용해 `.claude/agents/` + `.claude/skills/`에
-에이전트 팀과 오케스트레이터 스킬이 포함되어 있습니다.
+**평가 챌린지 → 펀디드 계좌 → 온디맨드 페이아웃** 수명주기를 equity 기반 룰 엔진이
+강제하는 프롭 트레이딩 플랫폼 시뮬레이션입니다. Breakout Prop(2025-09 Kraken 인수)의
+공개 규칙 구조를 본떴으며, 그 아래에서 Bybit 레버리지-마진 **페이퍼** 트레이딩 엔진이
+집행합니다. 프롭 설계 SSOT: [`docs/prop_system.md`](docs/prop_system.md)
 
-> ⚠️ 모든 수치는 예측이 아닌 **구조화된 의견**이며, 어떤 항목도 투자 조언이 아닙니다.
-> [SNAPSHOT] 값(실현가격·200주선 등)은 2026-07-03 기준으로 시간이 지나면 재검증이 필요합니다.
+> ⚠️ 시뮬레이션 전용 — 실제 자금/서비스가 아니며 투자 조언이 아닙니다.
 
-## 구성
+## 프롭 시스템 (`app/prop/`)
+
+| 플랜 | 목표 | 최대 DD | DD 방식 | 일일손실 | 최대 크기 |
+|---|---|---|---|---|---|
+| 1-Step Classic | 10% | 6% | Static | 4% | $100K |
+| 1-Step Pro | 12% | 5% | Static | 3% | $200K |
+| 1-Step Turbo | 9% | 3% | Static | 3% | $200K |
+| 2-Step Classic | 5% → 10% | 8% | Trailing | 5% | $100K |
+
+- 한도는 **balance로 계산**, 브리치는 **equity(미실현 포함)로 판정**. 일일손실은 매일
+  00:30 UTC 잔고에서 재앵커. 브리치 = 계좌 종료 (킬스위치 트립 + 전 포지션 청산, 영구).
+- 시간 제한·최소 거래일·일관성 규칙 없음. 단계 통과 시 잔고가 계좌 크기로 리셋되고,
+  펀디드 계좌는 수익 목표 없이 온디맨드 페이아웃(최소 $50, 기본 분할 80%)만 남습니다.
+- 진입 차단은 리스크 단일 관문(`BybitRiskManager.allow_entry`)에 통합, 룰 판정은
+  매 마감봉마다 `ChallengeAccount.evaluate()` 단일 지점에서 수행됩니다.
+
+## 구성 (집행 엔진 + 분석 사이드카)
 
 | 파트 | 역할 | 실행 주기 |
 |---|---|---|
@@ -24,6 +39,11 @@ Railway 배포 가능한 FastAPI 서비스로 이식한 프로젝트입니다.
 
 | 엔드포인트 | 설명 |
 |---|---|
+| `GET /api/prop/plans` | 프롭 플랜 카탈로그 + 수수료 테이블 |
+| `POST /api/prop/challenge` | 챌린지 구매 `{plan, size}` (flat일 때만, 원장 리셋) |
+| `GET /api/prop/account` | 활성 챌린지 계좌 상태 (플로어·여유·진행률) |
+| `POST /api/prop/payout` | 온디맨드 페이아웃 요청 `{amount}` (펀디드 전용) |
+| `GET /api/prop/payouts` | 페이아웃 이력 |
 | `GET /` | Bybit 트레이딩 관제탑 (랜딩) |
 | `GET /model` | BTC 사이클 바닥 모델 대시보드 |
 | `GET /healthz` | 헬스체크 (Railway healthcheckPath) |
@@ -88,42 +108,30 @@ uvicorn app.main:app --reload
 # http://localhost:8000
 ```
 
-## Harness 개념 적용 — 에이전트 팀
-
-이 리포는 Harness의 **파이프라인 + 생성-검증 패턴**으로 설계된 에이전트 팀을 포함합니다.
-
-```
-snapshot-analyst ──▶ quant-modeler ──▶ signal-operator
-   (스냅샷 검증)        (모델/분포 갱신)      (FSM 일별 운영)
-                          │
-                          ▼
-                     qa-reviewer  ◀── 생성-검증 게이트 (§1 원칙 8종 감사)
-```
-
-| 파일 | 역할 |
-|---|---|
-| `.claude/agents/snapshot-analyst.md` | [SNAPSHOT] 값 교차 검증 (파이프라인 1단계) |
-| `.claude/agents/quant-modeler.md` | 렌즈/앵커 갱신 + 분포 재계산 (2단계) |
-| `.claude/agents/signal-operator.md` | FSM 운영·phase 해석 (3단계) |
-| `.claude/agents/qa-reviewer.md` | 지식 베이스 §1 원칙 감사 게이트 (생성-검증) |
-| `.claude/skills/refresh-snapshot/` | 검증→갱신→감사 파이프라인 오케스트레이터 |
-| `.claude/skills/bottom-report/` | 분포+FSM 팬아웃/팬인 종합 리포트 |
-
-Claude Code에서 `/refresh-snapshot`, `/bottom-report`로 트리거하거나
-"스냅샷 갱신해줘" 같은 자연어로 사용합니다.
-
 ## 디렉토리
 
 ```
-├── app/                # FastAPI 서비스 (ensemble / fsm / snapshot / main)
-├── static/index.html   # 대시보드
+├── app/prop/           # 프롭 코어: plans / account(룰 엔진) / desk / store / api
+├── app/trading_bybit/  # 집행 엔진: 수집·전략·포지션 FSM·리스크 관문·백테스트
+├── app/                # 분석 사이드카 (ensemble / fsm / chain / snapshot / main)
+├── static/bybit.html   # 관제탑 UI (프롭 패널은 다음 단계)
 ├── knowledge/          # 분석 지식 베이스 원문
-├── docs/               # 참고 산출물 (샘플 분포 차트)
-├── .claude/            # Harness 에이전트 팀 + 스킬
+├── docs/               # prop_system.md (프롭 SSOT) · bybit_phase2_runbook.md
+├── scripts/            # 정적 가드 + pre-commit 배선
+├── tests/              # 오프라인 테스트 (test_prop / test_bybit / ...)
 ├── Dockerfile          # Railway 빌드
 └── railway.json        # Railway 배포 설정
 ```
 
+## 검증
+
+```bash
+python scripts/validate_all.py   # 정적 가드 (500줄 한계 · @responsibility)
+python -m tests.test_prop        # 프롭 데스크·룰 엔진
+python -m tests.test_bybit       # 트레이딩 엔진
+```
+
 ## 라이선스 / 면책
 
-분석 프레임워크 예제일 뿐이며 투자 조언이 아닙니다.
+프롭 트레이딩 시뮬레이션 프레임워크 예제일 뿐이며 투자 조언이 아닙니다.
+실제 Breakout Prop 규칙·수수료는 변경될 수 있으니 공식 사이트를 확인하세요.

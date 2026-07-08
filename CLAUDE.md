@@ -1,4 +1,4 @@
-# Coinmaster Pro — AI 실행 규칙 (CLAUDE.md)
+# Propmaster Pro — AI 실행 규칙 (CLAUDE.md)
 
 > **본 문서는 최상위 실행 규칙 SSOT다. 얇게 유지한다** — 상세는 §5 라우터의 문서로.
 > 패치 노트·작업 이력을 이 파일에 누적하지 않는다.
@@ -7,16 +7,20 @@
 
 ## 1. Project Identity
 
-BTC 사이클 바닥 모델(앙상블·FSM·풀사이클 체인) + Bybit 레버리지-마진 추세돌파 자동매매
-(**Phase 1 = 페이퍼 전용**)를 담은 FastAPI 서비스. Railway 배포.
+**Breakout 스타일 크립토 프롭 트레이딩 플랫폼 (시뮬레이션)**: 평가 챌린지 → 펀디드 계좌 →
+온디맨드 페이아웃 수명주기를 equity 기준 룰 엔진이 강제하고, 그 아래에서 Bybit
+레버리지-마진 페이퍼 트레이딩 엔진이 집행한다 (**Phase 1 = 페이퍼 전용**). FastAPI + Railway.
 
-- `app/` — 모델(Part 1~3: ensemble·fsm·chain) + 트레이딩(Part 5: `app/trading_bybit/`)
+- `app/prop/` — 프롭 코어: 플랜 카탈로그(plans) · 챌린지 계좌 룰 엔진(account) ·
+  데스크 수명주기(desk) · 영속화(store) · REST(api)
+- `app/trading_bybit/` — 집행 엔진: kline 수집 → 전략 시그널 → 포지션 FSM → 리스크 관문
+- `app/` (ensemble·fsm·chain) — BTC 사이클 분석 사이드카 (프롭 규칙과 무관)
 - `scripts/` — 정적 가드 (complexity·responsibility), pre-commit 배선
-- `tests/` — 오프라인 테스트 (`python -m tests.test_bybit`, 네트워크 금지)
+- `tests/` — 오프라인 테스트 (네트워크 금지)
 - `docs/` · `knowledge/` — 설계 문서·지식 베이스
-- `.claude/agents/` + `.claude/skills/` — 하네스 (에이전트 팀·오케스트레이터)
 
-모든 수치는 예측이 아닌 **구조화된 의견**이며 투자 조언이 아니다.
+모든 수치는 예측이 아닌 **구조화된 의견**이며 투자 조언이 아니다. 프롭 규칙·수수료는
+Breakout Prop 공개 구조를 본뜬 시뮬레이션 파라미터일 뿐 실제 서비스가 아니다.
 
 ---
 
@@ -37,6 +41,13 @@ BTC 사이클 바닥 모델(앙상블·FSM·풀사이클 체인) + Bybit 레버�
 5. **레버리지·리스크 규율 + hand-tune 금지** — 레버리지 ≤ 5x, 고정 비율 리스크,
    ATR 기반 스탑을 유지한다. 시그널·리스크 임계값은 손으로 튜닝하지 않는다 —
    Phase 2 백테스트 게이트(`app/trading_bybit/backtest/`)가 결정한다 (`config.py` 주석 참조).
+
+6. **프롭 룰 엔진 단일 판정** — 챌린지 계좌의 브리치(일일손실·최대DD)는
+   `app/prop/account.py` `evaluate()` 한 곳에서만 판정한다. 브리치는 **equity(미실현 포함)**
+   기준·**터미널**(FAILED 영구, 리셋 금지 — 새 시도 = 새 구매)이며, 단계 통과는
+   **실현 balance + flat** 기준이다. 브리치 시 킬스위치 트립 + 전 포지션 청산을 우회하는
+   패치 금지. PropDesk 는 `BybitManager`(단일 조립점)에서만 생성한다 — 원장·리스크 관문과
+   같은 객체를 공유해야 하기 때문이다.
 
 **provider 장애 ≠ 시장 신호** — 시세 API 실패는 폴백·캐시로 흡수하며, 어떤 경우에도
 방향성 판단(Long/Short)의 근거가 되지 않는다.
@@ -61,6 +72,7 @@ BTC 사이클 바닥 모델(앙상블·FSM·풀사이클 체인) + Bybit 레버�
 
 ```bash
 python scripts/validate_all.py       # 정적 가드 전체 (pre-commit 이 실행하는 것)
+python -m tests.test_prop            # 프롭 데스크·룰 엔진 오프라인 테스트
 python -m tests.test_bybit           # Bybit 트레이딩 오프라인 테스트
 python -m tests.test_guards          # 가드 경계값 테스트
 python scripts/install_git_hooks.py  # pre-commit 훅 설치 (clone 후 1회)
@@ -77,6 +89,7 @@ python scripts/install_git_hooks.py  # pre-commit 훅 설치 (clone 후 1회)
 | 트리거 키워드 | 참조 문서 |
 |---------------|-----------|
 | 도메인 개요 · API 목록 · 실행 주기 · 배포 | `README.md` |
+| 프롭 규칙 상세 · 플랜 파라미터 · 수명주기 설계 | `docs/prop_system.md` |
 | Bybit 봇 설계 · Phase 2 백테스트 · 배포 런북 | `docs/bybit_phase2_runbook.md` |
 | BTC 사이클·바닥 방법론 (렌즈·FSM 근거) | `knowledge/btc_analysis_knowledge.md` |
 | 가설 등록·판정 · 파라미터 채택 · Phase 승격 기준 | `knowledge/hypothesis_registry.md` |
