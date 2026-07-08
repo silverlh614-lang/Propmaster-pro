@@ -71,6 +71,11 @@ def test_symbol_leverage_caps():
     q_btc, _, _ = size_position(100, 50.0, 100, 99, BTC,
                                 BTC.effective_leverage_max(5.0))
     assert abs(q_btc * 100 - 500) < 1e-6, (q_btc, "BTC notional should clamp to 500")
+    # roster invariant: ONLY the majors carry 5x, every alt is 2x
+    for k, spec in SYMBOL_SPECS.items():
+        want = 5.0 if k in ("BTC", "ETH") else 2.0
+        assert spec.leverage_cap == want, (k, spec.leverage_cap)
+        assert spec.symbol.endswith("USDT") and spec.qty_step > 0
     print("ok  per-symbol leverage caps (BTC/ETH 5x, alts 2x)")
 
 

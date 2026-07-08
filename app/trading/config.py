@@ -130,6 +130,8 @@ class SymbolSpec:
         return min(global_cap, self.leverage_cap)
 
 
+# 메이저(BTC/ETH) 5x, 알트 2x — Breakout 레버리지 클래스. step/tick 은
+# Binance USDⓈ-M 근사치 (페이퍼 시뮬 반올림용).
 SYMBOL_SPECS: dict[str, SymbolSpec] = {
     "BTC": SymbolSpec("BTC", "BTCUSDT", qty_step=0.001, min_qty=0.001,
                       tick_size=0.1, leverage_cap=5.0),
@@ -137,6 +139,20 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
                       tick_size=0.01, leverage_cap=5.0),
     "SOL": SymbolSpec("SOL", "SOLUSDT", qty_step=0.1, min_qty=0.1,
                       tick_size=0.001, leverage_cap=2.0),
+    "XRP": SymbolSpec("XRP", "XRPUSDT", qty_step=0.1, min_qty=0.1,
+                      tick_size=0.0001, leverage_cap=2.0),
+    "BNB": SymbolSpec("BNB", "BNBUSDT", qty_step=0.01, min_qty=0.01,
+                      tick_size=0.01, leverage_cap=2.0),
+    "DOGE": SymbolSpec("DOGE", "DOGEUSDT", qty_step=1.0, min_qty=1.0,
+                       tick_size=0.00001, leverage_cap=2.0),
+    "ADA": SymbolSpec("ADA", "ADAUSDT", qty_step=1.0, min_qty=1.0,
+                      tick_size=0.0001, leverage_cap=2.0),
+    "AVAX": SymbolSpec("AVAX", "AVAXUSDT", qty_step=1.0, min_qty=1.0,
+                       tick_size=0.001, leverage_cap=2.0),
+    "LINK": SymbolSpec("LINK", "LINKUSDT", qty_step=0.01, min_qty=0.01,
+                       tick_size=0.001, leverage_cap=2.0),
+    "LTC": SymbolSpec("LTC", "LTCUSDT", qty_step=0.001, min_qty=0.001,
+                      tick_size=0.01, leverage_cap=2.0),
 }
 
 # 2026-07 게이트: 같은 프로필이 ETH 에서 무보정 아웃오브샘플로 통과
