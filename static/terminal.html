@@ -444,6 +444,7 @@
           <button class="go" id="btnBt" onclick="runBacktest()">▶ 리플레이</button>
           <span class="muted" style="font-size:10px">ATR×<input class="ov" id="ovAtr" placeholder="1.5"></span>
           <span class="muted" style="font-size:10px">R:R<input class="ov" id="ovRR" placeholder="2.0"></span>
+          <span class="muted" style="font-size:10px" title="0=라이브 1000봉 · N=Binance 아카이브 N개월">개월<input class="ov" id="ovMonths" placeholder="0" style="width:40px"></span>
         </div>
         <div id="btOut" class="note">아직 실행 안 함.</div>
       </div>
@@ -1042,11 +1043,14 @@ async function manualClose(){if(!confirm("현재 포지션을 시장가(시뮬)�
   try{await api("/api/trading/manual",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({action:"close",symbol:SYM})});}catch(e){alert(e.message);}refresh();loadJournal();}
 
-async function runBacktest(){$("btOut").textContent="리플레이 중… (과거 kline 다운로드)";
+async function runBacktest(){
+  const months=parseInt($("ovMonths").value)||0;
+  $("btOut").textContent=months>0?("리플레이 중… (아카이브 "+months+"개월 다운로드, 첫 실행은 수십 초)")
+                                  :"리플레이 중… (과거 kline 다운로드)";
   const ov={};if($("ovAtr").value)ov.atr_stop_mult=parseFloat($("ovAtr").value);
   if($("ovRR").value)ov.rr_target=parseFloat($("ovRR").value);
   try{const d=await api("/api/trading/backtest",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({symbol:SYM,strategy:$("stratSel").value||"prop_breakout",overrides:ov})});
+    body:JSON.stringify({symbol:SYM,strategy:$("stratSel").value||"prop_breakout",overrides:ov,months})});
     const m=d.metrics;
     $("btOut").innerHTML=`<b>${d.trades}건</b> · 승률 ${m.win_rate!=null?(m.win_rate*100).toFixed(0)+"%":"–"}
       · R기대값 <b class="${(m.expectancy_r||0)>=0?'up':'dn'}">${m.expectancy_r!=null?fmt(m.expectancy_r,2)+"R":"–"}</b>

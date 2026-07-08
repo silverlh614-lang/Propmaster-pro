@@ -68,14 +68,25 @@ class _PermissiveRisk:
 
 def replay(symbol: str, strategy_name: str, cfg: TradingConfig,
            entry_candles: list[Candle] | None = None,
-           htf_candles: list[Candle] | None = None) -> dict:
-    """Replay one symbol. Candles can be injected (offline tests) or fetched.
+           htf_candles: list[Candle] | None = None,
+           months: int = 0) -> dict:
+    """Replay one symbol. Candles can be injected (offline tests), fetched
+    live (1000-bar REST cap) or, with months > 0, pulled from the Binance
+    vision monthly archive (years of history — the Phase 2 default).
     Returns {trades, closes, equity_curve, snapshots}."""
     spec: SymbolSpec = SYMBOL_SPECS[symbol.upper()]
     if entry_candles is None:
-        entry_candles = fetch_klines(spec.symbol, cfg.entry_interval)
+        if months > 0:
+            from .history import fetch_history
+            entry_candles = fetch_history(spec.symbol, cfg.entry_interval, months)
+        else:
+            entry_candles = fetch_klines(spec.symbol, cfg.entry_interval)
     if htf_candles is None:
-        htf_candles = fetch_klines(spec.symbol, cfg.htf_interval)
+        if months > 0:
+            from .history import fetch_history
+            htf_candles = fetch_history(spec.symbol, cfg.htf_interval, months)
+        else:
+            htf_candles = fetch_klines(spec.symbol, cfg.htf_interval)
     if not entry_candles or not htf_candles:
         return {"trades": [], "closes": [], "equity_curve": [], "snapshots": 0}
 
@@ -90,13 +101,20 @@ def replay(symbol: str, strategy_name: str, cfg: TradingConfig,
 
     equity_curve: list[float] = []
     snapshots = 0
+    # Long histories (months mode) make full-list slices O(n^2) — a sliding
+    # window and a monotonic HTF pointer keep the replay linear. WINDOW must
+    # cover every strategy lookback; identical results to the full slice.
+    WINDOW = max(400, warmup + 2)
+    htf_close_ts = [c.ts_ms + htf_min * 60_000 for c in htf_candles]
+    j = 0
     for i in range(warmup, len(entry_candles)):
         bar = entry_candles[i]
-        closed_entry = entry_candles[:i + 1]
+        closed_entry = entry_candles[max(0, i + 1 - WINDOW):i + 1]
         bar_close_t = bar.ts_ms + entry_min * 60_000
-        closed_htf = [c for c in htf_candles
-                      if c.ts_ms + htf_min * 60_000 <= bar_close_t]
-        if len(closed_htf) < warmup:
+        while j < len(htf_candles) and htf_close_ts[j] <= bar_close_t:
+            j += 1
+        closed_htf = htf_candles[max(0, j - WINDOW):j]
+        if j < warmup:
             continue
         snapshots += 1
         atr_val = atr(closed_entry, cfg.atr_period)
