@@ -30,6 +30,7 @@ from .indicators import atr, ema
 from .models import Side
 from .risk import RiskManager
 from .store import AccountStore, BotState, Journal, PositionStore
+from .config import strategy_for
 from .strategies import STRATEGIES, make_strategy
 from .strategies.base import TradingContext
 
@@ -85,10 +86,15 @@ class SymbolBot:
         if self.running:
             return
         self.mode = mode
-        self.strategy_name = strategy
-        self.strategy = make_strategy(strategy, self.cfg)
+        # per-symbol strategy: the gate found majors want Donchian, choppy
+        # alts want the volatility breakout — TRADING_SYMBOL_STRATEGY maps it.
+        resolved = strategy_for(self.spec.key, strategy)
+        if resolved not in STRATEGIES:
+            resolved = strategy
+        self.strategy_name = resolved
+        self.strategy = make_strategy(resolved, self.cfg)
         self.pm = PositionManager(self.spec, self.cfg, self.risk, self.journal,
-                                  mode, strategy, ledger=self.ledger)
+                                  mode, resolved, ledger=self.ledger)
         # Restore any live position from the last run so a trade in progress
         # survives a restart / redeploy (equity restores via the ledger).
         self.pm.load_state(self.pos_store.load(self.spec.key))

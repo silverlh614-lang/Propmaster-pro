@@ -178,3 +178,20 @@ def enabled_symbols() -> list[SymbolSpec]:
         if k in SYMBOL_SPECS:
             out.append(SYMBOL_SPECS[k])
     return out or [SYMBOL_SPECS["BTC"]]
+
+
+def strategy_for(symbol_key: str, default: str) -> str:
+    """Per-symbol strategy resolution. The backtest gate found different
+    optima per asset (majors -> Donchian, choppy alts -> volatility
+    breakout), so TRADING_SYMBOL_STRATEGY lets each symbol run its own —
+    e.g. "BTC:prop_breakout,SOL:vbo". Symbols absent from the map fall back
+    to `default` (the strategy passed to /start). Empty env = uniform."""
+    raw = os.getenv("TRADING_SYMBOL_STRATEGY", "").strip()
+    if not raw:
+        return default
+    for pair in raw.split(","):
+        if ":" in pair:
+            k, v = pair.split(":", 1)
+            if k.strip().upper() == symbol_key.upper():
+                return v.strip()
+    return default

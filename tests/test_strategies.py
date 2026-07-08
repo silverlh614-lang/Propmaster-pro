@@ -118,7 +118,36 @@ def test_registry_and_replay_smoke():
     print("ok  registry is prop-only + replay smoke")
 
 
+def test_per_symbol_strategy_map():
+    """TRADING_SYMBOL_STRATEGY assigns each SymbolBot its own strategy at
+    start; absent symbols fall back to the requested default."""
+    import asyncio
+    import os as _os
+    from app.trading.config import TradingConfig
+    from app.trading.bot import TradingManager
+
+    _os.environ["TRADING_SYMBOLS"] = "BTC,SOL"
+    _os.environ["TRADING_SYMBOL_STRATEGY"] = "SOL:vbo"
+
+    async def run():
+        mgr = TradingManager(TradingConfig())
+        await mgr.start(mode="paper", strategy="prop_breakout")
+        try:
+            assert mgr.bots["BTC"].strategy_name == "prop_breakout"
+            assert mgr.bots["SOL"].strategy_name == "vbo"
+            assert type(mgr.bots["SOL"].strategy).__name__ == "VolatilityBreakoutStrategy"
+        finally:
+            await mgr.stop()
+            await mgr.stop_feeds()
+    try:
+        asyncio.run(run())
+    finally:
+        del _os.environ["TRADING_SYMBOLS"], _os.environ["TRADING_SYMBOL_STRATEGY"]
+    print("ok  per-symbol strategy map (SOL:vbo, BTC default)")
+
+
 if __name__ == "__main__":
+    test_per_symbol_strategy_map()
     test_prop_breakout_donchian()
     test_prop_breakout_optional_filters()
     test_vbo_volatility_breakout()

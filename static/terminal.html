@@ -722,7 +722,9 @@ async function refresh(){
   $("modeBadge").className="badge "+(run?"live":"off");
   $("modeBadge").textContent=run?"LIVE-PAPER":"OFFLINE";
   $("botLabel").textContent=run?("가동 중 · "+s.strategy):"정지됨";
-  $("botNote").textContent=s.note||""; $("fStrat").textContent=s.strategy||"–";
+  $("botNote").textContent=s.note||"";
+  const symStrat=((s.symbols||{})[SYM]||{}).strategy;
+  $("fStrat").textContent=symStrat||s.strategy||"–";
   $("btnStart").disabled=run;$("btnStop").disabled=!run;
   const kill=s.risk&&s.risk.kill_switch;$("btnKill").style.display=kill?"inline-block":"none";
   if(kill)$("botNote").textContent="⛔ KILL: "+s.risk.kill_reason;
