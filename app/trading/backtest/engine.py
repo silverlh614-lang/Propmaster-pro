@@ -180,3 +180,52 @@ def replay(symbol: str, strategy_name: str, cfg: TradingConfig,
     return {"trades": journal.rows, "closes": closes,
             "equity_curve": equity_curve, "snapshots": snapshots,
             "final_equity": round(pm.equity, 4)}
+
+
+def sweep(symbol: str, strategy_name: str, base_cfg: TradingConfig,
+          grid: dict[str, list], months: int = 0,
+          entry_candles: list[Candle] | None = None,
+          htf_candles: list[Candle] | None = None,
+          max_combos: int = 64) -> list[dict]:
+    """Grid-sweep config overrides over ONE candle download. Returns one row
+    per combo (overrides + key metrics), sorted by expectancy_r. The whole
+    point vs calling /backtest N times: candles are fetched once."""
+    import copy
+    import itertools
+
+    from .metrics import compute
+
+    keys = list(grid)
+    combos = list(itertools.product(*(grid[k] for k in keys)))
+    if len(combos) > max_combos:
+        raise ValueError(f"{len(combos)} combos > cap {max_combos}")
+    spec = SYMBOL_SPECS[symbol.upper()]
+    if entry_candles is None or htf_candles is None:
+        if months > 0:
+            from .history import fetch_history
+            entry_candles = fetch_history(spec.symbol, base_cfg.entry_interval, months)
+            htf_candles = fetch_history(spec.symbol, base_cfg.htf_interval, months)
+        else:
+            entry_candles = fetch_klines(spec.symbol, base_cfg.entry_interval)
+            htf_candles = fetch_klines(spec.symbol, base_cfg.htf_interval)
+
+    rows: list[dict] = []
+    for combo in combos:
+        cfg = copy.copy(base_cfg)
+        for k, v in zip(keys, combo):
+            cur = getattr(cfg, k)
+            setattr(cfg, k, (type(cur)(v) if not isinstance(cur, bool)
+                             else bool(v)))
+        r = replay(symbol, strategy_name, cfg,
+                   entry_candles=entry_candles, htf_candles=htf_candles)
+        m = compute(r["closes"], cfg.equity_usd,
+                    r.get("final_equity", cfg.equity_usd))
+        rows.append({"overrides": dict(zip(keys, combo)),
+                     "trades": m["trades"], "win_rate": m["win_rate"],
+                     "expectancy_r": m["expectancy_r"],
+                     "profit_factor": m["profit_factor"],
+                     "return_pct": m["return_pct"],
+                     "max_drawdown_usd": m["max_drawdown_usd"]})
+    rows.sort(key=lambda x: (x["expectancy_r"] is None,
+                             -(x["expectancy_r"] or 0)))
+    return rows

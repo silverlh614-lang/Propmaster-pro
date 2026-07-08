@@ -147,6 +147,44 @@ def backtest(req: BacktestRequest):
             "equity_curve": r["equity_curve"][-500:]}
 
 
+class SweepRequest(BaseModel):
+    symbol: str = "BTC"
+    strategy: str = "prop_breakout"
+    months: int = 12
+    grid: dict[str, list[float | str]] = {}   # field -> candidate values
+
+
+@router.post("/backtest/sweep")
+def backtest_sweep(req: SweepRequest):
+    """Grid A/B over one candle download — e.g. {"donchian_lookback":
+    [20, 55], "atr_stop_mult": [1.5, 2.5], "pump_filter_pct": [0, 15]}.
+    Rows come back sorted by expectancy_r."""
+    import copy
+
+    from .backtest.engine import sweep
+
+    if req.symbol.upper() not in SYMBOL_SPECS:
+        raise HTTPException(422, f"unknown symbol '{req.symbol}'")
+    if req.strategy not in STRATEGIES:
+        raise HTTPException(422, f"unknown strategy '{req.strategy}'")
+    if not (0 <= req.months <= 60):
+        raise HTTPException(422, "months must be 0..60")
+    if not req.grid:
+        raise HTTPException(422, "grid must name at least one config field")
+    for k in req.grid:
+        if not hasattr(CONFIG, k):
+            raise HTTPException(422, f"unknown config field '{k}'")
+    try:
+        rows = sweep(req.symbol, req.strategy, copy.copy(CONFIG), req.grid,
+                     months=req.months)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    except Exception as e:
+        raise HTTPException(502, f"sweep failed: {e}")
+    return {"symbol": req.symbol.upper(), "strategy": req.strategy,
+            "months": req.months, "combos": len(rows), "results": rows}
+
+
 @router.get("/config")
 def config():
     return {"config": CONFIG.as_dict(),

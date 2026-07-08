@@ -141,7 +141,10 @@ class PositionManager:
         self.pos = Position(symbol=self.spec.key, side=sig.side, units=[unit],
                             initial_risk_usd=risk_usd,
                             target_price=self._round_price(target))
+        # entry fee lives INSIDE the position's realized PnL so the CLOSE
+        # row (and PF/expectancy computed from it) matches the equity curve
         self.pos.realized_fee_usd = fee
+        self.pos.realized_pnl_usd = -fee
         self.equity -= fee
         self.bars_in_trade = 0
         self.note = f"OPEN {sig.side.value} @ {entry:g} stop {stop:g}"
@@ -180,6 +183,7 @@ class PositionManager:
                     entry_ts=ts, is_add=True, fee_usd=fee)
         p.units.append(unit)
         p.realized_fee_usd += fee
+        p.realized_pnl_usd -= fee
         self.equity -= fee
         self.note = f"ADD #{p.adds} {sig.side.value} @ {entry:g}"
         self._journal("ADD", sig, unit, "", 0.0, fee)

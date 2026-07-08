@@ -205,10 +205,36 @@ def test_backtest_fetch_fallback():
     print("ok  backtest fetch falls back binance->okx with clear diagnosis")
 
 
+def test_sweep_grid():
+    """sweep(): cartesian grid over one candle set, rows sorted by
+    expectancy, combo cap enforced."""
+    from app.trading.backtest.engine import sweep
+    from app.trading.config import TradingConfig
+
+    htf, entry = _coherent_series(220)
+    rows = sweep("BTC", "prop_breakout", TradingConfig(),
+                 {"donchian_lookback": [10, 20], "atr_stop_mult": [1.5, 2.5]},
+                 entry_candles=entry, htf_candles=htf)
+    assert len(rows) == 4
+    assert all(set(r["overrides"]) == {"donchian_lookback", "atr_stop_mult"}
+               for r in rows)
+    exps = [r["expectancy_r"] for r in rows if r["expectancy_r"] is not None]
+    assert exps == sorted(exps, reverse=True)
+    try:
+        sweep("BTC", "prop_breakout", TradingConfig(),
+              {"atr_stop_mult": list(range(100))},
+              entry_candles=entry, htf_candles=htf)
+        assert False, "combo cap should raise"
+    except ValueError as e:
+        assert "cap" in str(e)
+    print("ok  backtest sweep (grid, sort, combo cap)")
+
+
 if __name__ == "__main__":
     test_kline_source_failover()
     test_kline_cross_validation()
     test_history_archive()
     test_replay_windowed_equals_full()
     test_backtest_fetch_fallback()
+    test_sweep_grid()
     print("\nall data-feed/history tests passed ✅")
