@@ -136,6 +136,17 @@
     box-shadow:0 6px 24px rgba(0,0,0,.55);cursor:pointer;animation:tin .18s ease-out}
   .toast b{display:block;font-size:11px;letter-spacing:.06em;margin-bottom:2px}
   .toast .tmsg{color:var(--dim);font-size:10.5px}
+  /* layout edit mode */
+  body.layout-edit .panel{outline:1px dashed var(--brand);position:relative}
+  .ltb{display:none;position:absolute;top:4px;right:6px;gap:4px;z-index:30}
+  body.layout-edit .ltb{display:flex}
+  .ltb button{background:var(--panel-2);border:1px solid var(--border);color:var(--ink);
+    font-size:11px;padding:2px 7px;border-radius:3px;cursor:pointer}
+  .ltb button:hover{border-color:var(--brand)}
+  .lay-tray{display:flex;gap:6px;flex-wrap:wrap;padding:6px 12px;font-size:11px;align-items:center}
+  .lay-tray .chip{background:var(--panel-2);border:1px solid var(--border);padding:3px 9px;
+    border-radius:3px;cursor:pointer;color:var(--faint)}
+  .lay-tray .chip:hover{border-color:var(--up);color:var(--up)}
   .toast.win{border-left-color:var(--up)} .toast.loss{border-left-color:var(--dn)}
   .toast.warn{border-left-color:var(--yel)} .toast.brand{border-left-color:var(--brand)}
   .toast.out{opacity:0;transform:translateX(14px);transition:.25s}
@@ -271,6 +282,7 @@
     <button class="stop" id="btnKill" style="display:none" onclick="resetKill()">KILL RESET</button>
   </span>
   <button class="bell" id="bellBtn" onclick="toggleAlerts()" title="알림 토글">🔔</button>
+  <button class="bell" id="layoutBtn" onclick="toggleLayoutEdit()" title="레이아웃 편집">🧩</button>
 </div>
 
 <div class="ticker"><div class="rail" id="rail"><span class="it">로딩 중…</span></div></div>
@@ -280,9 +292,10 @@
     <b>실주문은 전송되지 않습니다.</b> 리스크는 프롭 룰 예산(일일손실·최대DD)에서 나오고, 브리치·가디언·행위 감시가
     상시 가동됩니다 — 실거래는 백테스트 게이트 통과 후 Phase 3.</div>
 
+  <div class="lay-tray" id="layTray" style="display:none"></div>
   <div class="grid">
     <!-- 프롭 챌린지 -->
-    <section class="panel col-4" id="propPanel">
+    <section data-panel="prop" class="panel col-4" id="propPanel">
       <div class="phead"><span class="mk">◆</span> PROP 챌린지 <span class="sp"></span>
         <span class="r muted" id="propState">없음</span></div>
       <div class="pbody">
@@ -322,7 +335,7 @@
     </section>
 
     <!-- 계좌 -->
-    <section class="panel col-4">
+    <section data-panel="account" class="panel col-4">
       <div class="phead"><span class="mk">◆</span> ACCOUNT (PAPER) <span class="sp"></span>
         <span class="r"><span class="tag paper">PAPER-SIM</span></span></div>
       <div class="pbody">
@@ -345,7 +358,7 @@
     </section>
 
     <!-- 라이브 차트 -->
-    <section class="panel col8">
+    <section data-panel="chart" class="panel col8">
       <div class="phead"><span class="mk">◆</span> 라이브 차트 · 15m + EMA + 채널 + 포지션
         <span class="sp"></span><span class="r" id="chTf">BTCUSDT</span></div>
       <div class="pbody" style="padding:0">
@@ -365,7 +378,7 @@
     </section>
 
     <!-- 시그널 게이트 -->
-    <section class="panel col-4">
+    <section data-panel="gates" class="panel col-4">
       <div class="phead"><span class="mk">◆</span> 시그널 게이트 <span class="sp"></span>
         <span class="r" id="gDir">–</span></div>
       <div class="pbody">
@@ -384,7 +397,7 @@
     </section>
 
     <!-- 포지션 / R-ladder -->
-    <section class="panel col8">
+    <section data-panel="position" class="panel col8">
       <div class="phead"><span class="mk">◆</span> 포지션 · 사이클 · R-ladder <span class="sp"></span>
         <span class="r" id="posSide">FLAT</span></div>
       <div class="pbody">
@@ -394,7 +407,7 @@
     </section>
 
     <!-- 리스크 규칙 -->
-    <section class="panel col-4">
+    <section data-panel="risk" class="panel col-4">
       <div class="phead"><span class="mk">◆</span> 리스크 규칙 (하드캡)</div>
       <div class="pbody">
         <div class="row"><span class="l">레버리지</span><span class="v" id="cLev">–</span></div>
@@ -408,7 +421,7 @@
     </section>
 
     <!-- 데이터 피드 -->
-    <section class="panel col-4">
+    <section data-panel="feed" class="panel col-4">
       <div class="phead"><span class="mk">◆</span> 데이터 피드 (Binance→OKX)</div>
       <div class="pbody">
         <div class="row"><span class="l">소스</span><span class="v" id="fSrc">–</span></div>
@@ -423,7 +436,7 @@
 
 
     <!-- 백테스트 -->
-    <section class="panel col-4">
+    <section data-panel="backtest" class="panel col-4">
       <div class="phead"><span class="mk">◆</span> 백테스트 게이트 (Phase 2)</div>
       <div class="pbody">
         <div class="note">과거 kline 리플레이 → 승률·R기대값·PF·MDD</div>
@@ -438,13 +451,13 @@
     </section>
 
     <!-- 체결 피드 -->
-    <section class="panel col-4">
+    <section data-panel="fills" class="panel col-4">
       <div class="phead"><span class="mk">◆</span> 체결 피드</div>
       <div class="pbody"><div class="feed" id="feed"><div class="note">거래 없음</div></div></div>
     </section>
 
     <!-- 저널 -->
-    <section class="panel full">
+    <section data-panel="journal" class="panel full">
       <div class="phead"><span class="mk">◆</span> 트레이드 저널 <span class="sp"></span>
         <span class="r"><a class="dl" id="csvBtn" href="/api/trading/trades.csv" download>⬇ CSV</a></span></div>
       <div class="pbody">
@@ -1020,6 +1033,73 @@ async function runBacktest(){
       · MDD ${money(m.max_drawdown_usd)} · 최대연패 ${m.max_losing_streak}
       <br><span class="muted" style="font-size:10px">${d.snapshots} 바 평가 · 최종자산 ${money(d.final_equity)}</span>`;
   }catch(e){$("btOut").innerHTML='<span class="dn">실패: '+e.message+'</span>';}}
+
+// ---- 레이아웃 편집: 패널 숨기기/순서/너비를 localStorage 에 영속 ----
+const LAY_KEY="layout_v1", LAY_WIDTHS=["col-4","half","col8","full"];
+const layState=()=>{try{return JSON.parse(localStorage.getItem(LAY_KEY))||{}}catch(e){return{}}};
+const laySave=st=>localStorage.setItem(LAY_KEY,JSON.stringify(st));
+const layPanels=()=>[...document.querySelectorAll('.grid > section.panel')];
+function panelTitle(el){const h=el.querySelector(".phead");
+  return h?h.textContent.replace(/◆|→|·/g," ").trim().split("\n")[0].slice(0,24):el.dataset.panel;}
+function applyLayout(){
+  const st=layState(),grid=document.querySelector(".grid");
+  (st.order||[]).forEach(id=>{const el=grid.querySelector(`[data-panel="${id}"]`);if(el)grid.appendChild(el);});
+  layPanels().forEach(el=>{const id=el.dataset.panel;
+    if((st.hidden||[]).includes(id))el.style.display="none";
+    const w=(st.widths||{})[id];
+    if(w){el.classList.remove(...LAY_WIDTHS.filter(c=>el.classList.contains(c)));el.classList.add(w);}});
+  renderLayTray();
+}
+function renderLayTray(){
+  const st=layState(),tray=$("layTray"),edit=document.body.classList.contains("layout-edit");
+  const hidden=(st.hidden||[]);
+  if(!edit||!true){tray.style.display=edit?"flex":"none";}
+  tray.style.display=edit?"flex":"none";
+  if(!edit)return;
+  tray.innerHTML='<span class="muted">🧩 레이아웃 편집 — 패널의 ◀▶(순서) ↔(너비) ✕(숨김)</span>';
+  hidden.forEach(id=>{const el=document.querySelector(`[data-panel="${id}"]`);
+    const c=document.createElement("span");c.className="chip";
+    c.textContent="+ "+(el?panelTitle(el):id);
+    c.onclick=()=>{const st2=layState();st2.hidden=(st2.hidden||[]).filter(x=>x!==id);
+      laySave(st2);if(el)el.style.display="";renderLayTray();};
+    tray.appendChild(c);});
+  const rst=document.createElement("span");rst.className="chip";rst.textContent="↺ 초기화";
+  rst.onclick=()=>{if(confirm("레이아웃을 기본값으로 되돌릴까요?")){localStorage.removeItem(LAY_KEY);location.reload();}};
+  tray.appendChild(rst);
+}
+function layMove(el,dir){
+  const grid=el.parentElement,sib=dir<0?el.previousElementSibling:el.nextElementSibling;
+  if(!sib)return;
+  dir<0?grid.insertBefore(el,sib):grid.insertBefore(sib,el);
+  const st=layState();st.order=layPanels().map(x=>x.dataset.panel);laySave(st);
+}
+function layWidth(el){
+  const cur=LAY_WIDTHS.find(c=>el.classList.contains(c))||"col-4";
+  const nxt=LAY_WIDTHS[(LAY_WIDTHS.indexOf(cur)+1)%LAY_WIDTHS.length];
+  el.classList.remove(cur);el.classList.add(nxt);
+  const st=layState();st.widths=st.widths||{};st.widths[el.dataset.panel]=nxt;laySave(st);
+}
+function layHide(el){
+  el.style.display="none";
+  const st=layState();st.hidden=[...new Set([...(st.hidden||[]),el.dataset.panel])];
+  laySave(st);renderLayTray();
+}
+function injectLayToolbars(){
+  layPanels().forEach(el=>{
+    if(el.querySelector(".ltb"))return;
+    const tb=document.createElement("div");tb.className="ltb";
+    const mk=(t,fn,tip)=>{const b=document.createElement("button");b.textContent=t;b.title=tip;
+      b.onclick=e=>{e.stopPropagation();fn(el);};tb.appendChild(b);};
+    mk("◀",x=>layMove(x,-1),"앞으로");mk("▶",x=>layMove(x,1),"뒤로");
+    mk("↔",layWidth,"너비 변경");mk("✕",layHide,"숨기기");
+    el.appendChild(tb);});
+}
+function toggleLayoutEdit(){
+  document.body.classList.toggle("layout-edit");
+  if(document.body.classList.contains("layout-edit"))injectLayToolbars();
+  renderLayTray();
+}
+applyLayout();
 
 renderBell();loadConfig();loadPropPlans();refresh();loadCandles();loadJournal();
 setInterval(refresh,2500);
