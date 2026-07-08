@@ -7,7 +7,7 @@ import csv
 import datetime as dt
 import io
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -183,6 +183,49 @@ def backtest_sweep(req: SweepRequest):
         raise HTTPException(502, f"sweep failed: {e}")
     return {"symbol": req.symbol.upper(), "strategy": req.strategy,
             "months": req.months, "combos": len(rows), "results": rows}
+
+
+@router.get("/backtest/quick")
+def backtest_quick(request: Request, months: int = 12, symbol: str = "BTC",
+                   strategy: str = "prop_breakout"):
+    """URL-only backtest (mobile-proof): every extra query param is a config
+    override — /backtest/quick?months=3&atr_stop_mult=2.5&entry_interval=60.
+    Returns metrics only, small enough to read on screen."""
+    import copy
+
+    from .backtest.engine import replay
+    from .backtest.metrics import compute
+
+    if symbol.upper() not in SYMBOL_SPECS:
+        raise HTTPException(422, f"unknown symbol '{symbol}'")
+    if strategy not in STRATEGIES:
+        raise HTTPException(422, f"unknown strategy '{strategy}'")
+    if not (0 <= months <= 60):
+        raise HTTPException(422, "months must be 0..60")
+    cfg = copy.copy(CONFIG)
+    applied: dict = {}
+    for k, v in request.query_params.items():
+        if k in ("months", "symbol", "strategy"):
+            continue
+        if not hasattr(cfg, k):
+            raise HTTPException(422, f"unknown config field '{k}'")
+        cur = getattr(cfg, k)
+        try:
+            val = (v.strip().lower() in ("1", "true", "yes", "on")
+                   if isinstance(cur, bool) else type(cur)(v))
+        except (TypeError, ValueError):
+            raise HTTPException(422, f"bad value for '{k}': {v!r}")
+        setattr(cfg, k, val)
+        applied[k] = val
+    try:
+        r = replay(symbol, strategy, cfg, months=months)
+    except Exception as e:
+        raise HTTPException(502, f"backtest fetch/replay failed: {e}")
+    m = compute(r["closes"], cfg.equity_usd,
+                r.get("final_equity", cfg.equity_usd))
+    return {"symbol": symbol.upper(), "strategy": strategy, "months": months,
+            "overrides": applied, "metrics": m,
+            "final_equity": r.get("final_equity"), "snapshots": r["snapshots"]}
 
 
 PRESET_GRID = {"donchian_lookback": [20, 55], "entry_interval": ["15", "60"],
