@@ -99,6 +99,10 @@ class TradingConfig:
     # --- prop_breakout: Donchian 채널 돌파 + HTF 추세 필터 -------------------
     donchian_lookback: int = 20           # entry TF 채널 봉 수 (현재 봉 제외)
     donchian_htf_ema: int = 20            # HTF 추세 필터 EMA 기간
+    # 선택 필터 (기본 OFF — 백테스트 게이트 A/B로만 켠다, hand-tune 금지)
+    pump_filter_pct: float = 0.0          # 채널 저점 대비 급등 % 초과 돌파 스킵 (NFI 펌프 필터)
+    squeeze_gate: bool = False            # 직전 봉 BB(20,2) ⊂ Keltner(20,1.5ATR) 요구
+    breakeven_at_r: float = 0.0           # N R 도달 시 손절→본전 (0=off, 부분익절 전 단계)
 
     # --- 애드업 / pyramiding (prop 기각: 손실 뒤 증액과 한 끗 — 기본 OFF) ----
     pyramid_enabled: bool = False

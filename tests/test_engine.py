@@ -374,6 +374,29 @@ def test_state_persistence():
 
 
 
+def test_fsm_breakeven_step():
+    """breakeven_at_r: at +1R the protective stop parks at entry — a full
+    reversal then exits at ~breakeven instead of -1R."""
+    cfg = TradingConfig()
+    cfg.breakeven_at_r = 1.0
+    cfg.rr_target = 4.0          # keep the 2R partial out of this test
+    pm = _pm(cfg)
+    sig = TradeSignal(Side.LONG, "T", 80, stop_price=98, entry_hint=100)
+    assert pm.try_open(sig, 100, atr_val=2.0, ts=0)          # 1R = $2/px
+    pm.manage(_c(60000, 100, 102.5, 99.5, 102), 2.0)         # tags +1R (102)
+    p = pm.pos
+    assert p.state.value == "OPEN" and p.trail_price == 100.0
+    pm.manage(_c(120000, 102, 102.2, 97, 97.5), 2.0)         # full reversal
+    assert p.state.value == "CLOSED"
+    assert abs(p.realized_pnl_usd) < p.initial_risk_usd * 0.2  # ~breakeven
+    # off by default: same path without the knob loses the full 1R
+    pm2 = _pm(TradingConfig())
+    assert pm2.try_open(sig, 100, atr_val=2.0, ts=0)
+    pm2.manage(_c(60000, 100, 102.5, 99.5, 102), 2.0)
+    assert pm2.pos.trail_price is None
+    print("ok  breakeven step (1R -> stop to entry, default off)")
+
+
 if __name__ == "__main__":
     test_indicators()
     test_sizing()
@@ -382,6 +405,7 @@ if __name__ == "__main__":
     test_risk_caps_follow_compounded_equity()
     test_fsm_stop_loss()
     test_fsm_partial_then_trail()
+    test_fsm_breakeven_step()
     test_fsm_pyramiding()
     test_strategy_signal()
     test_short_vol_exempt_flag()

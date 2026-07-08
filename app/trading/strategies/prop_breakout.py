@@ -10,6 +10,12 @@ two gates that survive prop backtests everywhere:
   2. Donchian breakout   : entry close beyond the N-bar channel extreme
                            (donchian_lookback bars, current bar excluded).
 
+Optional vetoes, OFF by default (A/B via the backtest gate only):
+  pump_filter_pct — reject a breakout that is already X% past the channel's
+  far side (NFI pump protection: don't buy the blow-off).
+  squeeze_gate    — require the PREVIOUS bar in a volatility squeeze
+  (BB(20,2) inside Keltner(20,1.5*ATR)): breakouts out of contraction.
+
 Stops stay ATR-anchored (System #2 discipline is kept); position size is
 NOT this module's job — prop budget sizing lives in the position FSM.
 """
@@ -41,6 +47,22 @@ class PropBreakoutStrategy(TradingStrategy):
         broke = (cur.close > ch_hi if allowed is Side.LONG
                  else cur.close < ch_lo)
 
+        pump_ok = True
+        if c.pump_filter_pct > 0:
+            ref = ch_lo if allowed is Side.LONG else ch_hi
+            runup = ((cur.close / ref - 1.0) if allowed is Side.LONG
+                     else (ref / cur.close - 1.0)) * 100.0
+            pump_ok = runup <= c.pump_filter_pct
+
+        squeeze_ok = True
+        if c.squeeze_gate:
+            # BB(2σ) inside Keltner(1.5·ATR) reduces to 2σ < 1.5·ATR
+            closes = [x.close for x in window]
+            mid = sum(closes) / len(closes)
+            sd = (sum((x - mid) ** 2 for x in closes) / len(closes)) ** 0.5
+            a_prev = atr(ef[:-1], c.atr_period)
+            squeeze_ok = bool(a_prev and 2 * sd < 1.5 * a_prev)
+
         a = atr(ef, c.atr_period)
         stop = None
         if a and a > 0:
@@ -51,7 +73,9 @@ class PropBreakoutStrategy(TradingStrategy):
             "allowed": allowed, "htf_ema": htf_ema,
             "channel_hi": ch_hi, "channel_lo": ch_lo,
             "broke": broke, "atr": a, "stop": stop,
-            "ready": bool(broke and stop is not None),
+            "pump_ok": pump_ok, "squeeze_ok": squeeze_ok,
+            "ready": bool(broke and pump_ok and squeeze_ok
+                          and stop is not None),
             "entry_ref": cur.close,
         }
 
@@ -84,6 +108,13 @@ class PropBreakoutStrategy(TradingStrategy):
             {"key": "atr", "label": "ATR 스탑 확보", "ok": bool(g["atr"]),
              "info": f"ATR {g['atr']:.4f}" if g["atr"] else "–"},
         ]
+        if self.cfg.pump_filter_pct > 0:
+            gates.append({"key": "pump", "label": "펌프 필터",
+                          "ok": bool(g["pump_ok"]),
+                          "info": f"≤ +{self.cfg.pump_filter_pct:g}%"})
+        if self.cfg.squeeze_gate:
+            gates.append({"key": "squeeze", "label": "변동성 스퀴즈",
+                          "ok": bool(g["squeeze_ok"]), "info": "BB⊂KC"})
         passed = sum(1 for x in gates if x["ok"])
         return {"allowed": allowed, "ready": g["ready"],
                 "passed": passed, "total": len(gates), "gates": gates,

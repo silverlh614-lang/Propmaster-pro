@@ -221,9 +221,43 @@ def test_prop_breakout_donchian():
     print("ok  prop_breakout donchian breakout + HTF filter")
 
 
+def test_prop_breakout_optional_filters():
+    """Pump filter and squeeze gate veto breakouts only when enabled."""
+    from app.trading.models import Side
+    htf = [_c(i * 3600000, 100 + i, 101 + i, 99 + i, 100.5 + i)
+           for i in range(30)]
+    flat = [_c(i * 900000, 105, 110, 100, 105) for i in range(25)]
+    burst = flat + [_c(25 * 900000, 106, 132, 105, 131)]   # +31% above ch_lo
+
+    cfg = TradingConfig()
+    base = make_strategy("prop_breakout", cfg)
+    assert base.evaluate(_ctx(htf, burst)) is not None      # filters off: fires
+
+    cfg_p = TradingConfig(); cfg_p.pump_filter_pct = 15.0
+    pumped = make_strategy("prop_breakout", cfg_p)
+    assert pumped.evaluate(_ctx(htf, burst)) is None        # +31% > 15% veto
+    calm = flat + [_c(25 * 900000, 106, 112, 105, 111.5)]   # +11.5% run-up
+    sig = pumped.evaluate(_ctx(htf, calm))
+    assert sig is not None and sig.side is Side.LONG
+    d = pumped.diagnose(_ctx(htf, burst))
+    assert any(x["key"] == "pump" and not x["ok"] for x in d["gates"])
+
+    cfg_s = TradingConfig(); cfg_s.squeeze_gate = True
+    squeezed = make_strategy("prop_breakout", cfg_s)
+    # wide-range window (range 10, sd 0 but ATR 10): 2σ(0) < 1.5·ATR — flat
+    # closes give σ=0 so the squeeze passes; alternate closes widen σ
+    noisy = [_c(i * 900000, 105, 110, 100, 102 + 6 * (i % 2)) for i in range(25)]
+    noisy_burst = noisy + [_c(25 * 900000, 106, 112, 105, 111.5)]
+    d = squeezed.diagnose(_ctx(htf, noisy_burst))
+    assert any(x["key"] == "squeeze" for x in d["gates"])
+    assert squeezed.evaluate(_ctx(htf, calm)) is not None   # σ=0 window passes
+    print("ok  prop_breakout optional pump/squeeze filters")
+
+
 if __name__ == "__main__":
     test_adx_regime()
     test_prop_breakout_donchian()
+    test_prop_breakout_optional_filters()
     test_swing_and_trendline()
     test_trendline_bounce_long()
     test_range_box_long_short()

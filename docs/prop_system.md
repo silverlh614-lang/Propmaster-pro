@@ -128,7 +128,8 @@ Breakout Prop(breakoutprop.com, 2025-09 Kraken 인수)의 공개 구조를 본�
 | 일일 규율 | 트레이드 수 캡만 | **당일 3패 시 진입 정지** + 오픈리스크 합 ≤ 잔여 일일예산의 50% |
 | 애드업 | 최대 2유닛 피라미딩 | **기본 OFF** (손실 뒤 증액과 한 끗 — conduct 모니터와 일관) |
 | 기본 전략 | trend_breakout (장악형+거래량 게이트) | **prop_breakout**: Donchian 20 돌파 + HTF EMA20 필터 (게이트 최소화 — 평가 기간 단축) |
-| 청산 | 2R 부분익절+브레이크이븐+트레일 | 유지 (진행 잠금이 프롭에 유리) |
+| 청산 | 2R 부분익절+브레이크이븐+트레일 | 유지 + 선택형 `breakeven_at_r`(N R 도달 시 손절→본전, 기본 off) |
+| 선택 필터 | — | `pump_filter_pct`(급등 돌파 스킵)·`squeeze_gate`(변동성 수축 후 돌파만) — 기본 off, 백테스트 A/B 전용 |
 
 프롭 계좌가 없으면(백테스트·스탠드얼론) 기존 고정 비율로 폴백한다.
 관련 knob: `TRADING_PROP_MODE`, `TRADING_RISK_DAILY_BUDGET_FRAC`,

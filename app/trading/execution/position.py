@@ -203,6 +203,16 @@ class PositionManager:
             self._close(stop, "stop hit", candle.ts_ms / 1000)
             return
 
+        # 1.5) optional breakeven step (freqtrade FixedRiskRewardLoss idea):
+        # once price is breakeven_at_r ahead, park the protective stop at
+        # entry — BEFORE the partial, so a reversal costs ~0 instead of -1R
+        if (self.cfg.breakeven_at_r > 0 and p.trail_price is None
+                and p.open_qty > 0 and p.initial_risk_usd > 0):
+            r_px = p.initial_risk_usd / sum(u.qty for u in p.units)
+            trig = p.avg_entry + p.side.sign * r_px * self.cfg.breakeven_at_r
+            if (candle.high >= trig) if long else (candle.low <= trig):
+                p.trail_price = self._round_price(p.avg_entry)
+
         # 2) first take-profit (2R): scale out partial_tp_frac, arm breakeven
         tgt = p.target_price
         if (not p.partial_done and tgt is not None
