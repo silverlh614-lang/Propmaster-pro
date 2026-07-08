@@ -282,6 +282,41 @@
     시스템(추세돌파·5일선·거래량·위험관리)을 구현한 것 — 실거래는 백테스트 게이트 통과 후 Phase 3.</div>
 
   <div class="grid">
+    <!-- 프롭 챌린지 -->
+    <section class="panel col-4" id="propPanel">
+      <div class="phead"><span class="mk">◆</span> PROP 챌린지 <span class="sp"></span>
+        <span class="r muted" id="propState">없음</span></div>
+      <div class="pbody">
+        <div id="propActive" style="display:none">
+          <div class="wallet"><span class="tag" id="propPlanTag">–</span><span id="propAcctId">–</span></div>
+          <div class="subline" id="propPhaseLine" style="margin-top:6px">–</div>
+          <div class="wrbar"><div class="cap"><span id="propTgtCap">수익 목표</span><span id="propTgtPct">–</span></div>
+            <div class="tr"><i id="propTgtBar" style="background:var(--up)"></i></div></div>
+          <div class="wrbar"><div class="cap"><span>최대 DD 소진 <span class="muted" id="propDdFloor"></span></span><span id="propDdPct">–</span></div>
+            <div class="tr"><i id="propDdBar" style="background:var(--dn)"></i></div></div>
+          <div class="wrbar"><div class="cap"><span>일일손실 소진 <span class="muted" id="propDailyFloor"></span></span><span id="propDailyPct">–</span></div>
+            <div class="tr"><i id="propDailyBar" style="background:var(--yel)"></i></div></div>
+          <div class="subline" id="propBreach" style="display:none;color:var(--dn);margin-top:8px"></div>
+          <div id="propPayoutBox" style="display:none;margin-top:10px">
+            <div class="row"><span class="l">인출 가능 수익</span><span class="v" id="propProfit">–</span></div>
+            <div class="row"><span class="l">누적 인출 / 분할</span><span class="v" id="propWd">–</span></div>
+            <div style="display:flex;gap:6px;margin-top:7px;align-items:center">
+              <input class="ov" id="poAmt" placeholder="금액 $" style="width:80px">
+              <button class="go" onclick="requestPayout()">USDC 페이아웃</button>
+            </div>
+          </div>
+        </div>
+        <div id="propBuyBox" style="margin-top:10px">
+          <div class="note" id="propBuyNote">활성 챌린지 없음 — 평가 계좌를 구매하면 원장이 계좌 크기로 리셋됩니다.</div>
+          <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;align-items:center">
+            <select id="propPlanSel"></select><select id="propSizeSel"></select>
+            <button class="go" onclick="buyChallenge()">챌린지 구매</button>
+          </div>
+          <div class="subline muted" id="propFee" style="margin-top:5px">–</div>
+        </div>
+      </div>
+    </section>
+
     <!-- 계좌 -->
     <section class="panel col-4">
       <div class="phead"><span class="mk">◆</span> ACCOUNT (PAPER) <span class="sp"></span>
@@ -701,6 +736,7 @@ async function refresh(){
   const today=(s.risk&&s.risk.today)||{};
   $("sTrades").textContent=today.trades||0;
   $("sDaily").textContent=money(today.pnl_usd||0);$("sDaily").className=(today.pnl_usd||0)>=0?"pos":"neg";
+  try{renderProp(s.prop);}catch(e){}
 
   const b=(s.symbols||{})[SYM]; if(!b)return;
   const mgr=b.manager||{}, col=b.collector||{}, dg=b.diagnostics;
@@ -874,6 +910,100 @@ function flashResult(r){const f=$("flash");const win=r.result==="WIN"||Number(r.
   f.textContent=(win?"▲ WIN ":"▼ LOSS ")+(r.r_multiple?fmt(r.r_multiple,2)+"R":money(Number(r.pnl_usd)));
   f.classList.remove("show");void f.offsetWidth;f.classList.add("show");}
 
+// ---- 프롭 챌린지 패널 ----
+let PROP_PLANS=null,_propPrev=null;
+async function loadPropPlans(){
+  try{PROP_PLANS=await api("/api/prop/plans");}catch(e){return;}
+  const ps=$("propPlanSel");ps.innerHTML="";
+  PROP_PLANS.plans.forEach(p=>{const o=document.createElement("option");o.value=p.key;o.textContent=p.name;ps.appendChild(o);});
+  ps.onchange=renderSizeSel;renderSizeSel();
+}
+function renderSizeSel(){
+  if(!PROP_PLANS)return;
+  const p=PROP_PLANS.plans.find(x=>x.key===$("propPlanSel").value)||PROP_PLANS.plans[0];
+  const ss=$("propSizeSel");ss.innerHTML="";
+  PROP_PLANS.sizes.filter(s=>s<=p.max_size).forEach(s=>{
+    const o=document.createElement("option");o.value=s;o.textContent="$"+(s/1000)+"K";ss.appendChild(o);});
+  ss.onchange=renderPropFee;renderPropFee();
+}
+function renderPropFee(){
+  const p=PROP_PLANS&&PROP_PLANS.plans.find(x=>x.key===$("propPlanSel").value);if(!p)return;
+  const fee=p.fees[String($("propSizeSel").value)];
+  $("propFee").textContent="평가 수수료(시뮬) "+money(fee)+" · 목표 "+p.phase_targets.join("%→")+"%"
+    +" · DD "+p.max_dd_pct+"% "+(p.dd_mode==="trailing"?"추적":"정적")+" · 일일 "+p.daily_loss_pct+"%";
+}
+const clamp100=x=>Math.max(0,Math.min(100,x));
+function renderProp(pr){
+  const a=pr&&pr.active,st=$("propState");
+  if(!a){st.textContent="없음";st.className="r muted";
+    $("propActive").style.display="none";$("propBuyBox").style.display="block";return;}
+  $("propActive").style.display="block";
+  const plan=a.plan||{};
+  const S={evaluation:["평가 P"+a.phase+"/"+plan.steps,"up"],funded:["FUNDED","up"],failed:["FAILED","dn"]};
+  const[label,cls]=S[a.status]||[a.status,"muted"];
+  st.textContent=label;st.className="r "+cls;
+  $("propPlanTag").textContent=plan.name||a.plan_key;
+  $("propAcctId").textContent=a.id+" · "+money(a.balance!=null?a.balance:a.size);
+  const tgt=a.target_balance;
+  if(a.status==="evaluation"&&tgt!=null){
+    $("propTgtCap").textContent="수익 목표 "+money(tgt);
+    const pp=a.target_progress_pct!=null?a.target_progress_pct:0;
+    $("propTgtPct").textContent=fmt(pp,1)+"%";$("propTgtBar").style.width=clamp100(pp)+"%";
+    $("propPhaseLine").textContent="phase "+a.phase+"/"+plan.steps+" · 목표 +"+plan.phase_targets[a.phase-1]+"% · 시간제한 없음";
+  }else if(a.status==="funded"){
+    $("propTgtCap").textContent="수익 목표 없음 (펀디드)";
+    $("propTgtPct").textContent="∞";$("propTgtBar").style.width="100%";
+    $("propPhaseLine").textContent="회사 자본 계좌 · 분할 "+plan.profit_split_pct+"% · 온디맨드 인출";
+  }else{
+    $("propTgtCap").textContent="수익 목표";$("propTgtPct").textContent="–";$("propTgtBar").style.width="0%";
+    $("propPhaseLine").textContent="계좌 종료 (phase "+a.phase+"에서 위반)";
+  }
+  const ddBud=a.size*(plan.max_dd_pct||0)/100,ddRoom=a.room_to_dd_floor;
+  if(ddRoom!=null&&ddBud>0){const u=clamp100((1-ddRoom/ddBud)*100);
+    $("propDdPct").textContent=fmt(u,1)+"%";$("propDdBar").style.width=u+"%";
+    $("propDdFloor").textContent="(플로어 "+money(a.dd_floor)+")";}
+  const dBud=(a.day_anchor||a.size)*(plan.daily_loss_pct||0)/100,dRoom=a.room_to_daily_floor;
+  if(dRoom!=null&&dBud>0){const u=clamp100((1-dRoom/dBud)*100);
+    $("propDailyPct").textContent=fmt(u,1)+"%";$("propDailyBar").style.width=u+"%";
+    $("propDailyFloor").textContent="(플로어 "+money(a.daily_floor)+")";}
+  const failed=a.status==="failed";
+  $("propBreach").style.display=failed?"block":"none";
+  if(failed)$("propBreach").textContent="⛔ "+(a.breach_reason||"룰 위반")+" — 재도전은 새 챌린지 구매";
+  $("propPayoutBox").style.display=a.status==="funded"?"block":"none";
+  if(a.status==="funded"){
+    const profit=(a.balance!=null?a.balance:a.size)-a.size;
+    $("propProfit").textContent=money(Math.max(0,profit));
+    $("propWd").textContent=money(a.withdrawn_usd||0)+" / "+plan.profit_split_pct+"%";
+  }
+  $("propBuyBox").style.display=failed?"block":"none";
+  if(failed)$("propBuyNote").textContent="계좌 종료됨 — 새 평가 챌린지로 재시작하세요.";
+  const key=a.id+":"+a.status+":"+a.phase;
+  if(_propPrev&&_propPrev!==key){
+    if(failed)notify("loss","프롭 계좌 종료",a.breach_reason||"룰 위반");
+    else if(a.status==="funded")notify("win","펀디드 전환!","평가 통과 — 회사 자본 계좌 (잔고 리셋)");
+    else notify("win","단계 통과","phase "+a.phase+" 진입 (잔고 리셋)");
+  }
+  _propPrev=key;
+}
+async function buyChallenge(){
+  const plan=$("propPlanSel").value,size=Number($("propSizeSel").value);
+  if(!plan||!size){alert("플랜/크기를 선택하세요");return;}
+  if(!confirm(plan+" · $"+(size/1000)+"K 챌린지를 구매할까요?\n(페이퍼 원장이 계좌 크기로 리셋됩니다)"))return;
+  try{await api("/api/prop/challenge",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({plan,size})});
+    notify("brand","챌린지 시작",plan+" · $"+(size/1000)+"K");}catch(e){alert(e.message);}
+  refresh();
+}
+async function requestPayout(){
+  const amount=Number($("poAmt").value);
+  if(!amount||amount<=0){alert("금액을 입력하세요 (최소 $50)");return;}
+  try{const r=await api("/api/prop/payout",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({amount})});
+    notify("win","페이아웃 완료",money(r.trader_usd)+" 수령 ("+r.split_pct+"% 분할)");$("poAmt").value="";}
+  catch(e){alert(e.message);}
+  refresh();
+}
+
 async function startBot(){try{await api("/api/trading/start",{method:"POST",headers:{"Content-Type":"application/json"},
   body:JSON.stringify({mode:"paper",strategy:$("stratSel").value})});}catch(e){alert(e.message);}refresh();}
 async function stopBot(){try{await api("/api/trading/stop",{method:"POST"});}catch(e){alert(e.message);}refresh();}
@@ -896,7 +1026,7 @@ async function runBacktest(){$("btOut").textContent="리플레이 중… (과거
       <br><span class="muted" style="font-size:10px">${d.snapshots} 바 평가 · 최종자산 ${money(d.final_equity)}</span>`;
   }catch(e){$("btOut").innerHTML='<span class="dn">실패: '+e.message+'</span>';}}
 
-renderBell();loadConfig();refresh();loadCandles();loadJournal();loadCycle();
+renderBell();loadConfig();loadPropPlans();refresh();loadCandles();loadJournal();loadCycle();
 setInterval(loadCycle,60000);
 setInterval(refresh,2500);
 setInterval(loadCandles,7000);
