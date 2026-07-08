@@ -139,9 +139,11 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
                       tick_size=0.001, leverage_cap=2.0),
 }
 
-# Phase 1 default: BTC only (verify the logic on one symbol, then widen with
-# TRADING_SYMBOLS=BTC,ETH). Kept intentionally narrow — one clean trade at a time.
-DEFAULT_SYMBOLS = "BTC"
+# 2026-07 게이트: 같은 프로필이 ETH 에서 무보정 아웃오브샘플로 통과
+# (12mo 35건 PF 2.10 +19.7% MDD -$15) — 두 심볼 기본 가동. 동시 포지션은
+# 여전히 전역 1개(max_concurrent_positions)라 리스크는 그대로, 기회만 늘어난다.
+# 되돌리려면 TRADING_SYMBOLS=BTC.
+DEFAULT_SYMBOLS = "BTC,ETH"
 
 
 def enabled_symbols() -> list[SymbolSpec]:
