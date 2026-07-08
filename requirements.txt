@@ -1,5 +1,5 @@
 # fastapi/starlette upper bounds: starlette 1.x (pulled by fastapi>=0.137)
-# breaks APIRouter.include_router (the Bybit API mounts entirely via a router),
+# breaks APIRouter.include_router (the trading API mounts entirely via a router),
 # so pin to the last starlette 0.4x-compatible fastapi line.
 fastapi>=0.115,<0.137
 starlette>=0.40,<0.42

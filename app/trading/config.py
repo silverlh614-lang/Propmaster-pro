@@ -1,8 +1,8 @@
-"""@responsibility Bybit 트레이딩 설정 SSOT — BYBIT_* env 오버라이드 + 심볼별 SymbolSpec
+"""@responsibility 트레이딩 엔진 설정 SSOT — TRADING_* env 오버라이드 + 심볼별 SymbolSpec
 
-Bybit leverage-margin trading configuration (Part 5). Every field can be
-overridden with a BYBIT_* environment variable (Railway variables),
-e.g. BYBIT_RISK_PER_TRADE_PCT=0.5.
+Leverage-margin trading engine configuration. Every field can be
+overridden with a TRADING_* environment variable (Railway variables),
+e.g. TRADING_RISK_PER_TRADE_PCT=0.5.
 
 Defaults encode the strategy source's risk discipline: leverage <= 5x,
 fixed fractional risk per trade, 2:1 reward:risk, ATR-based stops. These
@@ -16,7 +16,7 @@ from dataclasses import dataclass, fields
 
 
 def _env(name: str, default):
-    raw = os.getenv(f"BYBIT_{name.upper()}")
+    raw = os.getenv(f"TRADING_{name.upper()}")
     if raw is None:
         return default
     if isinstance(default, bool):
@@ -29,12 +29,12 @@ def _env(name: str, default):
 
 
 @dataclass
-class BybitConfig:
+class TradingConfig:
     # --- account (paper simulation) ----------------------------------------
     equity_usd: float = 200.0            # 소액: paper starting equity
     quote: str = "USDT"
 
-    # --- timeframes (Bybit kline interval strings, minutes) ----------------
+    # --- timeframes (kline interval codes: minutes as string / D,W) --------
     entry_interval: str = "15"           # 진입 시간봉
     htf_interval: str = "60"             # 상위 추세 시간봉 (System #3 조건 1)
     warmup_bars: int = 200               # REST backfill on start
@@ -95,7 +95,7 @@ class BybitConfig:
     session_start_kst: int = 0           # allow entries from this KST hour
     session_end_kst: int = 24            # ...until this KST hour (exclusive)
 
-    # --- fees (Bybit USDT perp taker; makers rebate, we assume taker) -------
+    # --- fees (USDT perp taker; makers rebate, we assume taker) -------------
     taker_fee_frac: float = 0.00055      # 0.055% of notional per side
 
     # --- risk caps (GLOBAL across symbols) ---------------------------------
@@ -109,8 +109,7 @@ class BybitConfig:
     poll_sec: float = 2.0
 
     # --- mode (Paper-First) ------------------------------------------------
-    live_enabled: bool = False           # Phase 3: BYBIT_LIVE_ENABLED=1 + creds
-    testnet: bool = True                 # when live lands, default to testnet
+    live_enabled: bool = False           # Phase 3: TRADING_LIVE_ENABLED=1 + creds
 
     def __post_init__(self):
         for f in fields(self):
@@ -122,16 +121,16 @@ class BybitConfig:
         return {f.name: getattr(self, f.name) for f in fields(self)}
 
 
-CONFIG = BybitConfig()
+CONFIG = TradingConfig()
 
 
 # --------------------------------------------------------------- symbols
 
 @dataclass(frozen=True)
 class SymbolSpec:
-    """Per-symbol wiring for Bybit linear (USDT perpetual) markets."""
+    """Per-symbol wiring for USDT linear perpetual markets."""
     key: str                    # display key, e.g. "BTC"
-    symbol: str                 # Bybit symbol, e.g. "BTCUSDT"
+    symbol: str                 # instrument symbol, e.g. "BTCUSDT"
     qty_step: float             # base-asset quantity rounding step
     min_qty: float              # exchange minimum order quantity
     tick_size: float            # price rounding step
@@ -144,12 +143,12 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
 }
 
 # Phase 1 default: BTC only (verify the logic on one symbol, then widen with
-# BYBIT_SYMBOLS=BTC,ETH). Kept intentionally narrow — one clean trade at a time.
+# TRADING_SYMBOLS=BTC,ETH). Kept intentionally narrow — one clean trade at a time.
 DEFAULT_SYMBOLS = "BTC"
 
 
 def enabled_symbols() -> list[SymbolSpec]:
-    raw = os.getenv("BYBIT_SYMBOLS", DEFAULT_SYMBOLS)
+    raw = os.getenv("TRADING_SYMBOLS", DEFAULT_SYMBOLS)
     out = []
     for k in raw.split(","):
         k = k.strip().upper()

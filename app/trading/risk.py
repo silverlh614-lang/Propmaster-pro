@@ -1,6 +1,6 @@
-"""@responsibility Bybit 리스크 단일 관문 — 레버리지·리스크%·오픈리스크·일일 캡·킬스위치, allow_entry 유일 허가점
+"""@responsibility 리스크 단일 관문 — 레버리지·리스크%·오픈리스크·일일 캡·킬스위치, allow_entry 유일 허가점
 
-Risk gate for the Bybit package. Every new entry AND every pyramiding add
+Risk gate for the trading package. Every new entry AND every pyramiding add
 funnels through allow_entry(); nothing places size without passing it. It
 enforces the strategy source's non-negotiables: leverage never exceeds the
 hard cap, per-trade risk is a fixed fraction of equity, total open risk
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from .config import BybitConfig, SymbolSpec
+from .config import TradingConfig, SymbolSpec
 from .store import BotState, Journal
 
 
@@ -48,8 +48,8 @@ def size_position(equity_usd: float, risk_pct: float, entry: float,
     return qty, round(qty * stop_dist, 4), ""
 
 
-class BybitRiskManager:
-    def __init__(self, cfg: BybitConfig, journal: Journal, state: BotState):
+class RiskManager:
+    def __init__(self, cfg: TradingConfig, journal: Journal, state: BotState):
         self.cfg = cfg
         self.journal = journal
         self.state_store = state

@@ -3,16 +3,16 @@ pool across symbols, write-through persistence, legacy migration.
 Run:  python -m tests.test_account_ledger"""
 from __future__ import annotations
 
-# tests.test_bybit isolates DATA_DIR before importing the app package.
-from tests.test_bybit import _c                            # noqa: F401
+# tests.test_engine isolates DATA_DIR before importing the app package.
+from tests.test_engine import _c                            # noqa: F401
 
-from app.trading_bybit import store as store_mod           # noqa: E402
-from app.trading_bybit.account import AccountLedger        # noqa: E402
-from app.trading_bybit.config import SYMBOL_SPECS, BybitConfig  # noqa: E402
-from app.trading_bybit.execution.position import PositionManager  # noqa: E402
-from app.trading_bybit.models import Side, TradeSignal    # noqa: E402
-from app.trading_bybit.risk import BybitRiskManager       # noqa: E402
-from app.trading_bybit.store import (AccountStore, BotState, Journal,  # noqa: E402
+from app.trading import store as store_mod           # noqa: E402
+from app.trading.account import AccountLedger        # noqa: E402
+from app.trading.config import SYMBOL_SPECS, TradingConfig  # noqa: E402
+from app.trading.execution.position import PositionManager  # noqa: E402
+from app.trading.models import Side, TradeSignal    # noqa: E402
+from app.trading.risk import RiskManager       # noqa: E402
+from app.trading.store import (AccountStore, BotState, Journal,  # noqa: E402
                                      PositionStore)
 
 SIG = TradeSignal(Side.LONG, "T", 80, stop_price=98, entry_hint=100)
@@ -21,11 +21,11 @@ SIG = TradeSignal(Side.LONG, "T", 80, stop_price=98, entry_hint=100)
 def test_shared_equity_pool():
     """Every symbol draws from ONE pool: BTC's fees and settled PnL must be
     visible to ETH's sizing immediately (실계좌의 단일 USDT 지갑과 동일)."""
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     cfg.max_concurrent_positions = 2
     cfg.max_total_open_risk_pct = 10.0
     ledger = AccountLedger(cfg)
-    risk = BybitRiskManager(cfg, Journal(), BotState())
+    risk = RiskManager(cfg, Journal(), BotState())
     btc = PositionManager(SYMBOL_SPECS["BTC"], cfg, risk, Journal(),
                           "paper", "t", ledger=ledger)
     eth = PositionManager(SYMBOL_SPECS["ETH"], cfg, risk, Journal(),
@@ -45,7 +45,7 @@ def test_shared_equity_pool():
 
 
 def test_persistence_and_legacy_migration():
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     store = AccountStore()
     store_mod.ACCOUNT_JSON.unlink(missing_ok=True)
 
@@ -72,8 +72,8 @@ def test_persistence_and_legacy_migration():
 def test_standalone_fallback():
     """No ledger passed (backtests, unit tests) -> a private in-memory pool;
     nothing leaks between managers or onto disk."""
-    cfg = BybitConfig()
-    risk = BybitRiskManager(cfg, Journal(), BotState())
+    cfg = TradingConfig()
+    risk = RiskManager(cfg, Journal(), BotState())
     pm = PositionManager(SYMBOL_SPECS["BTC"], cfg, risk, Journal(), "paper", "t")
     pm.equity = 300.0
     pm2 = PositionManager(SYMBOL_SPECS["BTC"], cfg, risk, Journal(), "paper", "t")
@@ -82,10 +82,10 @@ def test_standalone_fallback():
 
 
 def test_manager_wiring():
-    """BybitManager must expose the unified account and hand every SymbolBot
+    """TradingManager must expose the unified account and hand every SymbolBot
     the same ledger instance."""
-    from app.trading_bybit.bot import BybitManager
-    mgr = BybitManager(BybitConfig())
+    from app.trading.bot import TradingManager
+    mgr = TradingManager(TradingConfig())
     assert all(b.ledger is mgr.ledger for b in mgr.bots.values())
     st = mgr.status()
     acct = st["account"]

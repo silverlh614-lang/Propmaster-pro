@@ -8,7 +8,7 @@ regime, then the bar's decision is delegated to the matching sub-strategy:
   그 사이 (dead zone)  → 판단 유보 — 신규 진입 없음 (레짐 전환 whipsaw 방지)
 
 Sub-strategies are reused untouched — this class only routes the same
-BybitContext to one of them per bar, so the strategy/execution split holds
+TradingContext to one of them per bar, so the strategy/execution split holds
 and each sub-strategy stays independently backtestable. Thresholds are
 Phase 2 backtest-gate calibration targets (hand-tune 금지).
 """
@@ -16,20 +16,20 @@ from __future__ import annotations
 
 from ..indicators import adx
 from ..models import TradeSignal
-from .base import BybitContext, BybitStrategy
+from .base import TradingContext, TradingStrategy
 from .range_box import RangeBoxStrategy
 from .trend_breakout import TrendBreakoutStrategy
 from .trendline import TrendlineStrategy
 
 # 하위 전략 후보 (registry를 import하면 순환이라 여기서 직접 매핑)
-_SUBS: dict[str, type[BybitStrategy]] = {
+_SUBS: dict[str, type[TradingStrategy]] = {
     "trend_breakout": TrendBreakoutStrategy,
     "trendline": TrendlineStrategy,
     "range_box": RangeBoxStrategy,
 }
 
 
-class RegimeSwitchStrategy(BybitStrategy):
+class RegimeSwitchStrategy(TradingStrategy):
     name = "regime_switch"
 
     def __init__(self, config):
@@ -42,7 +42,7 @@ class RegimeSwitchStrategy(BybitStrategy):
         self.trend_sub = _SUBS[config.regime_trend_strategy](config)
         self.range_sub = _SUBS[config.regime_range_strategy](config)
 
-    def _regime(self, ctx: BybitContext) -> tuple[str | None, float | None]:
+    def _regime(self, ctx: TradingContext) -> tuple[str | None, float | None]:
         """('trend'|'range'|'neutral'|None, adx). None = ADX 워밍업 부족."""
         v = adx(ctx.htf_candles, self.cfg.adx_period)
         if v is None:
@@ -53,14 +53,14 @@ class RegimeSwitchStrategy(BybitStrategy):
             return "range", v
         return "neutral", v
 
-    def _sub(self, regime: str | None) -> BybitStrategy | None:
+    def _sub(self, regime: str | None) -> TradingStrategy | None:
         if regime == "trend":
             return self.trend_sub
         if regime == "range":
             return self.range_sub
         return None
 
-    def evaluate(self, ctx: BybitContext) -> TradeSignal | None:
+    def evaluate(self, ctx: TradingContext) -> TradeSignal | None:
         regime, v = self._regime(ctx)
         sub = self._sub(regime)
         if sub is None:
@@ -70,7 +70,7 @@ class RegimeSwitchStrategy(BybitStrategy):
             sig.detail = f"[{regime} ADX {v:.1f} → {sub.name}] {sig.detail}"
         return sig
 
-    def diagnose(self, ctx: BybitContext) -> dict | None:
+    def diagnose(self, ctx: TradingContext) -> dict | None:
         regime, v = self._regime(ctx)
         c = self.cfg
         label = {"trend": f"추세장 → {self.trend_sub.name}",

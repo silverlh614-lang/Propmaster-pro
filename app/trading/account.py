@@ -2,7 +2,7 @@
 
 Unified account ledger (한 계좌 원칙). ONE equity pool backs every symbol:
 position sizing, the risk caps' denominators and 복리 compounding all read
-and write this single number — mirroring the real Bybit USDT wallet, where
+and write this single number — mirroring a real exchange USDT wallet, where
 every symbol's orders draw from one balance.
 
 Paper mode simulates the balance here and persists it via AccountStore

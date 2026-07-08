@@ -41,7 +41,7 @@ Breakout Prop(breakoutprop.com, 2025-09 Kraken 인수)의 공개 구조를 본�
 | 브리치 결과 | 계좌 FAILED(영구) + 킬스위치 + 전 포지션 강제 청산 |
 
 판정 단일 지점: `ChallengeAccount.evaluate()` — 매 마감봉마다
-`BybitManager.prop_tick()`이 (equity_mark, balance, flat)을 공급한다.
+`TradingManager.prop_tick()`이 (equity_mark, balance, flat)을 공급한다.
 
 ## 3. 플랜 카탈로그 (`app/prop/plans.py`, 2026 리서치 보정)
 
@@ -70,10 +70,10 @@ Breakout Prop(breakoutprop.com, 2025-09 Kraken 인수)의 공개 구조를 본�
 
 | 결합점 | 위치 | 내용 |
 |---|---|---|
-| 조립 | `BybitManager.__init__` | PropDesk 생성 유일 지점 — 원장·리스크 관문 공유 |
-| 진입 차단 | `BybitRiskManager.allow_entry` | `prop.entries_allowed()` — FAILED 계좌는 전 진입 거부 |
-| 마크 판정 | `SymbolBot._step` → `BybitManager.prop_tick` | 매 마감봉, 신규 진입 시도 **전에** 판정 |
-| 브리치 처리 | `BybitManager._on_prop_breach` | 킬스위치 트립 + 전 심볼 페이퍼 청산 + 영속화 |
+| 조립 | `TradingManager.__init__` | PropDesk 생성 유일 지점 — 원장·리스크 관문 공유 |
+| 진입 차단 | `RiskManager.allow_entry` | `prop.entries_allowed()` — FAILED 계좌는 전 진입 거부 |
+| 마크 판정 | `SymbolBot._step` → `TradingManager.prop_tick` | 매 마감봉, 신규 진입 시도 **전에** 판정 |
+| 브리치 처리 | `TradingManager._on_prop_breach` | 킬스위치 트립 + 전 심볼 페이퍼 청산 + 영속화 |
 | 원장 리셋 | `PropDesk._reset_stake` | 구매/단계 통과/펀디드 전환 시 잔고 = 계좌 크기 |
 
 ## 5. API
@@ -86,11 +86,11 @@ Breakout Prop(breakoutprop.com, 2025-09 Kraken 인수)의 공개 구조를 본�
 | `POST /api/prop/payout` | 페이아웃 요청 `{amount}` (펀디드 전용) |
 | `GET /api/prop/payouts` | 페이아웃 이력 |
 
-`GET /api/bybit/status`의 `prop` 필드에도 동일 상태가 실린다 (관제탑 폴링용).
+`GET /api/trading/status`의 `prop` 필드에도 동일 상태가 실린다 (관제탑 폴링용).
 
 ## 6. 다음 단계 (이번 체질개선 범위 밖)
 
-- 관제탑 UI(`static/bybit.html`)에 프롭 패널: 플로어 게이지·단계 진행률·구매/페이아웃 버튼.
+- 관제탑 UI(`static/terminal.html`)에 프롭 패널: 플로어 게이지·단계 진행률·구매/페이아웃 버튼.
 - 심볼별 레버리지 차등 (BTC/ETH 5x, 알트 2x — 현재는 전역 5x 캡만).
 - 90% 분할 업그레이드·수수료 환불(첫 페이아웃 시) 모델링.
 - 금지 행위 시뮬레이션(마틴게일 감지 등)과 스케일링 플랜($200K→$2M).

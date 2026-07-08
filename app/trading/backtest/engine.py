@@ -1,7 +1,7 @@
-"""@responsibility 백테스트 엔진 — Bybit 과거 kline을 라이브와 동일한 컨텍스트·포지션 FSM으로 리플레이
+"""@responsibility 백테스트 엔진 — 과거 kline을 라이브와 동일한 컨텍스트·포지션 FSM으로 리플레이
 
-Backtest engine. Fetches historical Bybit klines (entry + higher timeframe)
-and replays them bar-by-bar, rebuilding the exact BybitContext the live bot
+Backtest engine. Fetches historical klines (entry + higher timeframe)
+and replays them bar-by-bar, rebuilding the exact TradingContext the live bot
 would have seen and driving the SAME PositionManager FSM. Risk daily caps are
 intentionally OFF (permissive gate) — the goal is raw strategy statistics,
 the Phase 2 gate that must pass before any live capital. Settlement is the
@@ -9,14 +9,17 @@ FSM's own stop/target/trailing against each bar's high/low (no look-ahead).
 """
 from __future__ import annotations
 
-from ..config import SYMBOL_SPECS, BybitConfig, SymbolSpec
+from ..config import SYMBOL_SPECS, TradingConfig, SymbolSpec
 from ..indicators import atr
 from ..models import Candle
 from ..strategies import make_strategy
-from ..strategies.base import BybitContext
+from ..strategies.base import TradingContext
 from ..execution.position import PositionManager
 
-BYBIT_REST = "https://api.bybit.com/v5/market/kline"
+KLINES_REST = "https://fapi.binance.com/fapi/v1/klines"
+_BINANCE_IV = {"1": "1m", "3": "3m", "5": "5m", "15": "15m", "30": "30m",
+               "60": "1h", "120": "2h", "240": "4h", "360": "6h",
+               "720": "12h", "D": "1d", "W": "1w"}
 
 
 def _interval_min(interval: str) -> int:
@@ -25,17 +28,18 @@ def _interval_min(interval: str) -> int:
 
 
 def fetch_klines(symbol: str, interval: str, limit: int = 1000) -> list[Candle]:
-    """Public Bybit klines, oldest→newest, forming bar dropped."""
+    """Public Binance USDⓈ-M klines, oldest→newest, forming bar dropped."""
     import httpx    # lazy: keeps the module importable in offline tests
-    params = {"category": "linear", "symbol": symbol, "interval": interval,
-              "limit": min(limit, 1000)}
-    with httpx.Client(timeout=15, headers={"User-Agent": "coinmaster-pro"}) as c:
-        r = c.get(BYBIT_REST, params=params)
+    iv = _BINANCE_IV.get(interval)
+    if iv is None:
+        raise ValueError(f"unsupported interval {interval}")
+    params = {"symbol": symbol, "interval": iv, "limit": min(limit, 1000)}
+    with httpx.Client(timeout=15, headers={"User-Agent": "propmaster-pro"}) as c:
+        r = c.get(KLINES_REST, params=params)
         r.raise_for_status()
-        data = r.json()
-    if data.get("retCode") != 0:
-        raise ValueError(f"bybit retCode {data.get('retCode')}: {data.get('retMsg')}")
-    rows = data.get("result", {}).get("list", [])
+        rows = r.json()
+    if not isinstance(rows, list):
+        raise ValueError(str(rows)[:120])
     out = [Candle(ts_ms=int(x[0]), open=float(x[1]), high=float(x[2]),
                   low=float(x[3]), close=float(x[4]), volume=float(x[5]))
            for x in rows]
@@ -62,7 +66,7 @@ class _PermissiveRisk:
     def record_error(self, e): ...
 
 
-def replay(symbol: str, strategy_name: str, cfg: BybitConfig,
+def replay(symbol: str, strategy_name: str, cfg: TradingConfig,
            entry_candles: list[Candle] | None = None,
            htf_candles: list[Candle] | None = None) -> dict:
     """Replay one symbol. Candles can be injected (offline tests) or fetched.
@@ -99,7 +103,7 @@ def replay(symbol: str, strategy_name: str, cfg: BybitConfig,
 
         pm.flatten_if_closed()
         pm.manage(bar, atr_val)
-        ctx = BybitContext(symbol=spec.key, htf_candles=closed_htf,
+        ctx = TradingContext(symbol=spec.key, htf_candles=closed_htf,
                            entry_candles=closed_entry, equity_usd=pm.equity,
                            now=bar_close_t / 1000,
                            open_position_side=(pm.pos.side.value

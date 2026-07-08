@@ -133,9 +133,9 @@
 <body>
 <div class="topbar">
   <div class="topbar-in">
-    <div class="brand">₿ Coinmaster Pro <span class="sub">BTC 사이클 바닥 모델 + Bybit 트레이더</span></div>
+    <div class="brand">₿ Propmaster Pro <span class="sub">BTC 사이클 바닥 모델 + 프롭 트레이딩 터미널</span></div>
     <nav class="tabs" id="tabs">
-      <a href="/">🎛️ Bybit 관제탑</a>
+      <a href="/">🎛️ 트레이딩 관제탑</a>
       <a href="#home" data-tab="home">개요</a>
       <a href="#part1" data-tab="part1">바닥 분포</a>
       <a href="#part2" data-tab="part2">매수 신호기</a>
@@ -149,7 +149,7 @@
   <!-- ============================== 개요 ============================== -->
   <section class="panel" id="panel-home">
     <p class="intro" style="margin-top:0">이 하락장의 바닥이 어디쯤일지(바닥 분포), 언제 얼마나 나눠 살지(매수 신호기),
-      다음 고점은 언제·얼마일지(사이클 전망)를 계산하고, Bybit 레버리지 추세돌파 봇(관제탑)을 운영하는 대시보드.</p>
+      다음 고점은 언제·얼마일지(사이클 전망)를 계산하고, 레버리지 추세돌파 봇(관제탑)을 운영하는 대시보드.</p>
     <p class="disclaimer">⚠️ 모든 수치는 예측이 아닌 <b>구조화된 의견</b>이며 투자 조언이 아닙니다. [SNAPSHOT] 값은 재검증 필요.</p>
 
     <div class="card tldr" id="tldr">요약 계산 중…</div>
@@ -389,7 +389,7 @@ function buildTldr() {
        현재 단계: <b>${phase}</b>. → <a href="#part2">매수 신호기 탭</a><br>
     ③ <b>바닥 다음은?</b> 2028년 반감기를 지나 <b>${chain.top_date["50"].slice(0, 7).replace("-", "년 ")}월쯤</b>
        ${fmt$(chain.top["50"])} 근처의 고점을 봅니다 (신고가 경신 확률 ${pct(chain.prob.top_above_old_ath)}). → <a href="#part3">사이클 전망 탭</a><br>
-    ④ <b>레버리지 봇은?</b> Bybit 추세돌파 페이퍼 봇이 ATR 기반 리스크 규율로 돌아갑니다. → <a href="/">🎛️ Bybit 관제탑</a><br>
+    ④ <b>레버리지 봇은?</b> 추세돌파 페이퍼 봇이 ATR 기반 리스크 규율로 돌아갑니다. → <a href="/">🎛️ 트레이딩 관제탑</a><br>
     <span class="muted">※ 예측이 아니라 "가정을 넣으면 답이 나오는 계산기"입니다. 가정을 바꾸면 답도 바뀌며, 투자 조언이 아닙니다.</span>`;
 }
 

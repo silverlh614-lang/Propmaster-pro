@@ -14,9 +14,9 @@ from app.prop.account import (BREACH_DAILY, BREACH_MAX_DD, FAILED, FUNDED,  # no
 from app.prop.desk import PropDesk                        # noqa: E402
 from app.prop.plans import PLANS, catalog, evaluation_fee  # noqa: E402
 from app.prop.store import PayoutStore, PropStore          # noqa: E402
-from app.trading_bybit.config import BybitConfig           # noqa: E402
-from app.trading_bybit.risk import BybitRiskManager        # noqa: E402
-from app.trading_bybit.store import BotState, Journal      # noqa: E402
+from app.trading.config import TradingConfig           # noqa: E402
+from app.trading.risk import RiskManager        # noqa: E402
+from app.trading.store import BotState, Journal      # noqa: E402
 
 DAY1 = 1_750_000_000.0            # fixed UTC timestamps for day-anchor tests
 DAY2 = DAY1 + 86_400.0
@@ -153,7 +153,7 @@ def test_desk_breach_blocks_entries_and_allows_rebuy():
     ok, why = d.entries_allowed()
     assert not ok and "failed" in why
     # the risk gate's single permission point relays the refusal
-    risk = BybitRiskManager(BybitConfig(), Journal(), BotState())
+    risk = RiskManager(TradingConfig(), Journal(), BotState())
     risk.attach_prop(d)
     ok, why = risk.allow_entry(0, 0.0, 1.0, equity_usd=10_000)
     assert not ok and why.startswith("prop:")

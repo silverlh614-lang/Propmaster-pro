@@ -1,22 +1,22 @@
-"""Offline tests for the Bybit leverage-margin package (Part 5) — synthetic
-candles, no network. Run:  python -m tests.test_bybit"""
+"""Offline tests for the leverage-margin trading package — synthetic
+candles, no network. Run:  python -m tests.test_engine"""
 from __future__ import annotations
 
 import os
 import tempfile
 
 # isolate journal/state files before importing the package
-_tmp = tempfile.mkdtemp(prefix="bybit-test-")
+_tmp = tempfile.mkdtemp(prefix="engine-test-")
 os.environ["DATA_DIR"] = _tmp
 
-from app.trading_bybit import indicators as ind          # noqa: E402
-from app.trading_bybit.config import SYMBOL_SPECS, BybitConfig  # noqa: E402
-from app.trading_bybit.execution.position import PositionManager  # noqa: E402
-from app.trading_bybit.models import Candle, Side, TradeSignal  # noqa: E402
-from app.trading_bybit.risk import BybitRiskManager, size_position  # noqa: E402
-from app.trading_bybit.store import BotState, Journal    # noqa: E402
-from app.trading_bybit.strategies import make_strategy    # noqa: E402
-from app.trading_bybit.strategies.base import BybitContext  # noqa: E402
+from app.trading import indicators as ind          # noqa: E402
+from app.trading.config import SYMBOL_SPECS, TradingConfig  # noqa: E402
+from app.trading.execution.position import PositionManager  # noqa: E402
+from app.trading.models import Candle, Side, TradeSignal  # noqa: E402
+from app.trading.risk import RiskManager, size_position  # noqa: E402
+from app.trading.store import BotState, Journal    # noqa: E402
+from app.trading.strategies import make_strategy    # noqa: E402
+from app.trading.strategies.base import TradingContext  # noqa: E402
 
 BTC = SYMBOL_SPECS["BTC"]
 
@@ -72,10 +72,10 @@ def test_sizing():
 # ------------------------------------------------------------- risk gate
 
 def test_risk_gate():
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     cfg.max_concurrent_positions = 1
     cfg.max_total_open_risk_pct = 2.0        # $4 on $200
-    risk = BybitRiskManager(cfg, Journal(), BotState())
+    risk = RiskManager(cfg, Journal(), BotState())
     ok, _ = risk.allow_entry(0, 0.0, 2.0)
     assert ok
     # second concurrent position blocked
@@ -97,9 +97,9 @@ def test_risk_gate():
 def test_risk_caps_follow_compounded_equity():
     """총자산대비 rule (복리 단타 비법서 시스템 #2): the open-risk cap must be
     measured against CURRENT equity, not the starting stake."""
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     cfg.max_total_open_risk_pct = 2.0        # 2% of equity
-    risk = BybitRiskManager(cfg, Journal(), BotState())
+    risk = RiskManager(cfg, Journal(), BotState())
     # $3 risk on $200 equity (cap $4) → allowed
     assert risk.allow_entry(0, 0.0, 3.0, equity_usd=200.0)[0]
     # same $3 risk after equity halved to $100 (cap $2) → blocked
@@ -115,8 +115,8 @@ def test_risk_caps_follow_compounded_equity():
 # ------------------------------------------------------------- position FSM
 
 def _pm(cfg=None):
-    cfg = cfg or BybitConfig()
-    risk = BybitRiskManager(cfg, Journal(), BotState())
+    cfg = cfg or TradingConfig()
+    risk = RiskManager(cfg, Journal(), BotState())
     return PositionManager(BTC, cfg, risk, Journal(), "paper", "trend_breakout")
 
 
@@ -132,9 +132,9 @@ def test_fsm_stop_loss():
 
 
 def test_fsm_partial_then_trail():
-    from app.trading_bybit import store
+    from app.trading import store
     store.TRADES_CSV.unlink(missing_ok=True)   # isolate the aggregate assertion
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     cfg.rr_target = 2.0
     cfg.partial_tp_frac = 0.5
     pm = _pm(cfg)
@@ -162,7 +162,7 @@ def test_fsm_partial_then_trail():
 
 
 def test_fsm_pyramiding():
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     cfg.pyramid_enabled = True
     cfg.pyramid_max_adds = 2
     cfg.pyramid_min_r = 1.0
@@ -199,10 +199,10 @@ def _uptrend_breakout():
 
 
 def test_strategy_signal():
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     strat = make_strategy("trend_breakout", cfg)
     htf, entry = _uptrend_breakout()
-    ctx = BybitContext(symbol="BTC", htf_candles=htf, entry_candles=entry,
+    ctx = TradingContext(symbol="BTC", htf_candles=htf, entry_candles=entry,
                        equity_usd=200, now=0)
     sig = strat.evaluate(ctx)
     assert sig is not None and sig.side is Side.LONG, sig
@@ -235,16 +235,16 @@ def test_short_vol_exempt_flag():
     short_vol_exempt flag is on (default off keeps the volume gate)."""
     htf, entry = _downtrend_breakdown_lowvol()
 
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     assert cfg.short_vol_exempt is False          # 라이브 기본값은 off
     strat = make_strategy("trend_breakout", cfg)
-    ctx = BybitContext(symbol="BTC", htf_candles=htf, entry_candles=entry,
+    ctx = TradingContext(symbol="BTC", htf_candles=htf, entry_candles=entry,
                        equity_usd=200, now=0)
     d = strat.diagnose(ctx)
     assert d and d["allowed"] == "SHORT", d
     assert strat.evaluate(ctx) is None            # 거래량 미달 → 차단 (기존 동작)
 
-    cfg2 = BybitConfig()
+    cfg2 = TradingConfig()
     cfg2.short_vol_exempt = True                  # 백테스트 A/B의 on 케이스
     strat2 = make_strategy("trend_breakout", cfg2)
     sig = strat2.evaluate(ctx)
@@ -277,9 +277,9 @@ def _coherent_series(n=200):
 
 
 def test_backtest_replay():
-    from app.trading_bybit.backtest.engine import replay
-    from app.trading_bybit.backtest.metrics import compute
-    cfg = BybitConfig()
+    from app.trading.backtest.engine import replay
+    from app.trading.backtest.metrics import compute
+    cfg = TradingConfig()
     htf, entry = _coherent_series(220)
     r = replay("BTC", "trend_breakout", cfg, entry_candles=entry, htf_candles=htf)
     m = compute(r["closes"], cfg.equity_usd, r.get("final_equity", cfg.equity_usd))
@@ -292,9 +292,9 @@ def test_candles_export():
     """bot.candles() must build OHLCV + EMA when the collector has candles —
     regression for a missing `ema` import that 500'd the /candles endpoint
     only once real bars arrived (empty short-circuited past the bug)."""
-    from app.trading_bybit.bot import BybitManager
-    from app.trading_bybit.config import BybitConfig
-    mgr = BybitManager(BybitConfig())
+    from app.trading.bot import TradingManager
+    from app.trading.config import TradingConfig
+    mgr = TradingManager(TradingConfig())
     bot = mgr.bots["BTC"]
     col = bot.collector
     px = 63000.0
@@ -306,17 +306,6 @@ def test_candles_export():
     assert len(out["candles"]) == 30 and len(out["ema5"]) == 30, out
     assert out["candles"][0][0] < out["candles"][-1][0]     # ascending by time
     print("ok  candles export (ema import regression)")
-
-
-def _klines_bybit(n=6, base=63000.0):
-    # newest-first: [start, o, h, l, c, v, turnover] as strings
-    rows = []
-    for i in range(n):
-        ts = 1_700_000_000_000 + i * 900_000
-        px = base + i * 5
-        rows.append([str(ts), str(px), str(px + 50), str(px - 50),
-                     str(px + 10), "100", "0"])
-    return list(reversed(rows))
 
 
 def _klines_binance(n=6, base=63000.0):
@@ -331,11 +320,11 @@ def _klines_binance(n=6, base=63000.0):
 
 
 def test_kline_source_failover():
-    """Bybit 403 (geo-block) must fail over to Binance, then OKX, and populate
-    the same Candle buffer. No real network — httpx.MockTransport."""
+    """Binance 403 (geo-block) must fail over to OKX and populate the same
+    Candle buffer. No real network — httpx.MockTransport."""
     import asyncio
     import httpx
-    from app.trading_bybit.collectors.kline import KlineCollector
+    from app.trading.collectors.kline import KlineCollector
 
     def make_handler(fail_hosts):
         def handler(request: httpx.Request) -> httpx.Response:
@@ -349,9 +338,6 @@ def test_kline_source_failover():
                 rows = [[r[0], r[1], r[2], r[3], r[4], r[5], "0", "0", "1"]
                         for r in reversed(_klines_binance())]
                 return httpx.Response(200, json={"code": "0", "data": rows})
-            if host == "api.bybit.com":
-                return httpx.Response(200, json={"retCode": 0, "retMsg": "OK",
-                    "result": {"list": _klines_bybit()}})
             return httpx.Response(404)
         return handler
 
@@ -366,17 +352,15 @@ def test_kline_source_failover():
         return col
 
     # primary works
-    asyncio.run(run_case(set(), "bybit"))
-    # bybit geo-blocked -> binance
-    asyncio.run(run_case({"api.bybit.com"}, "binance"))
-    # bybit + binance blocked -> okx
-    asyncio.run(run_case({"api.bybit.com", "fapi.binance.com"}, "okx"))
+    asyncio.run(run_case(set(), "binance"))
+    # binance geo-blocked -> okx
+    asyncio.run(run_case({"fapi.binance.com"}, "okx"))
 
     # all blocked -> raises, source none
     async def all_fail():
         col = KlineCollector("BTCUSDT", "15", "60")
         transport = httpx.MockTransport(make_handler(
-            {"api.bybit.com", "fapi.binance.com", "www.okx.com"}))
+            {"fapi.binance.com", "www.okx.com"}))
         async with httpx.AsyncClient(transport=transport) as client:
             try:
                 await col.poll_once(client)
@@ -385,7 +369,7 @@ def test_kline_source_failover():
                 pass
         assert col.source == "none"
     asyncio.run(all_fail())
-    print("ok  kline source failover (bybit->binance->okx)")
+    print("ok  kline source failover (binance->okx)")
 
 
 def test_kline_cross_validation():
@@ -393,20 +377,20 @@ def test_kline_cross_validation():
     beyond the threshold flags divergence. No network — MockTransport."""
     import asyncio
     import httpx
-    from app.trading_bybit.collectors.kline import KlineCollector
-    from app.trading_bybit.models import Candle
+    from app.trading.collectors.kline import KlineCollector
+    from app.trading.models import Candle
 
     def make_client(binance_last):
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.host == "fapi.binance.com":
                 return httpx.Response(200, json=[[1_700_000_000_000, "1", "1",
                     "1", str(binance_last), "1", 1, "0", 0, "0", "0", "0"]])
-            return httpx.Response(403)      # bybit/okx unreachable here
+            return httpx.Response(403)      # okx unreachable here
         return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
     async def run(binance_last):
         col = KlineCollector("BTCUSDT", "15", "60")
-        col.source = "bybit"                        # pretend bybit is live
+        col.source = "okx"                          # pretend OKX is live
         col._forming["15"] = Candle(1, 1, 1, 1, 63000.0, 1)   # my price = 63000
         async with make_client(binance_last) as client:
             await col._cross_check(client)
@@ -426,16 +410,16 @@ def test_state_persistence():
     """A live open position must round-trip through PositionStore so a trade
     in progress survives a restart/redeploy. (Equity round-trips through the
     unified AccountLedger/AccountStore — tests/test_account_ledger.py.)"""
-    from app.trading_bybit.config import BybitConfig, SYMBOL_SPECS
-    from app.trading_bybit.execution.position import PositionManager
-    from app.trading_bybit.models import Position, PositionState, Side, Unit
-    from app.trading_bybit.risk import BybitRiskManager
-    from app.trading_bybit.store import BotState, Journal, PositionStore
+    from app.trading.config import TradingConfig, SYMBOL_SPECS
+    from app.trading.execution.position import PositionManager
+    from app.trading.models import Position, PositionState, Side, Unit
+    from app.trading.risk import RiskManager
+    from app.trading.store import BotState, Journal, PositionStore
 
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     spec = SYMBOL_SPECS["BTC"]
     j = Journal()
-    risk = BybitRiskManager(cfg, j, BotState())
+    risk = RiskManager(cfg, j, BotState())
     pm = PositionManager(spec, cfg, risk, j, "paper", "trend_breakout")
     # simulate a partially-managed open long
     pm.pos = Position(symbol="BTCUSDT", side=Side.LONG,
@@ -483,4 +467,4 @@ if __name__ == "__main__":
     test_kline_source_failover()
     test_kline_cross_validation()
     test_state_persistence()
-    print("\nall bybit tests passed ✅")
+    print("\nall engine tests passed ✅")

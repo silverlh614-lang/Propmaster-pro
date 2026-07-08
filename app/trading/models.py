@@ -1,6 +1,6 @@
-"""@responsibility Bybit 트레이딩 공유 데이터타입 — Candle·TradeSignal·Position 등 도메인 모델
+"""@responsibility 트레이딩 공유 데이터타입 — Candle·TradeSignal·Position 등 도메인 모델
 
-Shared datatypes for the Bybit leverage-margin trading package (Part 5).
+Shared datatypes for the leverage-margin trading package.
 
 Unlike Part 4's binary Up/Down markets, these model a continuous leveraged
 perpetual position: entry, ATR stop, R-multiple target, partial exit, ATR

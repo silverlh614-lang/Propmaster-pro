@@ -18,13 +18,13 @@ from __future__ import annotations
 
 from ..indicators import adx, atr, box_range
 from ..models import Side, TradeSignal
-from .base import BybitContext, BybitStrategy
+from .base import TradingContext, TradingStrategy
 
 
-class RangeBoxStrategy(BybitStrategy):
+class RangeBoxStrategy(TradingStrategy):
     name = "range_box"
 
-    def _gates(self, ctx: BybitContext) -> dict | None:
+    def _gates(self, ctx: TradingContext) -> dict | None:
         c = self.cfg
         htf, ef = ctx.htf_candles, ctx.entry_candles
         if len(htf) < 2 * c.adx_period + 1:
@@ -71,7 +71,7 @@ class RangeBoxStrategy(BybitStrategy):
             "ready": ready,
         }
 
-    def evaluate(self, ctx: BybitContext) -> TradeSignal | None:
+    def evaluate(self, ctx: TradingContext) -> TradeSignal | None:
         g = self._gates(ctx)
         if not g or not g["ready"]:
             return None
@@ -86,7 +86,7 @@ class RangeBoxStrategy(BybitStrategy):
                            strength=strength, stop_price=round(g["stop"], 6),
                            entry_hint=round(g["entry_ref"], 6), detail=detail)
 
-    def diagnose(self, ctx: BybitContext) -> dict | None:
+    def diagnose(self, ctx: TradingContext) -> dict | None:
         g = self._gates(ctx)
         if not g:
             return None

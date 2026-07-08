@@ -1,17 +1,17 @@
-"""@responsibility Bybit 트레이딩 오케스트레이션 — SymbolBot 수명주기 + BybitManager 전역 리스크·저널 공유, 페이퍼 전용
+"""@responsibility 트레이딩 오케스트레이션 — SymbolBot 수명주기 + TradingManager 전역 리스크·저널 공유, 페이퍼 전용
 
-Bybit trading orchestration (Part 5).
+Trading engine orchestration.
 
 SymbolBot     — one symbol (BTCUSDT ...): its own kline collector, position
                 manager and closed-bar decision loop.
-BybitManager  — starts/stops all enabled SymbolBots together; shares one
+TradingManager  — starts/stops all enabled SymbolBots together; shares one
                 journal, one risk manager (global daily caps / kill switch)
                 and one persisted state blob (auto-resume).
 
 Phase 1: mode is always "paper" — live mode is refused until the Phase 3
 gate lands (mirrors Part 4's TradingManager). No real order path exists yet.
 
-Prop layer: BybitManager owns the PropDesk. Every closed bar feeds one
+Prop layer: TradingManager owns the PropDesk. Every closed bar feeds one
 mark-to-market tick into the challenge account's rule engine (prop_tick);
 a breach trips the kill switch and flattens all paper positions.
 """
@@ -22,21 +22,21 @@ import time
 
 from ..prop.desk import PropDesk
 from .account import AccountLedger
-from .config import (CONFIG, SYMBOL_SPECS, BybitConfig, SymbolSpec,
+from .config import (CONFIG, SYMBOL_SPECS, TradingConfig, SymbolSpec,
                      enabled_symbols)
 from .collectors.kline import KlineCollector
 from .execution.position import PositionManager
 from .indicators import atr, ema
 from .models import Side
-from .risk import BybitRiskManager
+from .risk import RiskManager
 from .store import AccountStore, BotState, Journal, PositionStore
 from .strategies import STRATEGIES, make_strategy
-from .strategies.base import BybitContext
+from .strategies.base import TradingContext
 
 
 class SymbolBot:
-    def __init__(self, spec: SymbolSpec, cfg: BybitConfig,
-                 journal: Journal, risk: BybitRiskManager,
+    def __init__(self, spec: SymbolSpec, cfg: TradingConfig,
+                 journal: Journal, risk: RiskManager,
                  pos_store: PositionStore, ledger: AccountLedger,
                  prop_tick=None):
         self.spec = spec
@@ -47,8 +47,7 @@ class SymbolBot:
         self.ledger = ledger
         self._prop_tick = prop_tick   # manager callback: one rule-engine mark
         self.collector = KlineCollector(spec.symbol, cfg.entry_interval,
-                                        cfg.htf_interval, cfg.warmup_bars,
-                                        testnet=cfg.testnet and cfg.live_enabled)
+                                        cfg.htf_interval, cfg.warmup_bars)
         self.mode = "paper"
         self.strategy_name = "trend_breakout"
         self.strategy = None
@@ -200,8 +199,8 @@ class SymbolBot:
             self.pm.try_open(sig, price, atr_val or 0.0, ctx.now)
         self.note = self.pm.note
 
-    def _build_ctx(self, entry: list) -> BybitContext:
-        return BybitContext(
+    def _build_ctx(self, entry: list) -> TradingContext:
+        return TradingContext(
             symbol=self.spec.key,
             htf_candles=self.collector.htf_closed(),
             entry_candles=entry,
@@ -247,8 +246,8 @@ class SymbolBot:
         }
 
 
-class BybitManager:
-    def __init__(self, cfg: BybitConfig = CONFIG):
+class TradingManager:
+    def __init__(self, cfg: TradingConfig = CONFIG):
         self.cfg = cfg
         self.journal = Journal()
         self.state_store = BotState()
@@ -258,7 +257,7 @@ class BybitManager:
         self.ledger = AccountLedger(cfg, AccountStore(),
                                     legacy_equity=self.pos_store.load("BTC")
                                     .get("equity"))
-        self.risk = BybitRiskManager(cfg, self.journal, self.state_store)
+        self.risk = RiskManager(cfg, self.journal, self.state_store)
         # 프롭 데스크: 챌린지 계좌 룰 엔진. 원장(잔고)·리스크 관문과 같은
         # 객체를 공유해야 하므로 여기(단일 조립점)서만 만든다.
         self.prop = PropDesk(ledger=self.ledger, on_breach=self._on_prop_breach)
@@ -400,4 +399,4 @@ class BybitManager:
         }
 
 
-MANAGER = BybitManager()
+MANAGER = TradingManager()

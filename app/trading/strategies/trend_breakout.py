@@ -18,13 +18,13 @@ from __future__ import annotations
 from ..indicators import (atr, bearish_engulfing, box_range, bullish_engulfing,
                           ema, sma)
 from ..models import Side, TradeSignal
-from .base import BybitContext, BybitStrategy
+from .base import TradingContext, TradingStrategy
 
 
-class TrendBreakoutStrategy(BybitStrategy):
+class TrendBreakoutStrategy(TradingStrategy):
     name = "trend_breakout"
 
-    def _gates(self, ctx: BybitContext) -> dict | None:
+    def _gates(self, ctx: TradingContext) -> dict | None:
         c = self.cfg
         htf, ef = ctx.htf_candles, ctx.entry_candles
         if len(htf) < max(c.ema_period, c.box_lookback) + 2:
@@ -76,7 +76,7 @@ class TrendBreakoutStrategy(BybitStrategy):
             "atr": a, "stop": stop, "entry_ref": entry_ref, "ready": ready,
         }
 
-    def evaluate(self, ctx: BybitContext) -> TradeSignal | None:
+    def evaluate(self, ctx: TradingContext) -> TradeSignal | None:
         g = self._gates(ctx)
         if not g or not g["ready"]:
             return None
@@ -91,7 +91,7 @@ class TrendBreakoutStrategy(BybitStrategy):
                            strength=strength, stop_price=round(stop, 6),
                            entry_hint=round(entry_ref, 6), detail=detail)
 
-    def diagnose(self, ctx: BybitContext) -> dict | None:
+    def diagnose(self, ctx: TradingContext) -> dict | None:
         """Live gate snapshot for the dashboard (same computation as
         evaluate, but never short-circuits — every gate's state is exposed)."""
         g = self._gates(ctx)

@@ -1,6 +1,6 @@
-"""@responsibility Bybit 전략 플러그인 프로토콜 — 전략은 TradeSignal만 방출, 사이징·집행은 포지션 FSM 소유
+"""@responsibility 전략 플러그인 프로토콜 — 전략은 TradeSignal만 방출, 사이징·집행은 포지션 FSM 소유
 
-Bybit strategy plugin protocol. A strategy inspects the current candle
+Strategy plugin protocol. A strategy inspects the current candle
 context once per closed entry-bar and either stays quiet (None) or emits a
 TradeSignal proposing a direction and a stop. Position sizing, order
 placement, trailing, pyramiding and settlement are NOT the strategy's job —
@@ -15,7 +15,7 @@ from ..models import Candle, TradeSignal
 
 
 @dataclass
-class BybitContext:
+class TradingContext:
     """Everything a strategy sees for one decision. Candles are CLOSED bars
     (the in-progress bar is excluded), newest last."""
     symbol: str
@@ -27,16 +27,16 @@ class BybitContext:
     extras: dict = field(default_factory=dict)   # indicator cache for the UI
 
 
-class BybitStrategy(ABC):
+class TradingStrategy(ABC):
     name: str = "base"
 
     def __init__(self, config):
         self.cfg = config
 
     @abstractmethod
-    def evaluate(self, ctx: BybitContext) -> TradeSignal | None:
+    def evaluate(self, ctx: TradingContext) -> TradeSignal | None:
         ...
 
-    def diagnose(self, ctx: BybitContext) -> dict | None:
+    def diagnose(self, ctx: TradingContext) -> dict | None:
         """Optional live gate snapshot for the dashboard (None = unsupported)."""
         return None

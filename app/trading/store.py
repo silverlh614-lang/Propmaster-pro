@@ -1,6 +1,6 @@
-"""@responsibility Bybit 트레이드 저널(CSV)·봇 상태 영속화 — 포지션 이벤트 기록과 재시작 생존 단일 통로
+"""@responsibility 트레이드 저널(CSV)·봇 상태 영속화 — 포지션 이벤트 기록과 재시작 생존 단일 통로
 
-Trade journal (CSV) and bot-state persistence for the Bybit package. One row
+Trade journal (CSV) and bot-state persistence for the trading package. One row
 per position lifecycle event (OPEN / ADD / PARTIAL / CLOSE). Aggregates read
 the settled rows (WIN/LOSS/CLOSED) for PnL and count OPEN rows for the daily
 trade cap. CSV so results survive restarts and export cleanly to Excel.
@@ -16,10 +16,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))
-TRADES_CSV = DATA_DIR / "bybit_trades.csv"
-STATE_JSON = DATA_DIR / "bybit_state.json"
-POSITIONS_JSON = DATA_DIR / "bybit_positions.json"
-ACCOUNT_JSON = DATA_DIR / "bybit_account.json"
+TRADES_CSV = DATA_DIR / "trades.csv"
+STATE_JSON = DATA_DIR / "engine_state.json"
+POSITIONS_JSON = DATA_DIR / "positions.json"
+ACCOUNT_JSON = DATA_DIR / "account.json"
 
 FIELDS = [
     "ts", "symbol", "mode", "strategy", "event", "side", "signal_type",

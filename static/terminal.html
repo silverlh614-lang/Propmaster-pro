@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#050607">
-<title>COINMASTER · BYBIT — 레버리지 추세돌파 관제탑</title>
+<title>PROPMASTER · TERMINAL — 프롭 트레이딩 관제탑</title>
 <!-- 홈 화면 바로가기(PWA): 매니페스트 + 아이콘 -->
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -247,8 +247,8 @@
 <div id="toasts"></div>
 
 <header class="top">
-  <img class="logo" src="/icon.svg" width="34" height="34" alt="COINMASTER BYBIT 앱 아이콘">
-  <div class="brand"><b>COINMASTER ◆ BYBIT</b><br>
+  <img class="logo" src="/icon.svg" width="34" height="34" alt="PROPMASTER TERMINAL 앱 아이콘">
+  <div class="brand"><b>PROPMASTER ◆ TERMINAL</b><br>
     <span class="sub">BTC · USDT PERP · 15m/1h 추세돌파 · 레버리지 마진</span></div>
   <div class="mid">5EMA · BOX BREAKOUT · ATR · 2R · 애드업 &nbsp;—&nbsp; <b>PHASE 1 PAPER</b></div>
   <div class="clock"><div class="hms" id="clk">--:--:--</div>
@@ -277,7 +277,7 @@
 <div class="ticker"><div class="rail" id="rail"><span class="it">로딩 중…</span></div></div>
 
 <div class="wrap">
-  <div class="warn" id="phaseWarn">⚠️ <b>Phase 1 — 페이퍼 전용.</b> Bybit 공개 kline으로 실시간 시뮬레이션만 하며
+  <div class="warn" id="phaseWarn">⚠️ <b>Phase 1 — 페이퍼 전용.</b> 공개 kline(Binance→OKX)으로 실시간 시뮬레이션만 하며
     <b>실주문은 전송되지 않습니다.</b> 레버리지 상한·리스크%·2R 손익비·ATR 손절·애드업은 「복리 단타 비법서」
     시스템(추세돌파·5일선·거래량·위험관리)을 구현한 것 — 실거래는 백테스트 게이트 통과 후 Phase 3.</div>
 
@@ -370,7 +370,7 @@
 
     <!-- 데이터 피드 -->
     <section class="panel col-4">
-      <div class="phead"><span class="mk">◆</span> 데이터 피드 (Bybit v5)</div>
+      <div class="phead"><span class="mk">◆</span> 데이터 피드 (Binance→OKX)</div>
       <div class="pbody">
         <div class="row"><span class="l">소스</span><span class="v" id="fSrc">–</span></div>
         <div class="row"><span class="l">현재가</span><span class="v" id="fPx">–</span></div>
@@ -400,7 +400,7 @@
     <section class="panel col-4">
       <div class="phead"><span class="mk">◆</span> 백테스트 게이트 (Phase 2)</div>
       <div class="pbody">
-        <div class="note">Bybit 과거 kline 리플레이 → 승률·R기대값·PF·MDD</div>
+        <div class="note">과거 kline 리플레이 → 승률·R기대값·PF·MDD</div>
         <div style="margin:8px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <button class="go" id="btnBt" onclick="runBacktest()">▶ 리플레이</button>
           <span class="muted" style="font-size:10px">ATR×<input class="ov" id="ovAtr" placeholder="1.5"></span>
@@ -419,7 +419,7 @@
     <!-- 저널 -->
     <section class="panel full">
       <div class="phead"><span class="mk">◆</span> 트레이드 저널 <span class="sp"></span>
-        <span class="r"><a class="dl" id="csvBtn" href="/api/bybit/trades.csv" download>⬇ CSV</a></span></div>
+        <span class="r"><a class="dl" id="csvBtn" href="/api/trading/trades.csv" download>⬇ CSV</a></span></div>
       <div class="pbody">
         <div class="scroll"><table>
           <thead><tr><th class="l">시각(UTC)</th><th class="l">심볼</th><th class="l">이벤트</th><th class="l">방향</th>
@@ -446,8 +446,8 @@ const $=id=>document.getElementById(id);
 const fmt=(n,d=2)=>(n==null||n===""||isNaN(n)?"–":Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}));
 const money=n=>(n==null||isNaN(n)?"–":(n<0?"-$":"$")+fmt(Math.abs(n)));
 
-// ---- 심볼 탭 (BYBIT_SYMBOLS로 켠 심볼 사이 전환 — 뷰만 전환, 봇은 전부 가동) ----
-let SYM=localStorage.getItem("bybit_sym")||"BTC";
+// ---- 심볼 탭 (TRADING_SYMBOLS로 켠 심볼 사이 전환 — 뷰만 전환, 봇은 전부 가동) ----
+let SYM=localStorage.getItem("terminal_sym")||"BTC";
 let SYMS=["BTC"];
 function renderSymTabs(){
   const box=$("symTabs");if(!box)return;
@@ -457,14 +457,14 @@ function renderSymTabs(){
 }
 function setSym(k){
   if(k===SYM)return;
-  SYM=k;localStorage.setItem("bybit_sym",k);renderSymTabs();
+  SYM=k;localStorage.setItem("terminal_sym",k);renderSymTabs();
   window._candles=null;drawChart();      // 이전 심볼 캔들 잔상 제거
   refresh();loadCandles();
 }
 
 // ---- 이벤트 알림: 토스트 + Web Audio 합성음 (음원 파일 없음) ----
 // 모드 3단계: on(토스트+소리) → mute(토스트만) → off. localStorage 영속.
-const ALERTS_KEY="bybit_alerts";
+const ALERTS_KEY="terminal_alerts";
 function alertMode(){return localStorage.getItem(ALERTS_KEY)||"on";}
 function toggleAlerts(){const m=alertMode(),next=m==="on"?"mute":m==="mute"?"off":"on";
   localStorage.setItem(ALERTS_KEY,next);renderBell();
@@ -544,7 +544,7 @@ function clock(){const now=new Date();$("clk").textContent=now.toISOString().sli
 setInterval(clock,1000);clock();
 
 async function loadConfig(){try{
-  const d=await api("/api/bybit/config");const sel=$("stratSel");sel.innerHTML="";
+  const d=await api("/api/trading/config");const sel=$("stratSel");sel.innerHTML="";
   d.strategies.forEach(s=>{const o=document.createElement("option");o.value=o.textContent=s;sel.appendChild(o)});
   const c=d.config;window._cfg=c;
   if(Array.isArray(d.symbols)&&d.symbols.length){SYMS=d.symbols;renderSymTabs();}
@@ -684,12 +684,12 @@ function drawChart(){
   const last=cs[cs.length-1][4];g.fillStyle="#38d5ff";g.beginPath();
   g.arc(X(cs.length-1),Y(last),3,0,7);g.fill();
 }
-async function loadCandles(){try{const d=await api("/api/bybit/candles?symbol="+SYM+"&tf=entry&limit=120");
+async function loadCandles(){try{const d=await api("/api/trading/candles?symbol="+SYM+"&tf=entry&limit=120");
   window._candles=d;drawChart();}catch(e){}}
 window.addEventListener("resize",drawChart);
 
 async function refresh(){
-  let s;try{s=await api("/api/bybit/status");}catch(e){return;} LAST=s;
+  let s;try{s=await api("/api/trading/status");}catch(e){return;} LAST=s;
   const run=s.running;
   $("modeBadge").className="badge "+(run?"live":"off");
   $("modeBadge").textContent=run?"LIVE-PAPER":"OFFLINE";
@@ -835,7 +835,7 @@ async function refresh(){
   ].map(t=>`<span class="it">${t}</span>`).join("").repeat(2);
 }
 
-async function loadJournal(){let d;try{d=await api("/api/bybit/trades?limit=120");}catch(e){return;}
+async function loadJournal(){let d;try{d=await api("/api/trading/trades?limit=120");}catch(e){return;}
   const rows=d.trades||[];
   drawEquitySpark(rows);
   // feed = settled closes newest first
@@ -874,18 +874,18 @@ function flashResult(r){const f=$("flash");const win=r.result==="WIN"||Number(r.
   f.textContent=(win?"▲ WIN ":"▼ LOSS ")+(r.r_multiple?fmt(r.r_multiple,2)+"R":money(Number(r.pnl_usd)));
   f.classList.remove("show");void f.offsetWidth;f.classList.add("show");}
 
-async function startBot(){try{await api("/api/bybit/start",{method:"POST",headers:{"Content-Type":"application/json"},
+async function startBot(){try{await api("/api/trading/start",{method:"POST",headers:{"Content-Type":"application/json"},
   body:JSON.stringify({mode:"paper",strategy:$("stratSel").value})});}catch(e){alert(e.message);}refresh();}
-async function stopBot(){try{await api("/api/bybit/stop",{method:"POST"});}catch(e){alert(e.message);}refresh();}
-async function resetKill(){await api("/api/bybit/kill/reset",{method:"POST"});refresh();}
+async function stopBot(){try{await api("/api/trading/stop",{method:"POST"});}catch(e){alert(e.message);}refresh();}
+async function resetKill(){await api("/api/trading/kill/reset",{method:"POST"});refresh();}
 async function manualClose(){if(!confirm("현재 포지션을 시장가(시뮬)로 청산할까요?"))return;
-  try{await api("/api/bybit/manual",{method:"POST",headers:{"Content-Type":"application/json"},
+  try{await api("/api/trading/manual",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({action:"close",symbol:SYM})});}catch(e){alert(e.message);}refresh();loadJournal();}
 
-async function runBacktest(){$("btOut").textContent="리플레이 중… (Bybit 과거 kline 다운로드)";
+async function runBacktest(){$("btOut").textContent="리플레이 중… (과거 kline 다운로드)";
   const ov={};if($("ovAtr").value)ov.atr_stop_mult=parseFloat($("ovAtr").value);
   if($("ovRR").value)ov.rr_target=parseFloat($("ovRR").value);
-  try{const d=await api("/api/bybit/backtest",{method:"POST",headers:{"Content-Type":"application/json"},
+  try{const d=await api("/api/trading/backtest",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({symbol:SYM,strategy:$("stratSel").value||"trend_breakout",overrides:ov})});
     const m=d.metrics;
     $("btOut").innerHTML=`<b>${d.trades}건</b> · 승률 ${m.win_rate!=null?(m.win_rate*100).toFixed(0)+"%":"–"}

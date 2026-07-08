@@ -18,13 +18,13 @@ from __future__ import annotations
 
 from ..indicators import atr, ema, swing_points, trendline_from
 from ..models import Side, TradeSignal
-from .base import BybitContext, BybitStrategy
+from .base import TradingContext, TradingStrategy
 
 
-class TrendlineStrategy(BybitStrategy):
+class TrendlineStrategy(TradingStrategy):
     name = "trendline"
 
-    def _gates(self, ctx: BybitContext) -> dict | None:
+    def _gates(self, ctx: TradingContext) -> dict | None:
         c = self.cfg
         htf, ef = ctx.htf_candles, ctx.entry_candles
         if len(htf) < c.ema_period + 2:
@@ -70,7 +70,7 @@ class TrendlineStrategy(BybitStrategy):
             "entry_ref": cur.close, "atr": a, "stop": stop, "ready": ready,
         }
 
-    def evaluate(self, ctx: BybitContext) -> TradeSignal | None:
+    def evaluate(self, ctx: TradingContext) -> TradeSignal | None:
         g = self._gates(ctx)
         if not g or not g["ready"]:
             return None
@@ -84,7 +84,7 @@ class TrendlineStrategy(BybitStrategy):
                            strength=strength, stop_price=round(g["stop"], 6),
                            entry_hint=round(g["entry_ref"], 6), detail=detail)
 
-    def diagnose(self, ctx: BybitContext) -> dict | None:
+    def diagnose(self, ctx: TradingContext) -> dict | None:
         g = self._gates(ctx)
         if not g:
             return None

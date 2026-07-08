@@ -1,12 +1,12 @@
-"""@responsibility 캔들 수집기 — Bybit→Binance→OKX 공개 kline REST 폴백으로 진입·상위 시간봉 OHLCV 유지 (인증 불필요)
+"""@responsibility 캔들 수집기 — Binance→OKX 공개 kline REST 폴백으로 진입·상위 시간봉 OHLCV 유지 (인증 불필요)
 
-Candle collector. Polls a PUBLIC v5/kline-style REST endpoint (no API key) for
-both the entry and higher timeframes and keeps a deduped, time-sorted buffer of
-CLOSED candles per interval. Bybit is the primary source; if it is unreachable
-(some regions geo-block api.bybit.com), it fails over to Binance USDⓈ-M futures
-and then OKX swaps so the live chart and strategy keep receiving identical
-Candle objects. The newest returned bar is still forming, so it is exposed as
-last_price but excluded from the closed-candle list the strategy consumes.
+Candle collector. Polls a PUBLIC kline REST endpoint (no API key) for both
+the entry and higher timeframes and keeps a deduped, time-sorted buffer of
+CLOSED candles per interval. Binance USDⓈ-M futures is the primary source;
+if it is unreachable it fails over to OKX swaps so the live chart and
+strategy keep receiving identical Candle objects. The newest returned bar is
+still forming, so it is exposed as last_price but excluded from the
+closed-candle list the strategy consumes.
 """
 from __future__ import annotations
 
@@ -16,8 +16,6 @@ import httpx
 
 from ..models import Candle
 
-BYBIT_REST = "https://api.bybit.com/v5/market/kline"
-BYBIT_TESTNET_REST = "https://api-testnet.bybit.com/v5/market/kline"
 BINANCE_REST = "https://fapi.binance.com/fapi/v1/klines"
 OKX_REST = "https://www.okx.com/api/v5/market/candles"
 MAX_BARS = 400          # rolling history kept per interval
@@ -28,7 +26,7 @@ MAX_BARS = 400          # rolling history kept per interval
 CROSS_CHECK_EVERY = 15          # polls (~30s at a 2s poll)
 MAX_SOURCE_DEV_PCT = 0.8        # % gap between venues that raises a warning
 
-# Bybit interval code (minutes as string / D,W,M) -> other venues' bar strings.
+# Engine interval code (minutes as string / D,W,M) -> each venue's bar string.
 _BINANCE_IV = {"1": "1m", "3": "3m", "5": "5m", "15": "15m", "30": "30m",
                "60": "1h", "120": "2h", "240": "4h", "360": "6h",
                "720": "12h", "D": "1d", "W": "1w"}
@@ -44,7 +42,7 @@ def _base_of(symbol: str) -> str:
 
 class KlineCollector:
     def __init__(self, symbol: str, entry_interval: str, htf_interval: str,
-                 limit: int = 200, testnet: bool = False):
+                 limit: int = 200):
         self.symbol = symbol
         self.entry_interval = entry_interval
         self.htf_interval = htf_interval
@@ -61,16 +59,10 @@ class KlineCollector:
         self.cross_source = ""
         self.cross_dev_pct: float | None = None
         self.divergence = False
-        # Source failover order. Testnet only exists on Bybit, so pin to it.
-        if testnet:
-            self._bybit_url = BYBIT_TESTNET_REST
-            self._sources: list[tuple[str, object]] = [
-                ("bybit_testnet", self._src_bybit)]
-        else:
-            self._bybit_url = BYBIT_REST
-            self._sources = [("bybit", self._src_bybit),
-                             ("binance", self._src_binance),
-                             ("okx", self._src_okx)]
+        # Source failover order (venue-neutral: both serve USDT perp klines).
+        self._sources: list[tuple[str, object]] = [
+            ("binance", self._src_binance),
+            ("okx", self._src_okx)]
 
     # ------------------------------------------------------------- buffer
 
@@ -112,20 +104,6 @@ class KlineCollector:
 
     # ------------------------------------------------------- source adapters
     # Each returns a list[Candle] (any order) or raises on failure.
-
-    async def _src_bybit(self, client: httpx.AsyncClient, interval: str,
-                         limit: int | None = None) -> list[Candle]:
-        params = {"category": "linear", "symbol": self.symbol,
-                  "interval": interval, "limit": limit or self.limit}
-        r = await client.get(self._bybit_url, params=params)
-        r.raise_for_status()
-        d = r.json()
-        if d.get("retCode") != 0:
-            raise RuntimeError(f"retCode {d.get('retCode')}: {d.get('retMsg')}")
-        # rows newest-first: [start, o, h, l, c, v, turnover] as strings
-        return [Candle(ts_ms=int(x[0]), open=float(x[1]), high=float(x[2]),
-                       low=float(x[3]), close=float(x[4]), volume=float(x[5]))
-                for x in d.get("result", {}).get("list", [])]
 
     async def _src_binance(self, client: httpx.AsyncClient, interval: str,
                           limit: int | None = None) -> list[Candle]:
@@ -219,7 +197,7 @@ class KlineCollector:
     async def run(self, stop: asyncio.Event, poll_sec: float = 2.0) -> None:
         """Poll until stopped; never raises out."""
         backoff = 2.0
-        ua = "Mozilla/5.0 (compatible; coinmaster-pro/1.0)"
+        ua = "Mozilla/5.0 (compatible; propmaster-pro/1.0)"
         async with httpx.AsyncClient(timeout=12, headers={"User-Agent": ua}) as client:
             while not stop.is_set():
                 try:

@@ -14,7 +14,7 @@ into the active account's rule engine, and executes the consequences:
   payout  -> funded only, on-demand, min $50, capped at realized profit
              above size; trader receives amount * profit split.
 
-The desk never places or blocks orders itself — BybitRiskManager consults
+The desk never places or blocks orders itself — RiskManager consults
 entries_allowed() inside allow_entry() (the single permission point).
 """
 from __future__ import annotations
@@ -123,7 +123,7 @@ class PropDesk:
         return {"event": TARGET_REACHED, "note": note, "account": acct.id}
 
     def entries_allowed(self) -> tuple[bool, str]:
-        """Consulted by BybitRiskManager.allow_entry (single permission
+        """Consulted by RiskManager.allow_entry (single permission
         point). No active account = engine runs standalone (allowed)."""
         acct = self.active()
         if acct is None:

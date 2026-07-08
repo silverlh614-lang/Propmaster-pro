@@ -1,20 +1,20 @@
 """Offline tests for the trendline / range-box / regime-switch strategies —
-synthetic candles, no network. Run:  python -m tests.test_bybit_strategies"""
+synthetic candles, no network. Run:  python -m tests.test_engine_strategies"""
 from __future__ import annotations
 
-# tests.test_bybit isolates DATA_DIR before importing the app package —
+# tests.test_engine isolates DATA_DIR before importing the app package —
 # import it first so this module inherits the same isolation + helpers.
-from tests.test_bybit import _c, _coherent_series, _uptrend_breakout  # noqa: F401
+from tests.test_engine import _c, _coherent_series, _uptrend_breakout  # noqa: F401
 
-from app.trading_bybit import indicators as ind          # noqa: E402
-from app.trading_bybit.config import BybitConfig          # noqa: E402
-from app.trading_bybit.models import Side                 # noqa: E402
-from app.trading_bybit.strategies import STRATEGIES, make_strategy  # noqa: E402
-from app.trading_bybit.strategies.base import BybitContext  # noqa: E402
+from app.trading import indicators as ind          # noqa: E402
+from app.trading.config import TradingConfig          # noqa: E402
+from app.trading.models import Side                 # noqa: E402
+from app.trading.strategies import STRATEGIES, make_strategy  # noqa: E402
+from app.trading.strategies.base import TradingContext  # noqa: E402
 
 
 def _ctx(htf, entry):
-    return BybitContext(symbol="BTC", htf_candles=htf, entry_candles=entry,
+    return TradingContext(symbol="BTC", htf_candles=htf, entry_candles=entry,
                         equity_usd=200, now=0)
 
 
@@ -71,7 +71,7 @@ def _rising_zigzag(n=29):
 
 
 def test_trendline_bounce_long():
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     strat = make_strategy("trendline", cfg)
     htf = _trending_htf(10, step=1.0)                    # close >= EMA5 -> LONG
 
@@ -104,7 +104,7 @@ def _triangle_entry(n):
 
 
 def test_range_box_long_short():
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     strat = make_strategy("range_box", cfg)
     flat = _flat_htf(30)
 
@@ -139,7 +139,7 @@ def test_range_box_long_short():
 
 def test_regime_switch_routing():
     # 횡보장: flat HTF -> range_box sub fires at the box bottom
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     strat = make_strategy("regime_switch", cfg)
     entry_long = _triangle_entry(39) + [_c(39 * 900000, 100.2, 101.5, 99.2, 101.0)]
     sig = strat.evaluate(_ctx(_flat_htf(30), entry_long))
@@ -150,7 +150,7 @@ def test_regime_switch_routing():
     # shrink adx_period, and anchor thresholds to the measured ADX (test-only
     # routing check — live thresholds stay backtest-calibrated).
     htf, entry = _uptrend_breakout()
-    cfg2 = BybitConfig()
+    cfg2 = TradingConfig()
     cfg2.adx_period = 10
     v = ind.adx(htf, cfg2.adx_period)
     cfg2.adx_trend_min = v * 0.9
@@ -161,7 +161,7 @@ def test_regime_switch_routing():
     assert sig2.detail.startswith("[trend ADX"), sig2.detail
 
     # dead zone (range_max < ADX < trend_min) -> no entries, ready False
-    cfg3 = BybitConfig()
+    cfg3 = TradingConfig()
     cfg3.adx_period = 10
     cfg3.adx_trend_min = v + 5
     cfg3.adx_range_max = max(v - 5, 0.0)
@@ -172,7 +172,7 @@ def test_regime_switch_routing():
     assert d["gates"][0]["key"] == "regime" and not d["gates"][0]["ok"]
 
     # misconfigured sub-strategy name -> loud failure at construction
-    cfg4 = BybitConfig()
+    cfg4 = TradingConfig()
     cfg4.regime_range_strategy = "nope"
     try:
         make_strategy("regime_switch", cfg4)
@@ -185,9 +185,9 @@ def test_regime_switch_routing():
 # ------------------------------------------------------------- integration
 
 def test_registry_and_backtest_replay():
-    from app.trading_bybit.backtest.engine import replay
+    from app.trading.backtest.engine import replay
     assert {"trendline", "range_box", "regime_switch"} <= set(STRATEGIES)
-    cfg = BybitConfig()
+    cfg = TradingConfig()
     htf, entry = _coherent_series(220)
     for name in ("trendline", "range_box", "regime_switch"):
         r = replay("BTC", name, cfg, entry_candles=entry, htf_candles=htf)

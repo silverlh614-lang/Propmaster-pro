@@ -8,12 +8,12 @@
 ## 1. Project Identity
 
 **Breakout 스타일 크립토 프롭 트레이딩 플랫폼 (시뮬레이션)**: 평가 챌린지 → 펀디드 계좌 →
-온디맨드 페이아웃 수명주기를 equity 기준 룰 엔진이 강제하고, 그 아래에서 Bybit
+온디맨드 페이아웃 수명주기를 equity 기준 룰 엔진이 강제하고, 그 아래에서 독자
 레버리지-마진 페이퍼 트레이딩 엔진이 집행한다 (**Phase 1 = 페이퍼 전용**). FastAPI + Railway.
 
 - `app/prop/` — 프롭 코어: 플랜 카탈로그(plans) · 챌린지 계좌 룰 엔진(account) ·
   데스크 수명주기(desk) · 영속화(store) · REST(api)
-- `app/trading_bybit/` — 집행 엔진: kline 수집 → 전략 시그널 → 포지션 FSM → 리스크 관문
+- `app/trading/` — 집행 엔진: kline 수집 → 전략 시그널 → 포지션 FSM → 리스크 관문
 - `app/` (ensemble·fsm·chain) — BTC 사이클 분석 사이드카 (프롭 규칙과 무관)
 - `scripts/` — 정적 가드 (complexity·responsibility), pre-commit 배선
 - `tests/` — 오프라인 테스트 (네트워크 금지)
@@ -27,26 +27,26 @@ Breakout Prop 공개 구조를 본뜬 시뮬레이션 파라미터일 뿐 실제
 ## 2. 핵심 불변식 (절대 규칙)
 
 1. **Paper-First** — `live_enabled` 기본 `False`. Phase 3 게이트(백테스트 통과 + 명시적
-   `BYBIT_LIVE_ENABLED=1` + 자격증명) 전에는 실주문 경로를 작성하지 않는다.
-   라이브 모드 거부 로직(`app/trading_bybit/bot.py`)을 우회·완화하는 패치 금지.
-2. **리스크 관문 우회 금지** — 모든 신규 진입은 `BybitRiskManager.allow_entry()`
-   (`app/trading_bybit/risk.py`) 단일 허가점을 통과한다. 킬스위치·동시 포지션/오픈리스크
-   캡을 우회하는 주문 생성 금지. 킬스위치 해제는 명시적 조작(`/api/bybit/kill/reset`)만.
+   `TRADING_LIVE_ENABLED=1` + 자격증명) 전에는 실주문 경로를 작성하지 않는다.
+   라이브 모드 거부 로직(`app/trading/bot.py`)을 우회·완화하는 패치 금지.
+2. **리스크 관문 우회 금지** — 모든 신규 진입은 `RiskManager.allow_entry()`
+   (`app/trading/risk.py`) 단일 허가점을 통과한다. 킬스위치·동시 포지션/오픈리스크
+   캡을 우회하는 주문 생성 금지. 킬스위치 해제는 명시적 조작(`/api/trading/kill/reset`)만.
 3. **전략-집행 분리** — Strategy 는 `TradeSignal` 방출만 한다. 주문·리스크·정산은 포지션
-   FSM (`app/trading_bybit/execution/position.py`) 소유다 (`strategies/base.py` 프로토콜).
-   새 전략은 `app/trading_bybit/strategies/` 레지스트리 추가로만 — 엔진 본체 수정 금지.
+   FSM (`app/trading/execution/position.py`) 소유다 (`strategies/base.py` 프로토콜).
+   새 전략은 `app/trading/strategies/` 레지스트리 추가로만 — 엔진 본체 수정 금지.
 4. **시세·앵커 단일 통로** — 현물가는 `app/price_feed.py` 폴백 체인
    (CoinGecko→Coinbase→Binance→스냅샷)만 경유. `[SNAPSHOT]` 앵커 값은 env
    (`REALIZED_PRICE` 등)로만 갱신하고 코드에 하드코딩하지 않는다 (`app/snapshot.py`).
 5. **레버리지·리스크 규율 + hand-tune 금지** — 레버리지 ≤ 5x, 고정 비율 리스크,
    ATR 기반 스탑을 유지한다. 시그널·리스크 임계값은 손으로 튜닝하지 않는다 —
-   Phase 2 백테스트 게이트(`app/trading_bybit/backtest/`)가 결정한다 (`config.py` 주석 참조).
+   Phase 2 백테스트 게이트(`app/trading/backtest/`)가 결정한다 (`config.py` 주석 참조).
 
 6. **프롭 룰 엔진 단일 판정** — 챌린지 계좌의 브리치(일일손실·최대DD)는
    `app/prop/account.py` `evaluate()` 한 곳에서만 판정한다. 브리치는 **equity(미실현 포함)**
    기준·**터미널**(FAILED 영구, 리셋 금지 — 새 시도 = 새 구매)이며, 단계 통과는
    **실현 balance + flat** 기준이다. 브리치 시 킬스위치 트립 + 전 포지션 청산을 우회하는
-   패치 금지. PropDesk 는 `BybitManager`(단일 조립점)에서만 생성한다 — 원장·리스크 관문과
+   패치 금지. PropDesk 는 `TradingManager`(단일 조립점)에서만 생성한다 — 원장·리스크 관문과
    같은 객체를 공유해야 하기 때문이다.
 
 **provider 장애 ≠ 시장 신호** — 시세 API 실패는 폴백·캐시로 흡수하며, 어떤 경우에도
@@ -73,7 +73,7 @@ Breakout Prop 공개 구조를 본뜬 시뮬레이션 파라미터일 뿐 실제
 ```bash
 python scripts/validate_all.py       # 정적 가드 전체 (pre-commit 이 실행하는 것)
 python -m tests.test_prop            # 프롭 데스크·룰 엔진 오프라인 테스트
-python -m tests.test_bybit           # Bybit 트레이딩 오프라인 테스트
+python -m tests.test_engine           # 트레이딩 엔진 오프라인 테스트
 python -m tests.test_guards          # 가드 경계값 테스트
 python scripts/install_git_hooks.py  # pre-commit 훅 설치 (clone 후 1회)
 ```
@@ -90,7 +90,7 @@ python scripts/install_git_hooks.py  # pre-commit 훅 설치 (clone 후 1회)
 |---------------|-----------|
 | 도메인 개요 · API 목록 · 실행 주기 · 배포 | `README.md` |
 | 프롭 규칙 상세 · 플랜 파라미터 · 수명주기 설계 | `docs/prop_system.md` |
-| Bybit 봇 설계 · Phase 2 백테스트 · 배포 런북 | `docs/bybit_phase2_runbook.md` |
+| 트레이딩 봇 설계 · Phase 2 백테스트 · 배포 런북 | `docs/engine_phase2_runbook.md` |
 | BTC 사이클·바닥 방법론 (렌즈·FSM 근거) | `knowledge/btc_analysis_knowledge.md` |
 | 가설 등록·판정 · 파라미터 채택 · Phase 승격 기준 | `knowledge/hypothesis_registry.md` |
 | 에이전트 팀 · 스킬 오케스트레이션 | `.claude/agents/` · `.claude/skills/` |

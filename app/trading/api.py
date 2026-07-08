@@ -1,6 +1,6 @@
-"""@responsibility Bybit 관제탑 REST API — /api/bybit/* 봇 제어·저널·백테스트·설정 조회
+"""@responsibility 트레이딩 관제탑 REST API — /api/trading/* 봇 제어·저널·백테스트·설정 조회
 
-REST API for the Bybit control tower (/api/bybit/*)."""
+REST API for the trading control tower (/api/trading/*)."""
 from __future__ import annotations
 
 import csv
@@ -16,7 +16,7 @@ from .config import CONFIG, SYMBOL_SPECS
 from .store import FIELDS
 from .strategies import STRATEGIES
 
-router = APIRouter(prefix="/api/bybit", tags=["bybit"])
+router = APIRouter(prefix="/api/trading", tags=["trading"])
 
 
 class StartRequest(BaseModel):
@@ -94,7 +94,7 @@ def trades_csv(symbol: str | None = None, limit: int = 100_000):
     w.writeheader()
     w.writerows(rows)
     day = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d")
-    fname = f"bybit_trades_{(symbol or 'all').lower()}_{day}.csv"
+    fname = f"trades_{(symbol or 'all').lower()}_{day}.csv"
     return Response(content="\ufeff" + buf.getvalue(),
                     media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{fname}"'})

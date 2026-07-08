@@ -3,8 +3,8 @@
 Propmaster Pro — Breakout-style crypto prop trading platform (simulated).
 
 Prop desk (app/prop/) owns the challenge lifecycle: evaluation -> funded ->
-payout, judged by the rule engine on every closed bar. The Bybit paper
-trading engine (app/trading_bybit/) executes; the BTC cycle-bottom model
+payout, judged by the rule engine on every closed bar. The paper trading
+engine (app/trading/) executes; the BTC cycle-bottom model
 (Parts 1-3) remains as an analysis sidecar.
 """
 from __future__ import annotations
@@ -20,8 +20,8 @@ from pydantic import BaseModel, Field
 
 from . import chain, ensemble, fsm, price_feed, snapshot
 from .prop.api import router as prop_router
-from .trading_bybit.api import router as bybit_router
-from .trading_bybit.bot import MANAGER as BYBIT_MANAGER
+from .trading.api import router as trading_router
+from .trading.bot import MANAGER as TRADING_MANAGER
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))
@@ -34,20 +34,20 @@ CHAIN_CHART_PATH = str(DATA_DIR / "btc_cycle_chain.png")
 async def lifespan(app: FastAPI):
     # Warm the kline feed on boot so the live chart shows candles immediately,
     # even before an operator starts the bot.
-    BYBIT_MANAGER.start_feeds()
-    # Auto-resume: if the Bybit bot was running before a restart/redeploy,
+    TRADING_MANAGER.start_feeds()
+    # Auto-resume: if the trading bot was running before a restart/redeploy,
     # start it again with the same mode/strategy (state persists in the
     # DATA_DIR volume).
-    bst = BYBIT_MANAGER.state_store.load()
+    bst = TRADING_MANAGER.state_store.load()
     if bst.get("running"):
-        await BYBIT_MANAGER.start(mode=bst.get("mode", "paper"),
+        await TRADING_MANAGER.start(mode=bst.get("mode", "paper"),
                                   strategy=bst.get("strategy", "trend_breakout"))
     yield
     # Graceful exit WITHOUT persisting running=False, so auto-resume fires
     # on the next boot. An operator pressing "stop" is the only thing that
     # persists an intentional off state.
-    await BYBIT_MANAGER.shutdown()
-    await BYBIT_MANAGER.stop_feeds()
+    await TRADING_MANAGER.shutdown()
+    await TRADING_MANAGER.stop_feeds()
 
 
 app = FastAPI(
@@ -58,7 +58,7 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
-app.include_router(bybit_router)
+app.include_router(trading_router)
 app.include_router(prop_router)
 
 _lock = threading.Lock()
@@ -285,8 +285,8 @@ def fsm_demo():
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    """Landing page = Bybit leverage-margin control tower."""
-    return (ROOT / "static" / "bybit.html").read_text(encoding="utf-8")
+    """Landing page = Propmaster terminal (trading + prop control tower)."""
+    return (ROOT / "static" / "terminal.html").read_text(encoding="utf-8")
 
 
 @app.get("/model", response_class=HTMLResponse)
@@ -295,10 +295,10 @@ def model_page():
     return (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 
 
-@app.get("/bybit", response_class=HTMLResponse)
-def bybit_page():
-    """Part 5 — Bybit leverage-margin trend-breakout control tower (paper)."""
-    return (ROOT / "static" / "bybit.html").read_text(encoding="utf-8")
+@app.get("/terminal", response_class=HTMLResponse)
+def terminal_page():
+    """Propmaster terminal — leverage-margin trading control tower (paper)."""
+    return (ROOT / "static" / "terminal.html").read_text(encoding="utf-8")
 
 
 @app.get("/manifest.webmanifest")

@@ -12,14 +12,14 @@ from __future__ import annotations
 import time
 
 from ..account import AccountLedger
-from ..config import BybitConfig, SymbolSpec
+from ..config import TradingConfig, SymbolSpec
 from ..models import Candle, Position, PositionState, Side, TradeSignal, Unit
-from ..risk import BybitRiskManager, size_position
+from ..risk import RiskManager, size_position
 from ..store import Journal
 
 
 class PositionManager:
-    def __init__(self, spec: SymbolSpec, cfg: BybitConfig, risk: BybitRiskManager,
+    def __init__(self, spec: SymbolSpec, cfg: TradingConfig, risk: RiskManager,
                  journal: Journal, mode: str = "paper", strategy_name: str = "",
                  ledger: AccountLedger | None = None):
         self.spec = spec
@@ -59,7 +59,7 @@ class PositionManager:
     def load_state(self, st: dict | None) -> None:
         """Restore a snapshot saved by to_state(). Absent/empty -> fresh start.
         A legacy `equity` field in old records is ignored here — the account
-        ledger inherits it once at BybitManager construction (migration)."""
+        ledger inherits it once at TradingManager construction (migration)."""
         if not st:
             return
         self.bars_in_trade = int(st.get("bars_in_trade", 0))

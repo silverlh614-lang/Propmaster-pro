@@ -1,7 +1,7 @@
 """@responsibility 프롭 데스크 REST API — /api/prop/* 플랜·챌린지 구매·계좌 상태·페이아웃
 
 REST API for the prop desk (/api/prop/*). The desk instance is owned by
-BybitManager so the challenge account, the risk gate and the shared
+TradingManager so the challenge account, the risk gate and the shared
 ledger are always the same objects the trading loop uses.
 """
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..trading_bybit.bot import MANAGER
+from ..trading.bot import MANAGER
 
 router = APIRouter(prefix="/api/prop", tags=["prop"])
 
