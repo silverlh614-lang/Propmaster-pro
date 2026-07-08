@@ -185,6 +185,33 @@ def backtest_sweep(req: SweepRequest):
             "months": req.months, "combos": len(rows), "results": rows}
 
 
+PRESET_GRID = {"donchian_lookback": [20, 55], "entry_interval": ["15", "60"],
+               "atr_stop_mult": [1.5, 2.5], "pump_filter_pct": [0, 10]}
+
+
+@router.get("/backtest/sweep/preset")
+def backtest_sweep_preset(months: int = 12, symbol: str = "BTC"):
+    """Mobile-friendly calibration: ONE GET URL runs the standard 16-combo
+    grid (channel length x entry TF x stop width x pump filter) — open it in
+    a browser, wait, read the sorted table. Same engine as POST /sweep."""
+    import copy
+
+    from .backtest.engine import sweep
+
+    if symbol.upper() not in SYMBOL_SPECS:
+        raise HTTPException(422, f"unknown symbol '{symbol}'")
+    if not (0 <= months <= 60):
+        raise HTTPException(422, "months must be 0..60")
+    try:
+        rows = sweep(symbol, "prop_breakout", copy.copy(CONFIG), PRESET_GRID,
+                     months=months)
+    except Exception as e:
+        raise HTTPException(502, f"sweep failed: {e}")
+    return {"symbol": symbol.upper(), "strategy": "prop_breakout",
+            "months": months, "grid": PRESET_GRID, "combos": len(rows),
+            "results": rows}
+
+
 @router.get("/config")
 def config():
     return {"config": CONFIG.as_dict(),
