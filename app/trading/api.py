@@ -188,28 +188,68 @@ def backtest_sweep(req: SweepRequest):
 PRESET_GRID = {"donchian_lookback": [20, 55], "entry_interval": ["15", "60"],
                "atr_stop_mult": [1.5, 2.5], "pump_filter_pct": [0, 10]}
 
+# 프리셋 스윕은 수 분짜리 작업 — 동기 HTTP 는 엣지 타임아웃에 걸린다.
+# 단일 백그라운드 잡 슬롯 + 같은 URL 새로고침 폴링 (모바일 친화).
+_SWEEP = {"state": "idle", "key": None, "done": 0, "total": 0,
+          "partial": [], "results": None, "error": ""}
+_SWEEP_LOCK = None  # lazy threading.Lock
 
-@router.get("/backtest/sweep/preset")
-def backtest_sweep_preset(months: int = 12, symbol: str = "BTC"):
-    """Mobile-friendly calibration: ONE GET URL runs the standard 16-combo
-    grid (channel length x entry TF x stop width x pump filter) — open it in
-    a browser, wait, read the sorted table. Same engine as POST /sweep."""
+
+def _sweep_worker(key: str, symbol: str, months: int) -> None:
     import copy
 
     from .backtest.engine import sweep
+
+    def tick(done, total, _row):
+        _SWEEP["done"], _SWEEP["total"] = done, total
+
+    try:
+        rows = sweep(symbol, "prop_breakout", copy.copy(CONFIG), PRESET_GRID,
+                     months=months, on_progress=tick)
+        _SWEEP.update(state="done", results=rows)
+    except Exception as e:                        # noqa: BLE001 — surfaced via poll
+        _SWEEP.update(state="error", error=f"{type(e).__name__}: {e}"[:300])
+
+
+@router.get("/backtest/sweep/preset")
+def backtest_sweep_preset(months: int = 12, symbol: str = "BTC",
+                          refresh: int = 0):
+    """Mobile-friendly calibration: open this ONE URL — the standard
+    16-combo grid starts in the background; REFRESH the same URL to watch
+    progress (done/total) until state=done delivers the sorted table.
+    ?refresh=1 discards a finished result and reruns."""
+    import threading
+    global _SWEEP_LOCK
+    if _SWEEP_LOCK is None:
+        _SWEEP_LOCK = threading.Lock()
 
     if symbol.upper() not in SYMBOL_SPECS:
         raise HTTPException(422, f"unknown symbol '{symbol}'")
     if not (0 <= months <= 60):
         raise HTTPException(422, "months must be 0..60")
-    try:
-        rows = sweep(symbol, "prop_breakout", copy.copy(CONFIG), PRESET_GRID,
-                     months=months)
-    except Exception as e:
-        raise HTTPException(502, f"sweep failed: {e}")
-    return {"symbol": symbol.upper(), "strategy": "prop_breakout",
-            "months": months, "grid": PRESET_GRID, "combos": len(rows),
-            "results": rows}
+    key = f"{symbol.upper()}:{months}"
+    with _SWEEP_LOCK:
+        if _SWEEP["state"] == "running":
+            return {"state": "running", "key": _SWEEP["key"],
+                    "progress": f"{_SWEEP['done']}/{_SWEEP['total'] or '?'}",
+                    "hint": "이 URL을 새로고침하면 진행률이 갱신됩니다"}
+        if (_SWEEP["state"] == "done" and _SWEEP["key"] == key
+                and not refresh):
+            return {"state": "done", "symbol": symbol.upper(),
+                    "strategy": "prop_breakout", "months": months,
+                    "grid": PRESET_GRID, "combos": len(_SWEEP["results"]),
+                    "results": _SWEEP["results"]}
+        if _SWEEP["state"] == "error" and _SWEEP["key"] == key and not refresh:
+            return {"state": "error", "error": _SWEEP["error"],
+                    "hint": "?refresh=1 로 재시도"}
+        _SWEEP.update(state="running", key=key, done=0, total=0,
+                      partial=[], results=None, error="")
+        threading.Thread(target=_sweep_worker, args=(key, symbol, months),
+                         daemon=True, name="sweep-preset").start()
+    return {"state": "started", "key": key,
+            "grid": PRESET_GRID, "combos": 16,
+            "hint": "계산 시작 — 이 URL을 30초~1분 간격으로 새로고침하세요. "
+                    "state=done 이 되면 결과가 이 자리에 표시됩니다"}
 
 
 @router.get("/config")

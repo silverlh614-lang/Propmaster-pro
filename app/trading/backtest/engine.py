@@ -139,8 +139,8 @@ def replay(symbol: str, strategy_name: str, cfg: TradingConfig,
     snapshots = 0
     # Long histories (months mode) make full-list slices O(n^2) — a sliding
     # window and a monotonic HTF pointer keep the replay linear. WINDOW must
-    # cover every strategy lookback; identical results to the full slice.
-    WINDOW = max(400, warmup + 2)
+    # cover every strategy lookback (donchian<=55, EMA20 converges < 160).
+    WINDOW = max(160, warmup + 2)
     htf_close_ts = [c.ts_ms + htf_min * 60_000 for c in htf_candles]
     j = 0
     for i in range(warmup, len(entry_candles)):
@@ -186,7 +186,7 @@ def sweep(symbol: str, strategy_name: str, base_cfg: TradingConfig,
           grid: dict[str, list], months: int = 0,
           entry_candles: list[Candle] | None = None,
           htf_candles: list[Candle] | None = None,
-          max_combos: int = 64) -> list[dict]:
+          max_combos: int = 64, on_progress=None) -> list[dict]:
     """Grid-sweep config overrides over ONE candle download. Returns one row
     per combo (overrides + key metrics), sorted by expectancy_r. The whole
     point vs calling /backtest N times: candles are fetched once."""
@@ -210,7 +210,7 @@ def sweep(symbol: str, strategy_name: str, base_cfg: TradingConfig,
             htf_candles = fetch_klines(spec.symbol, base_cfg.htf_interval)
 
     rows: list[dict] = []
-    for combo in combos:
+    for i, combo in enumerate(combos):
         cfg = copy.copy(base_cfg)
         for k, v in zip(keys, combo):
             cur = getattr(cfg, k)
@@ -226,6 +226,8 @@ def sweep(symbol: str, strategy_name: str, base_cfg: TradingConfig,
                      "profit_factor": m["profit_factor"],
                      "return_pct": m["return_pct"],
                      "max_drawdown_usd": m["max_drawdown_usd"]})
+        if on_progress is not None:
+            on_progress(i + 1, len(combos), rows[-1])
     rows.sort(key=lambda x: (x["expectancy_r"] is None,
                              -(x["expectancy_r"] or 0)))
     return rows
