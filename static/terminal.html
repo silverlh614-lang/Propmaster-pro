@@ -301,6 +301,7 @@
           <div id="propPayoutBox" style="display:none;margin-top:10px">
             <div class="row"><span class="l">인출 가능 수익</span><span class="v" id="propProfit">–</span></div>
             <div class="row"><span class="l">누적 인출 / 분할</span><span class="v" id="propWd">–</span></div>
+            <div class="row"><span class="l">스케일링</span><span class="v" id="propScale">–</span></div>
             <div style="display:flex;gap:6px;margin-top:7px;align-items:center">
               <input class="ov" id="poAmt" placeholder="금액 $" style="width:80px">
               <button class="go" onclick="requestPayout()">USDC 페이아웃</button>
@@ -914,7 +915,7 @@ function flashResult(r){const f=$("flash");const win=r.result==="WIN"||Number(r.
   f.classList.remove("show");void f.offsetWidth;f.classList.add("show");}
 
 // ---- 프롭 챌린지 패널 ----
-let PROP_PLANS=null,_propPrev=null,_propVioN=null;
+let PROP_PLANS=null,_propPrev=null,_propVioN=null,_propScaleLv=null;
 async function loadPropPlans(){
   try{PROP_PLANS=await api("/api/prop/plans");}catch(e){return;}
   const ps=$("propPlanSel");ps.innerHTML="";
@@ -988,6 +989,15 @@ function renderProp(pr){
     const profit=(a.balance!=null?a.balance:a.size)-a.size;
     $("propProfit").textContent=money(Math.max(0,profit));
     $("propWd").textContent=money(a.withdrawn_usd||0)+" / "+(a.profit_split_pct||plan.profit_split_pct)+"%";
+    const sc=a.scale;
+    if(sc)$("propScale").textContent=sc.next_size
+      ?("LV"+sc.level+" · 페이아웃 "+sc.payouts[0]+"/"+sc.payouts[1]
+        +" · 수익 "+fmt(sc.profit_pct,1)+"%/"+fmt(sc.required_profit_pct,0)
+        +"% → $"+(sc.next_size/1000)+"K")
+      :("LV"+sc.level+" · 최대 규모 도달");
+    if(_propScaleLv!==null&&(a.scale_level||0)>_propScaleLv)
+      notify("win","스케일 업! 🚀","계좌가 $"+((a.size||0)/1000)+"K로 증액 (잔고 리셋)");
+    _propScaleLv=a.scale_level||0;
   }
   $("propBuyBox").style.display=failed?"block":"none";
   if(failed)$("propBuyNote").textContent="계좌 종료됨 — 새 평가 챌린지로 재시작하세요.";
@@ -1015,7 +1025,8 @@ async function requestPayout(){
   try{const r=await api("/api/prop/payout",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({amount})});
     notify("win","페이아웃 완료",money(r.trader_usd)+" 수령 ("+r.split_pct+"% 분할"
-      +((r.fee_refund_usd||0)>0?" + 수수료 환불 "+money(r.fee_refund_usd):"")+")");$("poAmt").value="";}
+      +((r.fee_refund_usd||0)>0?" + 수수료 환불 "+money(r.fee_refund_usd):"")+")"
+      +(r.scaled_to?" · 스케일 업 → $"+(r.scaled_to/1000)+"K":""));$("poAmt").value="";}
   catch(e){alert(e.message);}
   refresh();
 }

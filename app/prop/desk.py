@@ -25,8 +25,9 @@ import time
 from . import conduct
 from .account import (BREACH_DAILY, BREACH_MAX_DD, EVALUATION, FAILED, FUNDED,
                       TARGET_REACHED, ChallengeAccount)
-from .plans import (ACCOUNT_SIZES, PLANS, SPLIT_UPGRADE_PCT, catalog,
-                    evaluation_fee, min_payout_usd)
+from .plans import (ACCOUNT_SIZES, PLANS, SCALE_MIN_PAYOUTS,
+                    SCALE_MIN_PROFIT_PCT, SCALE_STEP_MULT, SPLIT_UPGRADE_PCT,
+                    catalog, evaluation_fee, min_payout_usd, scale_max_usd)
 from .store import PayoutStore, PropStore
 
 BREACH_LABEL = {BREACH_MAX_DD: "max drawdown", BREACH_DAILY: "daily loss"}
@@ -187,16 +188,39 @@ class PropDesk:
         self.ledger.set(self.ledger.equity - amount)
         acct.withdrawn_usd = round(acct.withdrawn_usd + amount, 2)
         acct.fee_refunded = True
+        acct.payouts_since_scale += 1
+        acct.withdrawn_since_scale = round(acct.withdrawn_since_scale + amount, 2)
         # payout resets the daily anchor baseline down with the balance so a
         # withdrawal is never judged as a "loss" by the daily rule
         acct.day_anchor = max(acct.dd_floor(), acct.day_anchor - amount)
+        scaled_to = self._maybe_scale(acct)
         self._persist()
         rec = {"ts": time.time(), "account": acct.id, "amount_usd": amount,
                "split_pct": split, "fee_refund_usd": refund,
                "trader_usd": trader_usd,
                "currency": "USDC (simulated)", "status": "paid"}
+        if scaled_to:
+            rec["scaled_to"] = scaled_to
         self.payouts.append(rec)
         return {"ok": True, **rec, "balance_after": round(self.ledger.equity, 2)}
+
+    def _maybe_scale(self, acct: ChallengeAccount) -> float | None:
+        """Funded scaling rung: SCALE_MIN_PAYOUTS payouts AND withdrawn
+        profit >= SCALE_MIN_PROFIT_PCT of the current size double the
+        account (fresh stake), capped at PROP_SCALE_MAX."""
+        cap = scale_max_usd()
+        if acct.status != FUNDED or acct.size >= cap:
+            return None
+        if acct.payouts_since_scale < SCALE_MIN_PAYOUTS:
+            return None
+        if acct.withdrawn_since_scale < acct.size * SCALE_MIN_PROFIT_PCT / 100.0:
+            return None
+        acct.size = min(acct.size * SCALE_STEP_MULT, cap)
+        acct.scale_level += 1
+        acct.payouts_since_scale = 0
+        acct.withdrawn_since_scale = 0.0
+        self._reset_stake(acct)          # new rung = fresh stake at new size
+        return acct.size
 
     # ------------------------------------------------------------- views
 

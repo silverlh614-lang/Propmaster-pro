@@ -24,7 +24,9 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import asdict, dataclass, field
 
-from .plans import DD_TRAILING, PLANS, PropPlan
+from .plans import (DD_TRAILING, PLANS, SCALE_MIN_PAYOUTS,
+                    SCALE_MIN_PROFIT_PCT, SCALE_STEP_MULT, PropPlan,
+                    scale_max_usd)
 
 DAILY_ANCHOR_UTC_SEC = 30 * 60    # daily budget re-anchors at 00:30 UTC
 
@@ -64,6 +66,9 @@ class ChallengeAccount:
     profit_split_pct: float = 0.0    # account's split (upgrade overrides plan)
     fee_refunded: bool = False       # evaluation fee refunds with 1st payout
     violations: list = field(default_factory=list)  # conduct monitor records
+    scale_level: int = 0             # funded scaling rungs climbed
+    payouts_since_scale: int = 0     # milestone counters for the next rung
+    withdrawn_since_scale: float = 0.0
 
     def __post_init__(self):
         if self.highwater <= 0:
@@ -152,6 +157,17 @@ class ChallengeAccount:
             if tgt is not None:
                 d["target_progress_pct"] = round(
                     max(0.0, (balance - self.size)) / (tgt - self.size) * 100.0, 2)
+        if self.status == FUNDED:
+            cap = scale_max_usd()
+            d["scale"] = {
+                "level": self.scale_level,
+                "next_size": (min(self.size * SCALE_STEP_MULT, cap)
+                              if self.size < cap else None),
+                "payouts": [self.payouts_since_scale, SCALE_MIN_PAYOUTS],
+                "profit_pct": round(
+                    self.withdrawn_since_scale / self.size * 100.0, 2),
+                "required_profit_pct": SCALE_MIN_PROFIT_PCT,
+            }
         return d
 
     # ------------------------------------------------------ persistence

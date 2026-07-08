@@ -285,6 +285,43 @@ def test_conduct_monitor():
     print("ok  conduct monitor (martingale/oversize/revenge, warn vs enforce)")
 
 
+def test_funded_scaling():
+    led = _Ledger()
+    d = _desk(led)
+    d.buy_challenge("1step_classic", 10_000)
+    led.set(11_000.0)
+    d.on_mark(11_000.0, 11_000.0, True, DAY1)    # -> FUNDED, ledger 10000
+    # rung 1 milestone: 2 payouts AND withdrawn >= 10% of size ($1000)
+    led.set(10_600.0)
+    r1 = d.request_payout(500)
+    assert r1["ok"] and "scaled_to" not in r1    # 1 payout, $500 — not yet
+    a = d.active()
+    assert a.payouts_since_scale == 1 and a.withdrawn_since_scale == 500.0
+    led.set(led.equity + 500)                    # trade more profit
+    r2 = d.request_payout(500)
+    assert r2["ok"] and r2["scaled_to"] == 20_000.0
+    a = d.active()
+    assert a.size == 20_000.0 and a.scale_level == 1
+    assert led.equity == 20_000.0                # fresh stake at the new rung
+    assert a.highwater == 20_000.0 and a.dd_floor() == 20_000.0 * 0.94
+    assert a.payouts_since_scale == 0 and a.withdrawn_since_scale == 0.0
+    snap = a.snapshot()
+    assert snap["scale"]["level"] == 1 and snap["scale"]["next_size"] == 40_000.0
+    # cap: PROP_SCALE_MAX stops the ladder
+    os.environ["PROP_SCALE_MAX"] = "20000"
+    try:
+        led.set(22_000.0)
+        p = d.request_payout(1_000)
+        assert p["ok"] and "scaled_to" not in p
+        p = d.request_payout(1_000)
+        assert p["ok"] and "scaled_to" not in p  # qualified but capped
+        assert d.active().size == 20_000.0
+        assert d.active().snapshot()["scale"]["next_size"] is None
+    finally:
+        del os.environ["PROP_SCALE_MAX"]
+    print("ok  funded scaling (2 payouts + 10% withdrawn -> x2, capped)")
+
+
 def test_desk_persistence_roundtrip():
     led = _Ledger()
     store, pay = PropStore(), PayoutStore()
@@ -311,5 +348,6 @@ if __name__ == "__main__":
     test_desk_payouts()
     test_split_upgrade_and_fee_refund()
     test_conduct_monitor()
+    test_funded_scaling()
     test_desk_persistence_roundtrip()
     print("\nall prop tests passed ✅")

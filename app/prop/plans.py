@@ -78,6 +78,19 @@ ACCOUNT_SIZES = (5_000, 10_000, 25_000, 50_000, 100_000, 200_000)
 SPLIT_UPGRADE_PCT = 90.0
 SPLIT_UPGRADE_FEE_MULT = 1.2
 
+# Scaling program (funded only). Breakout's real program is discretionary
+# ("~3 months consistent profitability", aggregate cap $2M); the simulator
+# uses explicit milestones: at each rung, SCALE_MIN_PAYOUTS payouts AND
+# cumulative withdrawn profit >= SCALE_MIN_PROFIT_PCT of the current size
+# double the account (fresh stake), up to PROP_SCALE_MAX.
+SCALE_STEP_MULT = 2.0
+SCALE_MIN_PAYOUTS = 2
+SCALE_MIN_PROFIT_PCT = 10.0
+
+
+def scale_max_usd() -> float:
+    return float(os.getenv("PROP_SCALE_MAX", "2000000"))
+
 
 def min_payout_usd() -> float:
     return float(os.getenv("PROP_MIN_PAYOUT", "50"))
@@ -102,6 +115,10 @@ def catalog() -> dict:
         "min_payout_usd": min_payout_usd(),
         "split_upgrade": {"split_pct": SPLIT_UPGRADE_PCT,
                           "fee_mult": SPLIT_UPGRADE_FEE_MULT},
+        "scaling": {"step_mult": SCALE_STEP_MULT,
+                    "min_payouts": SCALE_MIN_PAYOUTS,
+                    "min_profit_pct": SCALE_MIN_PROFIT_PCT,
+                    "max_usd": scale_max_usd()},
         "plans": [
             {**p.as_dict(),
              "fees": {str(s): evaluation_fee(p, s)
