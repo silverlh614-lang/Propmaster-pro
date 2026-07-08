@@ -30,7 +30,7 @@
 | **Part 1 — 앙상블** (`app/ensemble.py`) | 6개 렌즈 삼각분포의 mixture-of-experts 몬테카를로 → 바닥 가격 분포 | 오프라인/주간 배치 (스냅샷 갱신 시 재계산) |
 | **Part 2 — FSM** (`app/fsm.py`) | WATCH → CAP_WATCH → ACCUMULATE → CONFIRM → TREND 상태기계 → 일별 deploy fraction | 온라인/일별 (상태는 `data/fsm_state.json`에 영속) |
 | **Part 3 — 풀사이클 체인** (`app/chain.py`) | 바닥 앙상블 → 회복 배수 → 2028 반감기 가격 → ROI regime 혼합(랠리 소멸 30%) → 2029 고점 가격·시점 | 오프라인 (파라미터 = 명시적 판단) |
-| **트레이딩 엔진** (`app/trading/`) | 레버리지-마진 추세돌파 자동매매: kline 수집 → 상위추세+돌파 시그널 → ATR 스탑·2:1 R:R → 부분청산·트레일링 (Phase 1 = 페이퍼 전용. 레버리지 ≤ 5x, 고정 비율 리스크 — `TRADING_*`로 조정) | 온라인/상시 (봇 start 시, 저널은 `data/trades.csv`) |
+| **트레이딩 엔진** (`app/trading/`) | 프롭 최적화 자동매매: kline 수집 → Donchian 돌파+HTF 추세 시그널(`prop_breakout` 기본) → ATR 스탑·2:1 R:R → 부분청산·트레일링. 사이징은 잔여 프롭 예산 기반(일일예산 25%·DD예산 10%), 당일 3패 시 정지, 애드업 OFF (Phase 1 = 페이퍼 전용, `TRADING_*`로 조정) | 온라인/상시 (봇 start 시, 저널은 `data/trades.csv`) |
 | **대시보드** (`static/index.html`) | `/model` — 스냅샷 앵커·분포 차트·P(바닥<레벨)·FSM 조작 UI | — |
 | **관제탑** (`static/terminal.html`) | `/` — 레버리지 봇 상태·포지션·캔들, 수동 개입(L/S/X), 트레이드 저널 | — |
 | **지식 베이스** (`knowledge/`) | 방법론·데이터·원칙 원문 (`/api/knowledge`로 서빙) | living document |
@@ -62,7 +62,7 @@
 | `GET /api/knowledge` | 지식 베이스 마크다운 원문 |
 | `GET /terminal` | 트레이딩 관제탑 UI (`/`와 동일) |
 | `GET /api/trading/status` | 봇 상태 (포지션 FSM·캔들·리스크·오늘 성과) |
-| `POST /api/trading/start` | 봇 시작 `{mode: "paper", strategy: "trend_breakout"}` |
+| `POST /api/trading/start` | 봇 시작 `{mode: "paper", strategy: "prop_breakout"}` |
 | `POST /api/trading/stop` | 봇 정지 (열린 페이퍼 포지션 청산) |
 | `POST /api/trading/manual` | 수동 개입 `{action: long\|short\|close, symbol}` |
 | `POST /api/trading/kill/reset` | 킬스위치 해제 |

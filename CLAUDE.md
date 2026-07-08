@@ -38,9 +38,11 @@ Breakout Prop 공개 구조를 본뜬 시뮬레이션 파라미터일 뿐 실제
 4. **시세·앵커 단일 통로** — 현물가는 `app/price_feed.py` 폴백 체인
    (CoinGecko→Coinbase→Binance→스냅샷)만 경유. `[SNAPSHOT]` 앵커 값은 env
    (`REALIZED_PRICE` 등)로만 갱신하고 코드에 하드코딩하지 않는다 (`app/snapshot.py`).
-5. **레버리지·리스크 규율 + hand-tune 금지** — 레버리지 ≤ 5x, 고정 비율 리스크,
-   ATR 기반 스탑을 유지한다. 시그널·리스크 임계값은 손으로 튜닝하지 않는다 —
-   Phase 2 백테스트 게이트(`app/trading/backtest/`)가 결정한다 (`config.py` 주석 참조).
+5. **레버리지·리스크 규율 + hand-tune 금지** — 레버리지 ≤ 5x(심볼 클래스 캡 우선),
+   ATR 기반 스탑을 유지한다. 사이징은 **프롭 예산 기반**(잔여 일일/DD 예산의 고정 분율,
+   `risk_per_trade_pct` 는 상한 캡; 프롭 계좌 없으면 고정 비율 폴백) — 복리단타의
+   자산 고정비율·애드업은 prop_mode 에서 기각됐다. 시그널·리스크 임계값은 손으로
+   튜닝하지 않는다 — Phase 2 백테스트 게이트(`app/trading/backtest/`)가 결정한다.
 
 6. **프롭 룰 엔진 단일 판정** — 챌린지 계좌의 브리치(일일손실·최대DD)는
    `app/prop/account.py` `evaluate()` 한 곳에서만 판정한다. 브리치는 **equity(미실현 포함)**

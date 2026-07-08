@@ -117,7 +117,25 @@ Breakout Prop(breakoutprop.com, 2025-09 Kraken 인수)의 공개 구조를 본�
 - 관제탑 펀디드 박스에 `LV · 페이아웃 n/2 · 수익 x%/10% → 다음 크기` 진행 표시,
   달성 시 페이아웃 응답에 `scaled_to` + 스케일 업 토스트.
 
-## 8. 다음 단계
+## 8. 프롭 최적화 매매 로직 (복리단타 시스템 기각)
+
+원전(복리단타 비법서)의 자산 고정비율·복리 사이징·애드업·장악형/거래량 게이트는
+프롭 환경에서 기각하고, 룰 예산에 종속된 로직으로 교체했다:
+
+| 항목 | 복리단타 (기각) | 프롭 최적화 (현행) |
+|---|---|---|
+| 사이징 | 자산의 고정 1% (복리) | **잔여 예산 분율**: min(잔여 일일예산×25%, 잔여 DD예산×10%), `risk_per_trade_pct`는 캡. 손실 누적 시 자동 축소 |
+| 일일 규율 | 트레이드 수 캡만 | **당일 3패 시 진입 정지** + 오픈리스크 합 ≤ 잔여 일일예산의 50% |
+| 애드업 | 최대 2유닛 피라미딩 | **기본 OFF** (손실 뒤 증액과 한 끗 — conduct 모니터와 일관) |
+| 기본 전략 | trend_breakout (장악형+거래량 게이트) | **prop_breakout**: Donchian 20 돌파 + HTF EMA20 필터 (게이트 최소화 — 평가 기간 단축) |
+| 청산 | 2R 부분익절+브레이크이븐+트레일 | 유지 (진행 잠금이 프롭에 유리) |
+
+프롭 계좌가 없으면(백테스트·스탠드얼론) 기존 고정 비율로 폴백한다.
+관련 knob: `TRADING_PROP_MODE`, `TRADING_RISK_DAILY_BUDGET_FRAC`,
+`TRADING_RISK_DD_BUDGET_FRAC`, `TRADING_DAILY_STOP_AFTER_LOSSES`,
+`TRADING_DAILY_OPEN_RISK_FRAC`, `TRADING_DONCHIAN_LOOKBACK`, `TRADING_DONCHIAN_HTF_EMA`.
+
+## 9. 다음 단계
 
 - ~~관제탑 프롭 패널~~ ✅ / ~~심볼별 레버리지 차등~~ ✅ / ~~90% 분할·수수료 환불~~ ✅
   / ~~행위 감시~~ ✅ / ~~스케일링 플랜~~ ✅

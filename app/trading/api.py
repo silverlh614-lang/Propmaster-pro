@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/trading", tags=["trading"])
 
 class StartRequest(BaseModel):
     mode: str = "paper"
-    strategy: str = "trend_breakout"
+    strategy: str = "prop_breakout"
 
 
 class ManualRequest(BaseModel):
@@ -104,7 +104,7 @@ class BacktestRequest(BaseModel):
     # overrides accepts strings too so interval fields can be swept
     # (H7: htf_interval "60"|"240"|"D") alongside numeric params.
     symbol: str = "BTC"
-    strategy: str = "trend_breakout"
+    strategy: str = "prop_breakout"
     overrides: dict[str, float | str] = {}
 
 

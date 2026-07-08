@@ -195,8 +195,35 @@ def test_registry_and_backtest_replay():
     print("ok  registry + backtest replay smoke (3 new strategies)")
 
 
+def test_prop_breakout_donchian():
+    """prop_breakout: Donchian channel break + HTF EMA filter, no
+    engulfing/volume gates (복리단타 게이트 기각)."""
+    from app.trading.models import Side
+    cfg = TradingConfig()
+    strat = make_strategy("prop_breakout", cfg)
+    htf = [_c(i * 3600000, 100 + i, 101 + i, 99 + i, 100.5 + i)
+           for i in range(30)]                        # rising -> LONG only
+    flat = [_c(i * 900000, 105, 110, 100, 105) for i in range(25)]
+    # inside the channel: no signal
+    inside = flat + [_c(25 * 900000, 105, 109, 104, 108)]
+    assert strat.evaluate(_ctx(htf, inside)) is None
+    # close above the 20-bar high (110): LONG with an ATR stop below entry
+    burst = flat + [_c(25 * 900000, 106, 112, 105, 111.5)]
+    sig = strat.evaluate(_ctx(htf, burst))
+    assert sig is not None and sig.side is Side.LONG
+    assert sig.signal_type == "PROP_BREAKOUT" and sig.stop_price < 111.5
+    d = strat.diagnose(_ctx(htf, burst))
+    assert d["ready"] and d["box_hi"] == 110 and d["passed"] == d["total"]
+    # falling HTF flips the allowed side -> the same burst is not a SHORT
+    htf_dn = [_c(i * 3600000, 130 - i, 131 - i, 129 - i, 130.5 - i)
+              for i in range(30)]
+    assert strat.evaluate(_ctx(htf_dn, burst)) is None
+    print("ok  prop_breakout donchian breakout + HTF filter")
+
+
 if __name__ == "__main__":
     test_adx_regime()
+    test_prop_breakout_donchian()
     test_swing_and_trendline()
     test_trendline_bounce_long()
     test_range_box_long_short()

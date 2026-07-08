@@ -65,6 +65,13 @@ class RiskManager:
         single permission point — a FAILED account blocks every new entry."""
         self._prop = desk
 
+    def prop_risk_budget(self) -> dict | None:
+        """Remaining prop budgets ({daily_room, dd_room}) for budget-based
+        sizing; None when no live prop account governs."""
+        if self._prop is None:
+            return None
+        return self._prop.risk_budget()
+
     # ---------------------------------------------------- global exposure
 
     def register_book(self, key: str, book) -> None:
@@ -104,6 +111,17 @@ class RiskManager:
         equity = equity_usd if equity_usd and equity_usd > 0 else self.cfg.equity_usd
         if t["trades"] >= self.cfg.max_trades_per_day:
             return False, f"max_trades_per_day ({self.cfg.max_trades_per_day}) reached"
+        if t["losses"] >= self.cfg.daily_stop_after_losses:
+            return False, (f"daily_stop_after_losses "
+                           f"({self.cfg.daily_stop_after_losses}) — 오늘은 정지")
+        budget = self.prop_risk_budget()
+        if budget is not None:
+            room_cap = budget["daily_room"] * self.cfg.daily_open_risk_frac
+            if open_risk_usd + new_risk_usd > room_cap + 1e-9:
+                return False, (f"prop budget guard: open risk "
+                               f"${open_risk_usd + new_risk_usd:.2f} > "
+                               f"{self.cfg.daily_open_risk_frac:.0%} of remaining "
+                               f"daily room ${budget['daily_room']:.2f}")
         if t["pnl_usd"] <= -abs(equity * self.cfg.daily_loss_cap_pct / 100.0):
             return False, f"daily_loss_cap (-{self.cfg.daily_loss_cap_pct}%) hit"
         if not is_add and open_positions >= self.cfg.max_concurrent_positions:

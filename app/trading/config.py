@@ -85,8 +85,23 @@ class TradingConfig:
     trail_atr_mult: float = 2.0          # trail remainder by k * ATR
     time_stop_bars: int = 0              # 0 = off; else force-exit after N bars
 
-    # --- 애드업 / pyramiding ------------------------------------------------
-    pyramid_enabled: bool = True
+    # --- prop 예산 사이징 (복리단타 고정비율 기각) ---------------------------
+    # 리스크는 프롭 계좌의 "잔여 예산"에서 나온다: 잔여 일일예산의 25% AND
+    # 잔여 최대DD 예산의 10% 중 작은 쪽 (risk_per_trade_pct 는 상한 캡으로만).
+    # 손실이 쌓이면 사이즈가 자동으로 줄어 플로어를 지킨다. 프롭 계좌가 없으면
+    # (백테스트·스탠드얼론) 고정 비율로 폴백.
+    prop_mode: bool = True
+    risk_daily_budget_frac: float = 0.25  # per-trade risk <= 잔여 일일예산 * frac
+    risk_dd_budget_frac: float = 0.10     # per-trade risk <= 잔여 DD예산 * frac
+    daily_stop_after_losses: int = 3      # 당일 N패 도달 시 그날 진입 정지
+    daily_open_risk_frac: float = 0.5     # 오픈리스크 합 <= 잔여 일일예산 * frac
+
+    # --- prop_breakout: Donchian 채널 돌파 + HTF 추세 필터 -------------------
+    donchian_lookback: int = 20           # entry TF 채널 봉 수 (현재 봉 제외)
+    donchian_htf_ema: int = 20            # HTF 추세 필터 EMA 기간
+
+    # --- 애드업 / pyramiding (prop 기각: 손실 뒤 증액과 한 끗 — 기본 OFF) ----
+    pyramid_enabled: bool = False
     pyramid_max_adds: int = 2            # never add more than this many units
     pyramid_min_r: float = 1.0           # only add once price is >= this R ahead
 

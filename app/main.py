@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     bst = TRADING_MANAGER.state_store.load()
     if bst.get("running"):
         await TRADING_MANAGER.start(mode=bst.get("mode", "paper"),
-                                  strategy=bst.get("strategy", "trend_breakout"))
+                                  strategy=bst.get("strategy", "prop_breakout"))
     yield
     # Graceful exit WITHOUT persisting running=False, so auto-resume fires
     # on the next boot. An operator pressing "stop" is the only thing that

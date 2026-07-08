@@ -474,7 +474,7 @@
 <div class="foot">
   <span class="kv">MODE <b>PAPER</b></span>
   <span class="kv">SYMBOL <b id="fSym">BTCUSDT</b></span>
-  <span class="kv">STRATEGY <b id="fStrat">trend_breakout</b></span>
+  <span class="kv">STRATEGY <b id="fStrat">prop_breakout</b></span>
   <span class="sp"></span>
   <span class="kv" id="fClock">--:--:-- UTC</span>
   <span class="kv muted">구조화된 의견 · 투자 조언 아님</span>
@@ -588,11 +588,14 @@ async function loadConfig(){try{
   const c=d.config;window._cfg=c;
   if(Array.isArray(d.symbols)&&d.symbols.length){SYMS=d.symbols;renderSymTabs();}
   $("cLev").textContent="≤ "+fmt(c.leverage_max,1)+"x (목표 "+fmt(c.leverage,1)+"x)";
-  $("cRisk").textContent=fmt(c.risk_per_trade_pct,2)+"% / 거래";
+  $("cRisk").textContent=c.prop_mode
+    ?("잔여 일일예산 "+Math.round((c.risk_daily_budget_frac||0)*100)+"% · DD예산 "
+      +Math.round((c.risk_dd_budget_frac||0)*100)+"% (캡 "+fmt(c.risk_per_trade_pct,2)+"%)")
+    :(fmt(c.risk_per_trade_pct,2)+"% / 거래");
   $("cRR").textContent=fmt(c.rr_target,1)+" : 1";
   $("cAtr").textContent=fmt(c.atr_stop_mult,2)+" × ATR("+c.atr_period+")";
   $("cCap").textContent="-"+fmt(c.daily_loss_cap_pct,1)+"%";
-  $("cPyr").textContent=c.pyramid_max_adds+" 유닛";
+  $("cPyr").textContent=c.pyramid_enabled?(c.pyramid_max_adds+" 유닛"):"OFF (prop)";
   $("cConc").textContent=c.max_concurrent_positions;
   $("sTradesMax").textContent=c.max_trades_per_day;
   $("ovAtr").placeholder=c.atr_stop_mult;$("ovRR").placeholder=c.rr_target;
@@ -1043,7 +1046,7 @@ async function runBacktest(){$("btOut").textContent="리플레이 중… (과거
   const ov={};if($("ovAtr").value)ov.atr_stop_mult=parseFloat($("ovAtr").value);
   if($("ovRR").value)ov.rr_target=parseFloat($("ovRR").value);
   try{const d=await api("/api/trading/backtest",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({symbol:SYM,strategy:$("stratSel").value||"trend_breakout",overrides:ov})});
+    body:JSON.stringify({symbol:SYM,strategy:$("stratSel").value||"prop_breakout",overrides:ov})});
     const m=d.metrics;
     $("btOut").innerHTML=`<b>${d.trades}건</b> · 승률 ${m.win_rate!=null?(m.win_rate*100).toFixed(0)+"%":"–"}
       · R기대값 <b class="${(m.expectancy_r||0)>=0?'up':'dn'}">${m.expectancy_r!=null?fmt(m.expectancy_r,2)+"R":"–"}</b>

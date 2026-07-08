@@ -322,6 +322,60 @@ def test_funded_scaling():
     print("ok  funded scaling (2 payouts + 10% withdrawn -> x2, capped)")
 
 
+def test_prop_budget_sizing_and_gates():
+    """복리단타 고정비율 기각 — 리스크는 잔여 프롭 예산의 분율에서 나오고,
+    손실이 쌓이면 자동 축소되며, 일일 규율 게이트가 진입을 막는다."""
+    from app.trading.config import SYMBOL_SPECS, TradingConfig
+    from app.trading.execution.position import PositionManager
+    from app.trading.models import Side, TradeSignal
+    from app.trading.risk import RiskManager
+    from app.trading.store import BotState, Journal
+
+    cfg = TradingConfig()
+    assert cfg.prop_mode and cfg.pyramid_enabled is False   # 복리 애드업 기각
+    led = _Ledger(10_000.0)
+    d = _desk(led)
+    d.buy_challenge("1step_classic", 10_000)     # daily 4% / DD 6% static
+    d.on_mark(10_000.0, 10_000.0, True, DAY1)    # anchor the day at 10000
+
+    risk = RiskManager(cfg, Journal(), BotState())
+    risk.attach_prop(d)
+    pm = PositionManager(SYMBOL_SPECS["BTC"], cfg, risk, Journal(),
+                         "paper", "t", ledger=led)
+    sig = TradeSignal(Side.LONG, "T", 70, stop_price=99_000, entry_hint=100_000)
+    # fresh account: daily room 400 * 25% = 100, DD room 600 * 10% = 60 -> $60
+    assert pm.try_open(sig, 100_000, 500.0, DAY1)
+    assert abs(pm.pos.initial_risk_usd - 60.0) < 1e-6
+
+    # after a $200 losing day the rooms shrink -> risk shrinks automatically
+    led2 = _Ledger(9_800.0)
+    d2 = _desk(led2)
+    d2.buy_challenge("1step_classic", 10_000)
+    d2.on_mark(10_000.0, 10_000.0, True, DAY1)   # day anchored at 10000
+    led2.set(9_800.0)
+    risk2 = RiskManager(cfg, Journal(), BotState())
+    risk2.attach_prop(d2)
+    pm2 = PositionManager(SYMBOL_SPECS["BTC"], cfg, risk2, Journal(),
+                          "paper", "t", ledger=led2)
+    assert pm2.try_open(sig, 100_000, 500.0, DAY1)
+    # daily room 200 * 25% = 50, DD room 400 * 10% = 40 -> $40
+    assert abs(pm2.pos.initial_risk_usd - 40.0) < 1e-6
+
+    # budget guard: open risk total may not exceed 50% of remaining daily room
+    ok, why = risk2.allow_entry(0, 80.0, 40.0, equity_usd=9_800)
+    assert not ok and "prop budget guard" in why  # 120 > 200 * 0.5
+
+    # daily stop: 3 losses today freeze entries for the day
+    j = Journal()
+    for _ in range(3):
+        j.append({"symbol": "BTC", "mode": "paper", "strategy": "t",
+                  "event": "CLOSE", "result": "LOSS", "pnl_usd": -10})
+    risk3 = RiskManager(cfg, j, BotState())
+    ok, why = risk3.allow_entry(0, 0.0, 10.0, equity_usd=10_000)
+    assert not ok and "daily_stop_after_losses" in why
+    print("ok  prop budget sizing (shrinks with losses) + daily discipline gates")
+
+
 def test_desk_persistence_roundtrip():
     led = _Ledger()
     store, pay = PropStore(), PayoutStore()
@@ -349,5 +403,6 @@ if __name__ == "__main__":
     test_split_upgrade_and_fee_refund()
     test_conduct_monitor()
     test_funded_scaling()
+    test_prop_budget_sizing_and_gates()
     test_desk_persistence_roundtrip()
     print("\nall prop tests passed ✅")

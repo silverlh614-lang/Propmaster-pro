@@ -49,7 +49,7 @@ class SymbolBot:
         self.collector = KlineCollector(spec.symbol, cfg.entry_interval,
                                         cfg.htf_interval, cfg.warmup_bars)
         self.mode = "paper"
-        self.strategy_name = "trend_breakout"
+        self.strategy_name = "prop_breakout"
         self.strategy = None
         self.pm: PositionManager | None = None
         self.running = False
@@ -269,14 +269,14 @@ class TradingManager:
             for spec in enabled_symbols()
         }
         self.mode = "paper"
-        self.strategy_name = "trend_breakout"
+        self.strategy_name = "prop_breakout"
 
     @property
     def running(self) -> bool:
         return any(b.running for b in self.bots.values())
 
     async def start(self, mode: str = "paper",
-                    strategy: str = "trend_breakout") -> dict:
+                    strategy: str = "prop_breakout") -> dict:
         if self.running:
             return {"ok": False, "error": "already running"}
         if strategy not in STRATEGIES:

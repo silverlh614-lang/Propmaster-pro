@@ -1,11 +1,13 @@
 """@responsibility 전략 레지스트리 — 이름→전략 클래스 매핑, 신규 전략 등록 지점"""
 from .base import TradingContext, TradingStrategy
+from .prop_breakout import PropBreakoutStrategy
 from .range_box import RangeBoxStrategy
 from .regime_switch import RegimeSwitchStrategy
 from .trend_breakout import TrendBreakoutStrategy
 from .trendline import TrendlineStrategy
 
 STRATEGIES = {
+    "prop_breakout": PropBreakoutStrategy,
     "trend_breakout": TrendBreakoutStrategy,
     "trendline": TrendlineStrategy,
     "range_box": RangeBoxStrategy,

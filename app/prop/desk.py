@@ -155,6 +155,16 @@ class PropDesk:
             self._persist()
         return fresh
 
+    def risk_budget(self) -> dict | None:
+        """Remaining rule-room for the sizing layer: how much equity can be
+        lost before each floor. None when no live prop account governs."""
+        acct = self.active()
+        if acct is None or acct.status == FAILED or self.ledger is None:
+            return None
+        bal = self.ledger.equity
+        return {"daily_room": max(0.0, bal - acct.daily_floor()),
+                "dd_room": max(0.0, bal - acct.dd_floor())}
+
     def entries_allowed(self) -> tuple[bool, str]:
         """Consulted by RiskManager.allow_entry (single permission
         point). No active account = engine runs standalone (allowed)."""

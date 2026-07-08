@@ -88,6 +88,20 @@ class PositionManager:
             return self.risk.global_exposure()
         return self.open_positions, self.open_risk_usd
 
+    def _risk_pct(self) -> float:
+        """프롭 예산 사이징: 리스크 = min(잔여 일일예산*frac, 잔여 DD예산*frac),
+        risk_per_trade_pct 는 상한 캡. 프롭 계좌가 없으면(백테스트 등) 고정
+        비율 폴백 — 복리단타의 자산 고정비율은 prop_mode 에서 기각된다."""
+        cfg = self.cfg
+        if cfg.prop_mode and hasattr(self.risk, "prop_risk_budget"):
+            b = self.risk.prop_risk_budget()
+            if b and self.equity > 0:
+                usd = min(b["daily_room"] * cfg.risk_daily_budget_frac,
+                          b["dd_room"] * cfg.risk_dd_budget_frac)
+                return min(cfg.risk_per_trade_pct,
+                           max(0.0, usd / self.equity * 100.0))
+        return cfg.risk_per_trade_pct
+
     def _fee(self, notional: float) -> float:
         return round(abs(notional) * self.cfg.taker_fee_frac, 6)
 
@@ -106,7 +120,7 @@ class PositionManager:
         entry = self._round_price(entry_price)
         stop = self._round_price(sig.stop_price)
         qty, risk_usd, why = size_position(
-            self.equity, self.cfg.risk_per_trade_pct, entry, stop,
+            self.equity, self._risk_pct(), entry, stop,
             self.spec, self.spec.effective_leverage_max(self.cfg.leverage_max))
         if qty <= 0:
             self.note = f"size skip: {why}"
@@ -150,7 +164,7 @@ class PositionManager:
             return False
         stop = self._round_price(sig.stop_price)
         qty, risk_usd, why = size_position(
-            self.equity, self.cfg.risk_per_trade_pct, entry, stop,
+            self.equity, self._risk_pct(), entry, stop,
             self.spec, self.spec.effective_leverage_max(self.cfg.leverage_max))
         if qty <= 0:
             return False
