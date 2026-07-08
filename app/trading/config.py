@@ -35,8 +35,10 @@ class TradingConfig:
     quote: str = "USDT"
 
     # --- timeframes (kline interval codes: minutes as string / D,W) --------
-    entry_interval: str = "15"           # 진입 시간봉
-    htf_interval: str = "60"             # 상위 추세 시간봉 (추세 필터용)
+    # Phase 2 게이트 채택값 (2026-07 스윕): 1h 진입 — 15m 대비 수수료 밀도가
+    # 1/4이고 12/6/3개월 창 전부 양(+)이었던 유일한 축.
+    entry_interval: str = "60"           # 진입 시간봉
+    htf_interval: str = "60"             # 추세 필터 시간봉 (검증된 조합 그대로)
     warmup_bars: int = 200               # REST backfill on start
 
     # --- 차트 오버레이 (표시 전용 — 시그널에 미사용) ------------------------
@@ -44,7 +46,8 @@ class TradingConfig:
 
     # --- risk management (ATR sizing) ---------------------------------------
     atr_period: int = 14
-    atr_stop_mult: float = 1.5           # hard stop = k * ATR from entry
+    # 2026-07 스윕: ATR×2.5 는 4/4 조합 +, ×1.5 는 4/4 조합 - (지배 변수)
+    atr_stop_mult: float = 2.5           # hard stop = k * ATR from entry
     risk_per_trade_pct: float = 1.0      # 1회 리스크 상한 캡 (예산 사이징의 ceiling)
     leverage: float = 3.0                # target leverage
     leverage_max: float = 5.0            # HARD cap — never more
@@ -68,7 +71,7 @@ class TradingConfig:
     daily_open_risk_frac: float = 0.5     # 오픈리스크 합 <= 잔여 일일예산 * frac
 
     # --- prop_breakout: Donchian 채널 돌파 + HTF 추세 필터 -------------------
-    donchian_lookback: int = 20           # entry TF 채널 봉 수 (현재 봉 제외)
+    donchian_lookback: int = 55           # 채널 봉 수 — 게이트 채택값 (터틀 스타일)
     donchian_htf_ema: int = 20            # HTF 추세 필터 EMA 기간
     # 선택 필터 (기본 OFF — 백테스트 게이트 A/B로만 켠다, hand-tune 금지)
     pump_filter_pct: float = 0.0          # 채널 저점 대비 급등 % 초과 돌파 스킵 (NFI 펌프 필터)

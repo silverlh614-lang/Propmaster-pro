@@ -232,6 +232,8 @@ def test_backtest_replay():
     from app.trading.backtest.engine import replay
     from app.trading.backtest.metrics import compute
     cfg = TradingConfig()
+    cfg.entry_interval, cfg.htf_interval = "15", "60"   # series geometry
+    cfg.donchian_lookback = 20
     htf, entry = _coherent_series(220)
     r = replay("BTC", "prop_breakout", cfg, entry_candles=entry, htf_candles=htf)
     m = compute(r["closes"], cfg.equity_usd, r.get("final_equity", cfg.equity_usd))

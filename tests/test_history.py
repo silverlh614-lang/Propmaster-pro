@@ -165,6 +165,8 @@ def test_replay_windowed_equals_full():
 
     cfg = TradingConfig()
     cfg.prop_mode = False
+    cfg.entry_interval, cfg.htf_interval = "15", "60"   # series geometry
+    cfg.donchian_lookback = 20
     entry, htf = _coherent_series()
     r = replay("BTC", "prop_breakout", cfg, entry_candles=entry,
                htf_candles=htf)

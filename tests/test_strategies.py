@@ -20,6 +20,7 @@ def test_prop_breakout_donchian():
     engulfing/volume gates."""
     from app.trading.models import Side
     cfg = TradingConfig()
+    cfg.donchian_lookback = 20          # mechanics test — pin the geometry
     strat = make_strategy("prop_breakout", cfg)
     htf = [_c(i * 3600000, 100 + i, 101 + i, 99 + i, 100.5 + i)
            for i in range(30)]                        # rising -> LONG only
@@ -49,11 +50,11 @@ def test_prop_breakout_optional_filters():
     flat = [_c(i * 900000, 105, 110, 100, 105) for i in range(25)]
     burst = flat + [_c(25 * 900000, 106, 132, 105, 131)]   # +31% above ch_lo
 
-    cfg = TradingConfig()
+    cfg = TradingConfig(); cfg.donchian_lookback = 20
     base = make_strategy("prop_breakout", cfg)
     assert base.evaluate(_ctx(htf, burst)) is not None      # filters off: fires
 
-    cfg_p = TradingConfig(); cfg_p.pump_filter_pct = 15.0
+    cfg_p = TradingConfig(); cfg_p.donchian_lookback = 20; cfg_p.pump_filter_pct = 15.0
     pumped = make_strategy("prop_breakout", cfg_p)
     assert pumped.evaluate(_ctx(htf, burst)) is None        # +31% > 15% veto
     calm = flat + [_c(25 * 900000, 106, 112, 105, 111.5)]   # +11.5% run-up
@@ -62,7 +63,7 @@ def test_prop_breakout_optional_filters():
     d = pumped.diagnose(_ctx(htf, burst))
     assert any(x["key"] == "pump" and not x["ok"] for x in d["gates"])
 
-    cfg_s = TradingConfig(); cfg_s.squeeze_gate = True
+    cfg_s = TradingConfig(); cfg_s.donchian_lookback = 20; cfg_s.squeeze_gate = True
     squeezed = make_strategy("prop_breakout", cfg_s)
     # wide-range window (range 10, sd 0 but ATR 10): 2σ(0) < 1.5·ATR — flat
     # closes give σ=0 so the squeeze passes; alternate closes widen σ
@@ -85,9 +86,11 @@ def test_registry_and_replay_smoke():
     except ValueError:
         pass
     htf, entry = _coherent_series(220)
+    cfg = TradingConfig()
+    cfg.entry_interval, cfg.htf_interval = "15", "60"   # series geometry
+    cfg.donchian_lookback = 20
     for name in STRATEGIES:
-        r = replay("BTC", name, TradingConfig(), entry_candles=entry,
-                   htf_candles=htf)
+        r = replay("BTC", name, cfg, entry_candles=entry, htf_candles=htf)
         assert r["snapshots"] > 0
     print("ok  registry is prop-only + replay smoke")
 

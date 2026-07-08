@@ -127,7 +127,7 @@ Breakout Prop(breakoutprop.com, 2025-09 Kraken 인수)의 공개 구조를 본�
 | 사이징 | **잔여 예산 분율**: min(잔여 일일예산×25%, 잔여 DD예산×10%), `risk_per_trade_pct`는 상한 캡. 손실 누적 시 자동 축소 |
 | 일일 규율 | 당일 3패 시 진입 정지 + 오픈리스크 합 ≤ 잔여 일일예산의 50% |
 | 애드업 | 기본 OFF (손실 뒤 증액과 한 끗 — conduct 모니터와 일관) |
-| 전략 | **prop_breakout 단일**: Donchian 20 돌파 + HTF EMA20 필터 (재량 게이트 최소화 — 평가 기간 단축) |
+| 전략 | **prop_breakout 단일**: Donchian 55 돌파(1h) + EMA20 필터 — 2026-07 백테스트 게이트 채택 (12/6/3개월 창 전부 +, ATR×2.5 축 4/4 일관) |
 | 청산 | 2R 부분익절+브레이크이븐+트레일 + 선택형 `breakeven_at_r`(N R 도달 시 손절→본전, 기본 off) |
 | 선택 필터 | `pump_filter_pct`(급등 돌파 스킵)·`squeeze_gate`(변동성 수축 후 돌파만) — 기본 off, 백테스트 A/B 전용 |
 
