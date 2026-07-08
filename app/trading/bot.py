@@ -9,7 +9,7 @@ TradingManager  — starts/stops all enabled SymbolBots together; shares one
                 and one persisted state blob (auto-resume).
 
 Phase 1: mode is always "paper" — live mode is refused until the Phase 3
-gate lands (mirrors Part 4's TradingManager). No real order path exists yet.
+gate lands. No real order path exists yet.
 
 Prop layer: TradingManager owns the PropDesk. Every closed bar feeds one
 mark-to-market tick into the challenge account's rule engine (prop_tick);
@@ -126,7 +126,7 @@ class SymbolBot:
 
     def manual(self, action: str) -> dict:
         """Control-tower close button (paper). Entries stay strategy-driven —
-        the source's discipline is to follow the system, not hand-trade."""
+        prop discipline is to follow the system, not hand-trade."""
         if not self.pm:
             return {"ok": False, "error": f"no {self.spec.key} session"}
         if action == "close":
@@ -155,12 +155,6 @@ class SymbolBot:
             except asyncio.TimeoutError:
                 pass
 
-    def _in_session(self, now: float) -> bool:
-        if not self.cfg.session_filter:
-            return True
-        kst_hour = time.gmtime(now + 9 * 3600).tm_hour
-        return self.cfg.session_start_kst <= kst_hour < self.cfg.session_end_kst
-
     def _step(self, strategy) -> None:
         """Act once per newly-closed entry candle: manage the open position
         against the bar, then let the strategy open or pyramid."""
@@ -187,9 +181,6 @@ class SymbolBot:
         sig = strategy.evaluate(ctx)
         if sig is None:
             self.note = self.pm.note if self.pm.pos else "watching — no signal"
-            return
-        if not self._in_session(ctx.now):
-            self.note = f"signal {sig.side.value} out of session window"
             return
         price = bar.close
         p = self.pm.pos
@@ -227,11 +218,11 @@ class SymbolBot:
         cs = (self.collector.htf_closed() if tf == "htf"
               else self.collector.entry_closed())[-limit:]
         closes = [c.close for c in cs]
-        ema5 = ema(closes, self.cfg.ema_period) if closes else []
+        line = ema(closes, self.cfg.ema_period) if closes else []
         return {"symbol": self.spec.key, "tf": tf,
                 "interval": self.cfg.htf_interval if tf == "htf" else self.cfg.entry_interval,
                 "candles": [[c.ts_ms, c.open, c.high, c.low, c.close, c.volume] for c in cs],
-                "ema5": [round(x, 6) for x in ema5]}
+                "ema": [round(x, 6) for x in line]}
 
     def status(self) -> dict:
         px = self.collector.last_price()

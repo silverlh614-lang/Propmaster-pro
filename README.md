@@ -89,7 +89,6 @@ uvicorn app.main:app --reload
 ├── app/trading/  # 집행 엔진: 수집·전략·포지션 FSM·리스크 관문·백테스트
 ├── app/main.py         # FastAPI 조립 (프롭 + 트레이딩 라우터)
 ├── static/terminal.html   # 관제탑 UI (프롭 패널은 다음 단계)
-├── knowledge/          # 분석 지식 베이스 원문
 ├── docs/               # prop_system.md (프롭 SSOT) · engine_phase2_runbook.md
 ├── scripts/            # 정적 가드 + pre-commit 배선
 ├── tests/              # 오프라인 테스트 (test_prop / test_engine / ...)

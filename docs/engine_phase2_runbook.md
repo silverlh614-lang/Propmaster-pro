@@ -68,7 +68,7 @@ Service → **Volumes → New Volume** → Mount path `/data` (`DATA_DIR` 기본
 
 **볼륨을 붙여야만 재배포/재시작에도 다음이 전부 유지된다:**
 - 봇 **START/정지 상태** → START로 두면 재배포 시 **auto-resume**(자동 재가동)
-- **복리 EQUITY** (실현손익이 누적된 계좌 잔고 — `positions.json`)
+- **EQUITY** (실현손익이 누적된 계좌 잔고 — `account.json`)
 - **진행 중인 오픈 포지션** (진입가·수량·손절·트레일·부분익절 상태까지 그대로 복원)
 - **트레이드 저널** (`trades.csv` — 승률·R기대값·PnL)
 - **킬스위치·일일 카운터** (`engine_state.json`)

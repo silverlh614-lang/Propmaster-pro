@@ -2,11 +2,10 @@
 
 Shared datatypes for the leverage-margin trading package.
 
-Unlike Part 4's binary Up/Down markets, these model a continuous leveraged
-perpetual position: entry, ATR stop, R-multiple target, partial exit, ATR
-trailing and pyramiding. All PnL is expressed in USDT and in R-multiples
-(realized_pnl / initial_risk) so the profit-ratio discipline from the
-strategy source ("먹을 때 크게, 잃을 때 작게") is measurable directly.
+These model a continuous leveraged perpetual position: entry, ATR stop,
+R-multiple target, partial exit, ATR trailing and pyramiding. All PnL is
+expressed in USDT and in R-multiples (realized_pnl / initial_risk) so the
+profit-ratio discipline is measurable directly.
 """
 from __future__ import annotations
 
@@ -99,7 +98,7 @@ class Position:
     """Aggregate of one or more Units on the same side, managed as a whole:
     shared trailing stop, staged take-profit, pyramiding adds. Risk (R) is
     fixed at the FIRST unit's entry so every downstream number is an R
-    multiple — the profit-ratio yardstick."""
+    multiple."""
     symbol: str
     side: Side
     units: list[Unit] = field(default_factory=list)

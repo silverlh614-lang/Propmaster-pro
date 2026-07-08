@@ -2,8 +2,8 @@
 
 Risk gate for the trading package. Every new entry AND every pyramiding add
 funnels through allow_entry(); nothing places size without passing it. It
-enforces the strategy source's non-negotiables: leverage never exceeds the
-hard cap, per-trade risk is a fixed fraction of equity, total open risk
+enforces the prop non-negotiables: leverage never exceeds the
+hard cap, per-trade risk stays inside the rule budgets, total open risk
 (base + adds) is capped, plus daily loss cap, daily trade count, concurrent
 position limit and a consecutive-error kill switch. Counters are per UTC day
 and persist via BotState. Kill reset is an explicit operator action only.
@@ -23,7 +23,7 @@ def _today() -> str:
 def size_position(equity_usd: float, risk_pct: float, entry: float,
                   stop: float, spec: SymbolSpec, leverage_max: float
                   ) -> tuple[float, float, str]:
-    """Fixed-fractional ATR sizing (source System #2): risk_usd = equity *
+    """Fixed-fractional ATR sizing: risk_usd = equity *
     risk% ; qty = risk_usd / stop_distance. Rounds to the symbol step and
     clamps notional so leverage never exceeds the hard cap.
 
@@ -98,9 +98,9 @@ class RiskManager:
         """Single permission point. open_positions / open_risk_usd describe
         live exposure right now; new_risk_usd is the R this order would add.
 
-        equity_usd is the CURRENT compounded equity — the source's 총자산대비
-        rule: every % cap is measured against what the account is worth now,
-        not the starting stake. Falls back to the config stake if absent."""
+        equity_usd is the CURRENT compounded equity: every % cap is measured
+        against what the account is worth now, not the starting stake.
+        Falls back to the config stake if absent."""
         if self.kill_switch:
             return False, f"kill_switch: {self.kill_reason}"
         if self._prop is not None:

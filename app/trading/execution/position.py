@@ -5,7 +5,7 @@ NOT: sizing via the risk gate, order fills, the ATR hard stop, the 2R
 take-profit, the partial exit + breakeven move, ATR trailing and pyramiding
 adds. Consumes CLOSED candles; a paper fill model checks stop/target
 intrabar (high/low) and assumes the stop fills first when a bar spans both
-(conservative). Realized PnL compounds into equity — the source's 복리.
+(conservative). Realized PnL compounds into equity.
 """
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ class PositionManager:
     def _risk_pct(self) -> float:
         """프롭 예산 사이징: 리스크 = min(잔여 일일예산*frac, 잔여 DD예산*frac),
         risk_per_trade_pct 는 상한 캡. 프롭 계좌가 없으면(백테스트 등) 고정
-        비율 폴백 — 복리단타의 자산 고정비율은 prop_mode 에서 기각된다."""
+        비율 폴백."""
         cfg = self.cfg
         if cfg.prop_mode and hasattr(self.risk, "prop_risk_budget"):
             b = self.risk.prop_risk_budget()

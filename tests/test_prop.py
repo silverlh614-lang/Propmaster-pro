@@ -323,7 +323,7 @@ def test_funded_scaling():
 
 
 def test_prop_budget_sizing_and_gates():
-    """복리단타 고정비율 기각 — 리스크는 잔여 프롭 예산의 분율에서 나오고,
+    """리스크는 잔여 프롭 예산의 분율에서 나오고,
     손실이 쌓이면 자동 축소되며, 일일 규율 게이트가 진입을 막는다."""
     from app.trading.config import SYMBOL_SPECS, TradingConfig
     from app.trading.execution.position import PositionManager
@@ -332,7 +332,7 @@ def test_prop_budget_sizing_and_gates():
     from app.trading.store import BotState, Journal
 
     cfg = TradingConfig()
-    assert cfg.prop_mode and cfg.pyramid_enabled is False   # 복리 애드업 기각
+    assert cfg.prop_mode and cfg.pyramid_enabled is False   # 애드업 기본 OFF
     led = _Ledger(10_000.0)
     d = _desk(led)
     d.buy_challenge("1step_classic", 10_000)     # daily 4% / DD 6% static

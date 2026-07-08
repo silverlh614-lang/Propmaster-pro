@@ -166,7 +166,7 @@ def test_replay_windowed_equals_full():
     cfg = TradingConfig()
     cfg.prop_mode = False
     entry, htf = _coherent_series()
-    r = replay("BTC", "trend_breakout", cfg, entry_candles=entry,
+    r = replay("BTC", "prop_breakout", cfg, entry_candles=entry,
                htf_candles=htf)
     assert r["snapshots"] > 0
     # WINDOW smaller than the series still yields the same trades

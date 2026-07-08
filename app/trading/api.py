@@ -102,7 +102,7 @@ def trades_csv(symbol: str | None = None, limit: int = 100_000):
 
 class BacktestRequest(BaseModel):
     # overrides accepts strings too so interval fields can be swept
-    # (H7: htf_interval "60"|"240"|"D") alongside numeric params.
+    # (htf_interval "60"|"240"|"D") alongside numeric params.
     symbol: str = "BTC"
     strategy: str = "prop_breakout"
     overrides: dict[str, float | str] = {}

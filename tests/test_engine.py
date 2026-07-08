@@ -37,19 +37,7 @@ def test_indicators():
     candles = [_c(i * 60000, 100, 102, 98, 101) for i in range(20)]
     a = ind.atr(candles, 14)
     assert a is not None and a > 0
-
-    prev = _c(0, 100, 101, 97, 98)          # bearish body 2
-    cur = _c(1, 97.5, 104, 97, 103)         # bullish body 5.5, engulfs
-    assert ind.bullish_engulfing(prev, cur)
-    assert not ind.bearish_engulfing(prev, cur)
-    prev2 = _c(0, 98, 104, 97, 103)         # bullish
-    cur2 = _c(1, 103.5, 104, 96, 97)        # bearish engulf
-    assert ind.bearish_engulfing(prev2, cur2)
-
-    box = ind.box_range([_c(i, 100, 110, 100, 105) for i in range(21)]
-                        + [_c(21, 105, 130, 105, 128)], 20)
-    assert box is not None and box[0] == 110 and box[1] == 100
-    print("ok  indicators")
+    print("ok  indicators (ema/sma/atr)")
 
 
 # ------------------------------------------------------------- sizing
@@ -112,8 +100,8 @@ def test_risk_gate():
 
 
 def test_risk_caps_follow_compounded_equity():
-    """총자산대비 rule (복리 단타 비법서 시스템 #2): the open-risk cap must be
-    measured against CURRENT equity, not the starting stake."""
+    """The open-risk cap must be measured against CURRENT equity, not the
+    starting stake."""
     cfg = TradingConfig()
     cfg.max_total_open_risk_pct = 2.0        # 2% of equity
     risk = RiskManager(cfg, Journal(), BotState())
@@ -196,35 +184,6 @@ def test_fsm_pyramiding():
 
 # ------------------------------------------------------------- strategy
 
-def _uptrend_breakout():
-    """HTF: 20-bar box [100,110] then a breakout bar to 130.
-    Entry: uptrend closing with a bullish engulfing + volume spike."""
-    htf = []
-    for i in range(24):
-        base = 100 + (i % 3)              # oscillate inside [100,110]
-        htf.append(_c(i * 3600000, base, 110, 100, 105))
-    htf.append(_c(24 * 3600000, 108, 132, 107, 130, 500))  # breakout up
-    entry = []
-    px = 110.0
-    for i in range(28):
-        entry.append(_c(i * 900000, px, px + 1, px - 1, px + 0.5, 100))
-        px += 0.2
-    prev = _c(28 * 900000, 120, 121, 117, 118, 100)         # bearish
-    cur = _c(29 * 900000, 117.5, 123.5, 117, 123, 300)      # bullish engulf + vol
-    entry += [prev, cur]
-    return htf, entry
-
-
-def test_strategy_signal():
-    cfg = TradingConfig()
-    strat = make_strategy("trend_breakout", cfg)
-    htf, entry = _uptrend_breakout()
-    ctx = TradingContext(symbol="BTC", htf_candles=htf, entry_candles=entry,
-                       equity_usd=200, now=0)
-    sig = strat.evaluate(ctx)
-    assert sig is not None and sig.side is Side.LONG, sig
-    assert sig.stop_price < sig.entry_hint
-    print("ok  strategy trend-breakout LONG signal")
 
 
 def _downtrend_breakdown_lowvol():
@@ -247,30 +206,6 @@ def _downtrend_breakdown_lowvol():
     return htf, entry
 
 
-def test_short_vol_exempt_flag():
-    """H8 infra: SHORT with a no-volume bearish engulfing fires ONLY when the
-    short_vol_exempt flag is on (default off keeps the volume gate)."""
-    htf, entry = _downtrend_breakdown_lowvol()
-
-    cfg = TradingConfig()
-    assert cfg.short_vol_exempt is False          # 라이브 기본값은 off
-    strat = make_strategy("trend_breakout", cfg)
-    ctx = TradingContext(symbol="BTC", htf_candles=htf, entry_candles=entry,
-                       equity_usd=200, now=0)
-    d = strat.diagnose(ctx)
-    assert d and d["allowed"] == "SHORT", d
-    assert strat.evaluate(ctx) is None            # 거래량 미달 → 차단 (기존 동작)
-
-    cfg2 = TradingConfig()
-    cfg2.short_vol_exempt = True                  # 백테스트 A/B의 on 케이스
-    strat2 = make_strategy("trend_breakout", cfg2)
-    sig = strat2.evaluate(ctx)
-    assert sig is not None and sig.side is Side.SHORT, sig
-    assert sig.stop_price > sig.entry_hint        # SHORT: 스탑은 진입가 위
-    print("ok  H8 short_vol_exempt flag (off=blocked, on=SHORT fires)")
-
-
-# ------------------------------------------------------------- backtest
 
 def _coherent_series(n=200):
     """One 15m price path (consolidation then uptrend) aggregated 4:1 into an
@@ -298,7 +233,7 @@ def test_backtest_replay():
     from app.trading.backtest.metrics import compute
     cfg = TradingConfig()
     htf, entry = _coherent_series(220)
-    r = replay("BTC", "trend_breakout", cfg, entry_candles=entry, htf_candles=htf)
+    r = replay("BTC", "prop_breakout", cfg, entry_candles=entry, htf_candles=htf)
     m = compute(r["closes"], cfg.equity_usd, r.get("final_equity", cfg.equity_usd))
     assert isinstance(m["trades"], int)
     assert r["snapshots"] > 0, "replay produced no evaluatable bars"
@@ -320,7 +255,7 @@ def test_candles_export():
         col._bars[col.entry_interval][ts] = Candle(ts, px, px + 50, px - 50, px + 10, 100 + i)
         px += 5
     out = bot.candles("entry", 120)
-    assert len(out["candles"]) == 30 and len(out["ema5"]) == 30, out
+    assert len(out["candles"]) == 30 and len(out["ema"]) == 30, out
     assert out["candles"][0][0] < out["candles"][-1][0]     # ascending by time
     print("ok  candles export (ema import regression)")
 
@@ -407,8 +342,6 @@ if __name__ == "__main__":
     test_fsm_partial_then_trail()
     test_fsm_breakeven_step()
     test_fsm_pyramiding()
-    test_strategy_signal()
-    test_short_vol_exempt_flag()
     test_backtest_replay()
     test_candles_export()
     test_state_persistence()

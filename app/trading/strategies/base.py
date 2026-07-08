@@ -4,7 +4,7 @@ Strategy plugin protocol. A strategy inspects the current candle
 context once per closed entry-bar and either stays quiet (None) or emits a
 TradeSignal proposing a direction and a stop. Position sizing, order
 placement, trailing, pyramiding and settlement are NOT the strategy's job —
-the position FSM owns those (mirrors Part 4's strategy/execution split).
+the position FSM owns those.
 """
 from __future__ import annotations
 

@@ -250,7 +250,7 @@
   <img class="logo" src="/icon.svg" width="34" height="34" alt="PROPMASTER TERMINAL 앱 아이콘">
   <div class="brand"><b>PROPMASTER ◆ TERMINAL</b><br>
     <span class="sub">BTC · USDT PERP · 15m/1h 추세돌파 · 레버리지 마진</span></div>
-  <div class="mid">5EMA · BOX BREAKOUT · ATR · 2R · 애드업 &nbsp;—&nbsp; <b>PHASE 1 PAPER</b></div>
+  <div class="mid">DONCHIAN BREAKOUT · HTF EMA · ATR · 2R · 예산 사이징 &nbsp;—&nbsp; <b>PHASE 1 PAPER</b></div>
   <div class="clock"><div class="hms" id="clk">--:--:--</div>
     <div class="tz"><span id="clkKst">--:--</span> KST · UTC</div></div>
 </header>
@@ -277,8 +277,8 @@
 
 <div class="wrap">
   <div class="warn" id="phaseWarn">⚠️ <b>Phase 1 — 페이퍼 전용.</b> 공개 kline(Binance→OKX)으로 실시간 시뮬레이션만 하며
-    <b>실주문은 전송되지 않습니다.</b> 레버리지 상한·리스크%·2R 손익비·ATR 손절·애드업은 「복리 단타 비법서」
-    시스템(추세돌파·5일선·거래량·위험관리)을 구현한 것 — 실거래는 백테스트 게이트 통과 후 Phase 3.</div>
+    <b>실주문은 전송되지 않습니다.</b> 리스크는 프롭 룰 예산(일일손실·최대DD)에서 나오고, 브리치·가디언·행위 감시가
+    상시 가동됩니다 — 실거래는 백테스트 게이트 통과 후 Phase 3.</div>
 
   <div class="grid">
     <!-- 프롭 챌린지 -->
@@ -326,7 +326,7 @@
       <div class="phead"><span class="mk">◆</span> ACCOUNT (PAPER) <span class="sp"></span>
         <span class="r"><span class="tag paper">PAPER-SIM</span></span></div>
       <div class="pbody">
-        <div class="wallet"><span class="tag">복리 EQUITY</span><span id="eqPath">시작 대비 --</span></div>
+        <div class="wallet"><span class="tag">EQUITY</span><span id="eqPath">시작 대비 --</span></div>
         <div class="meganum" id="equityBig">$0.00</div>
         <div class="subline" id="equitySub">실현손익 --</div>
         <div class="subline" id="equityMark" style="margin-top:3px">평가액 --</div>
@@ -346,12 +346,12 @@
 
     <!-- 라이브 차트 -->
     <section class="panel col8">
-      <div class="phead"><span class="mk">◆</span> 라이브 차트 · 15m + 5EMA + 박스 + 포지션
+      <div class="phead"><span class="mk">◆</span> 라이브 차트 · 15m + EMA + 채널 + 포지션
         <span class="sp"></span><span class="r" id="chTf">BTCUSDT</span></div>
       <div class="pbody" style="padding:0">
         <div class="chartwrap">
           <div class="chiplegend">
-            <span><i style="border-color:var(--cyn)"></i>5EMA</span>
+            <span><i style="border-color:var(--cyn)"></i>EMA</span>
             <span><i style="border-color:var(--yel);border-top-style:dashed"></i>박스</span>
             <span><i style="border-color:#fff"></i>진입</span>
             <span><i style="border-color:var(--up)"></i>2R</span>
@@ -524,7 +524,7 @@ function notify(kind,title,msg,sound=true){
   if(sound)beep(kind);
 }
 
-// ---- 복리 EQUITY 스파크라인 (저널 청산 누적 → 시작금 기준선 대비) ----
+// ---- EQUITY 스파크라인 (저널 청산 누적 → 시작금 기준선 대비) ----
 function drawEquitySpark(rows){
   const cv=$("eqSpark");if(!cv)return;
   const dpr=window.devicePixelRatio||1,W=cv.clientWidth||260,H=40;
@@ -534,7 +534,7 @@ function drawEquitySpark(rows){
   const settled=(rows||[]).filter(r=>["WIN","LOSS","CLOSED"].includes(r.result)).slice().reverse(); // 과거→최신
   if(!settled.length){
     g.strokeStyle="#20262e";g.beginPath();g.moveTo(0,H/2);g.lineTo(W,H/2);g.stroke();
-    g.fillStyle="#4e5864";g.font="9px monospace";g.fillText("복리 곡선 — 청산 기록 대기",6,H/2-5);return;}
+    g.fillStyle="#4e5864";g.font="9px monospace";g.fillText("EQUITY 곡선 — 청산 기록 대기",6,H/2-5);return;}
   let eq=start;const pts=[eq];
   settled.forEach(r=>{eq+=Number(r.pnl_usd)||0;pts.push(eq);});
   const lo=Math.min(...pts,start),hi=Math.max(...pts,start),pad=(hi-lo)*0.15||1;
@@ -657,7 +657,7 @@ function drawChart(){
     if(fd.source&&fd.source!=="none") msg="봉 워밍업 중… ("+fd.source+" 연결됨, 캔들 대기)";
     else if(fd.last_error) msg="⚠ kline 소스 연결 실패 — "+fd.last_error;
     g.fillStyle=fd.last_error?"#ff6b74":"#4e5864";g.font="12px monospace";g.fillText(msg,16,H/2);return;}
-  const cs=data.candles, ema=data.ema5||[];
+  const cs=data.candles, ema=data.ema||[];
   const ov=window._overlay||{};
   const padT=14,padB=42,padL=6,padR=64;
   const cw=W-padL-padR, ch=H-padT-padB;
@@ -686,7 +686,7 @@ function drawChart(){
   cs.forEach((c,i)=>{const x=X(i);const up=c[4]>=c[1];g.strokeStyle=g.fillStyle=up?"#2ee58a":"#ff4d5c";
     g.beginPath();g.moveTo(x,Y(c[2]));g.lineTo(x,Y(c[3]));g.stroke();
     const yo=Y(c[1]),yc=Y(c[4]);g.fillRect(x-bw/2,Math.min(yo,yc),bw,Math.max(1,Math.abs(yc-yo)));});
-  // ema5
+  // ema overlay
   if(ema.length){g.strokeStyle="#38d5ff";g.lineWidth=1.5;g.beginPath();
     ema.forEach((v,i)=>{const x=X(i),y=Y(v);i?g.lineTo(x,y):g.moveTo(x,y);});g.stroke();g.lineWidth=1;}
   // position overlays
@@ -740,7 +740,7 @@ async function refresh(){
     $("equityMark").textContent="평가액 = EQUITY (미실현 없음)";
     $("equityMark").style.color="";
   }
-  // 일일 손실캡 소진율 — 캡 기준은 현재 복리 equity (총자산대비)
+  // 일일 손실캡 소진율 — 캡 기준은 현재 equity
   const _cfg=window._cfg;
   if(_cfg&&eq!=null&&eq>0){
     const capUsd=eq*_cfg.daily_loss_cap_pct/100.0, dPnl=today.pnl_usd||0;

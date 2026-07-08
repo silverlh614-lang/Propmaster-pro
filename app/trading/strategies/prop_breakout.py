@@ -1,12 +1,11 @@
 """@responsibility 프롭 기본 전략 — Donchian 채널 돌파 + HTF EMA 추세 필터, 게이트 최소화
 
-Prop-optimized breakout. The 복리단타 gate chain (engulfing, volume,
-session) is rejected for prop use — every extra discretionary gate lowers
-trade count and makes the evaluation drag while fees burn. This keeps the
-two gates that survive prop backtests everywhere:
+Prop-optimized breakout — deliberately minimal: every extra discretionary
+gate lowers trade count and makes the evaluation drag while fees burn.
+Only the two gates that survive prop backtests everywhere:
 
   1. HTF trend filter    : HTF close vs its EMA sets the ALLOWED direction
-                           (donchian_htf_ema, slower than the 복리단타 5EMA).
+                           (donchian_htf_ema).
   2. Donchian breakout   : entry close beyond the N-bar channel extreme
                            (donchian_lookback bars, current bar excluded).
 
@@ -16,8 +15,8 @@ Optional vetoes, OFF by default (A/B via the backtest gate only):
   squeeze_gate    — require the PREVIOUS bar in a volatility squeeze
   (BB(20,2) inside Keltner(20,1.5*ATR)): breakouts out of contraction.
 
-Stops stay ATR-anchored (System #2 discipline is kept); position size is
-NOT this module's job — prop budget sizing lives in the position FSM.
+Stops stay ATR-anchored; position size is NOT this module's job — prop
+budget sizing lives in the position FSM.
 """
 from __future__ import annotations
 

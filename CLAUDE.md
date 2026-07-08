@@ -16,7 +16,7 @@
 - `app/trading/` — 집행 엔진: kline 수집 → 전략 시그널 → 포지션 FSM → 리스크 관문
 - `scripts/` — 정적 가드 (complexity·responsibility), pre-commit 배선
 - `tests/` — 오프라인 테스트 (네트워크 금지)
-- `docs/` · `knowledge/` — 설계 문서·지식 베이스
+- `docs/` — 설계 문서 (프롭 SSOT·런북)
 
 모든 수치는 예측이 아닌 **구조화된 의견**이며 투자 조언이 아니다. 프롭 규칙·수수료는
 Breakout Prop 공개 구조를 본뜬 시뮬레이션 파라미터일 뿐 실제 서비스가 아니다.
@@ -39,9 +39,8 @@ Breakout Prop 공개 구조를 본뜬 시뮬레이션 파라미터일 뿐 실제
    (vision 아카이브)만 경유한다. 가격을 다른 경로로 들여오지 않는다.
 5. **레버리지·리스크 규율 + hand-tune 금지** — 레버리지 ≤ 5x(심볼 클래스 캡 우선),
    ATR 기반 스탑을 유지한다. 사이징은 **프롭 예산 기반**(잔여 일일/DD 예산의 고정 분율,
-   `risk_per_trade_pct` 는 상한 캡; 프롭 계좌 없으면 고정 비율 폴백) — 복리단타의
-   자산 고정비율·애드업은 prop_mode 에서 기각됐다. 시그널·리스크 임계값은 손으로
-   튜닝하지 않는다 — Phase 2 백테스트 게이트(`app/trading/backtest/`)가 결정한다.
+   `risk_per_trade_pct` 는 상한 캡; 프롭 계좌 없으면 고정 비율 폴백)이다. 시그널·리스크
+   임계값은 손으로 튜닝하지 않는다 — Phase 2 백테스트 게이트가 결정한다.
 
 6. **프롭 룰 엔진 단일 판정** — 챌린지 계좌의 브리치(일일손실·최대DD)는
    `app/prop/account.py` `evaluate()` 한 곳에서만 판정한다. 브리치는 **equity(미실현 포함)**
@@ -92,7 +91,6 @@ python scripts/install_git_hooks.py  # pre-commit 훅 설치 (clone 후 1회)
 | 도메인 개요 · API 목록 · 실행 주기 · 배포 | `README.md` |
 | 프롭 규칙 상세 · 플랜 파라미터 · 수명주기 설계 | `docs/prop_system.md` |
 | 트레이딩 봇 설계 · Phase 2 백테스트 · 배포 런북 | `docs/engine_phase2_runbook.md` |
-| 가설 등록·판정 · 파라미터 채택 · Phase 승격 기준 | `knowledge/hypothesis_registry.md` |
 | 에이전트 팀 · 스킬 오케스트레이션 | `.claude/agents/` · `.claude/skills/` |
 
 ---

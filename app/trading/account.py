@@ -1,7 +1,7 @@
 """@responsibility 통합 계좌 원장 — 전 심볼 공유 equity 단일 소유, 페이퍼 잔고 시뮬과 Phase 3 지갑 조회의 교체 지점
 
 Unified account ledger (한 계좌 원칙). ONE equity pool backs every symbol:
-position sizing, the risk caps' denominators and 복리 compounding all read
+position sizing, the risk caps' denominators and compounding all read
 and write this single number — mirroring a real exchange USDT wallet, where
 every symbol's orders draw from one balance.
 
