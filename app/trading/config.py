@@ -69,6 +69,10 @@ class TradingConfig:
     risk_dd_budget_frac: float = 0.10     # per-trade risk <= 잔여 DD예산 * frac
     daily_stop_after_losses: int = 3      # 당일 N패 도달 시 그날 진입 정지
     daily_open_risk_frac: float = 0.5     # 오픈리스크 합 <= 잔여 일일예산 * frac
+    # 연패 쿨다운 (hoc-trade 50만 데이터셋: "2연패 후 쿨다운"이 복수매매를
+    # 유의하게 줄인 유일한 검증된 개입). N연패 시 마지막 손실 후 M분 진입 차단.
+    cooldown_after_losses: int = 0        # 0=off; 예: 2
+    cooldown_minutes: int = 60
     # 00:30 UTC 일일리셋 함정 방어: 리셋 N분 전 마감봉에서 열린 포지션 청산
     # (리셋 순간 미실현 손실을 크게 열어두면 새 일일 플로어를 즉시 위반 — 리포트
     # $2.87 초과 탈락 사례). 0=off (백테스트 게이트로 켤지 판단).

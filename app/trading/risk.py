@@ -114,6 +114,11 @@ class RiskManager:
         if t["losses"] >= self.cfg.daily_stop_after_losses:
             return False, (f"daily_stop_after_losses "
                            f"({self.cfg.daily_stop_after_losses}) — 오늘은 정지")
+        cd = self._cooldown_remaining_min()
+        if cd > 0:
+            return False, (f"loss-streak cooldown "
+                           f"({self.cfg.cooldown_after_losses}연패) — "
+                           f"{cd}분 후 재개")
         budget = self.prop_risk_budget()
         if budget is not None:
             room_cap = budget["daily_room"] * self.cfg.daily_open_risk_frac
@@ -132,6 +137,28 @@ class RiskManager:
             return False, (f"total_open_risk would be "
                            f"${open_risk_usd + new_risk_usd:.2f} > cap ${cap:.2f}")
         return True, ""
+
+    def _cooldown_remaining_min(self) -> int:
+        """Minutes left in a loss-streak cooldown, 0 if none/disabled. When
+        the last N settled trades are all losses, entries pause for M minutes
+        after the most recent loss (hoc-trade's validated anti-revenge gate)."""
+        n = self.cfg.cooldown_after_losses
+        if n <= 0:
+            return 0
+        settled = [r for r in self.journal.tail(n * 3)
+                   if r.get("result") in ("WIN", "LOSS", "CLOSED")]
+        if len(settled) < n:
+            return 0
+        recent = settled[:n]                       # tail() returns newest-first
+        if any(r["result"] != "LOSS" for r in recent):
+            return 0
+        try:
+            last = dt.datetime.fromisoformat(recent[0]["ts"])
+        except Exception:
+            return 0
+        elapsed = (dt.datetime.now(dt.timezone.utc) - last).total_seconds() / 60.0
+        left = self.cfg.cooldown_minutes - elapsed
+        return int(left) + 1 if left > 0 else 0
 
     # ------------------------------------------------------------- events
 

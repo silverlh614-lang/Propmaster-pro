@@ -125,7 +125,7 @@ Breakout Prop(breakoutprop.com, 2025-09 Kraken 인수)의 공개 구조를 본�
 | 항목 | 현행 |
 |---|---|
 | 사이징 | **잔여 예산 분율**: min(잔여 일일예산×25%, 잔여 DD예산×10%), `risk_per_trade_pct`는 상한 캡. 손실 누적 시 자동 축소 |
-| 일일 규율 | 당일 3패 시 진입 정지 + 오픈리스크 합 ≤ 잔여 일일예산의 50% |
+| 일일 규율 | 당일 3패 시 진입 정지 + 오픈리스크 합 ≤ 잔여 일일예산의 50% + 선택형 `cooldown_after_losses`(N연패 시 M분 진입 차단, 기본 off — hoc-trade 50만 데이터셋이 검증한 유일한 반-복수매매 개입) |
 | 애드업 | 기본 OFF (손실 뒤 증액과 한 끗 — conduct 모니터와 일관) |
 | 전략 | **심볼별 매핑** (`TRADING_SYMBOL_STRATEGY`, 예 `BTC:prop_breakout,SOL:vbo`): 게이트 결과 메이저(BTC/ETH)=`prop_breakout`(Donchian 55·1h·ATR2.5), 알트(SOL/XRP)=`vbo`(변동성 돌파 K0.5). 미지정 심볼은 /start 기본 전략. env 없으면 균일 |
 | 리셋 함정 방어 | `flatten_before_reset_min` (기본 off): 00:30 UTC 일일리셋 N분 전 마감봉에서 열린 포지션 청산 — 리셋 순간 미실현 손실로 새 플로어 즉시 위반하는 함정 차단 |

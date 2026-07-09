@@ -104,6 +104,39 @@ def test_risk_gate():
     print("ok  risk gate (concurrent, open-risk cap, kill switch)")
 
 
+def test_loss_streak_cooldown():
+    """cooldown_after_losses: N fresh consecutive losses pause entries for
+    cooldown_minutes after the last loss; a win breaks it, time expires it."""
+    import datetime as dt
+    from app.trading import store as _store
+
+    now = dt.datetime.now(dt.timezone.utc)
+    iso = lambda m: (now - dt.timedelta(minutes=m)).isoformat(timespec="seconds")
+    L = lambda ts: {"symbol": "BTC", "mode": "p", "strategy": "t",
+                    "event": "CLOSE", "result": "LOSS", "pnl_usd": -5, "ts": ts}
+    W = lambda ts: {**L(ts), "result": "WIN", "pnl_usd": 5}
+
+    def fresh():
+        _store.TRADES_CSV.unlink(missing_ok=True)
+        return Journal()
+
+    off = TradingConfig()
+    assert off.cooldown_after_losses == 0        # disabled by default
+    j = fresh(); j.append(L(iso(1))); j.append(L(iso(0)))
+    assert RiskManager(off, j, BotState()).allow_entry(0, 0., 1., equity_usd=1e4)[0]
+
+    cfg = TradingConfig(); cfg.cooldown_after_losses = 2; cfg.cooldown_minutes = 60
+    j = fresh(); j.append(L(iso(20))); j.append(L(iso(5)))     # 2 fresh losses
+    ok, why = RiskManager(cfg, j, BotState()).allow_entry(0, 0., 1., equity_usd=1e4)
+    assert not ok and "cooldown" in why
+    j = fresh(); j.append(L(iso(20))); j.append(W(iso(5)))     # win breaks streak
+    assert RiskManager(cfg, j, BotState()).allow_entry(0, 0., 1., equity_usd=1e4)[0]
+    j = fresh(); j.append(L(iso(120))); j.append(L(iso(90)))   # expired (>60m)
+    assert RiskManager(cfg, j, BotState()).allow_entry(0, 0., 1., equity_usd=1e4)[0]
+    fresh()
+    print("ok  loss-streak cooldown (off / blocked / win-breaks / expired)")
+
+
 def test_risk_caps_follow_compounded_equity():
     """The open-risk cap must be measured against CURRENT equity, not the
     starting stake."""
@@ -344,6 +377,7 @@ if __name__ == "__main__":
     test_sizing()
     test_symbol_leverage_caps()
     test_risk_gate()
+    test_loss_streak_cooldown()
     test_risk_caps_follow_compounded_equity()
     test_fsm_stop_loss()
     test_fsm_partial_then_trail()
