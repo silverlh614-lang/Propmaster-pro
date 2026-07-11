@@ -37,7 +37,13 @@ def test_indicators():
     candles = [_c(i * 60000, 100, 102, 98, 101) for i in range(20)]
     a = ind.atr(candles, 14)
     assert a is not None and a > 0
-    print("ok  indicators (ema/sma/atr)")
+
+    # ema_flip_count: trend ~0 flips, alternation ~every bar, short = None
+    assert ind.ema_flip_count(list(range(30)), 5, 20) == 0
+    chop = [100 + (5 if i % 2 == 0 else -5) for i in range(30)]
+    assert ind.ema_flip_count(chop, 20, 20) >= 15
+    assert ind.ema_flip_count([1, 2, 3], 5, 20) is None
+    print("ok  indicators (ema/sma/atr/flip-count)")
 
 
 # ------------------------------------------------------------- sizing
@@ -266,6 +272,61 @@ def _coherent_series(n=200):
     return htf, entry
 
 
+def _box_breakout_ctx(vol=100.0, htf_choppy=False):
+    """Entry TF: a flat 20-bar box [99,101] then an up-breakout bar closing
+    103.5. HTF: clean uptrend (or a ±5 whipsaw ending bullish when choppy)."""
+    htf = []
+    for i in range(26):
+        c = (100 + (5 if i % 2 == 0 else -5)) if htf_choppy else (100.0 + i)
+        if htf_choppy and i >= 24:
+            c = 108.0 + (i - 24)          # end bullish so allowed side = LONG
+        htf.append(_c(i * 3600000, c - 1, c + 1.2, c - 1.2, c, 100))
+    entry = [_c(i * 900000, 100, 101, 99, 100, 100) for i in range(26)]
+    entry.append(_c(26 * 900000, 100, 104, 100, 103.5, vol))
+    return TradingContext("BTC", htf, entry, 200.0, 0.0)
+
+
+def test_trend_reinforcement_gates():
+    """박스권 방어 게이트: 기본 OFF(동작 불변), 켜면 무거래량/횡보장 돌파 차단."""
+    from app.trading.strategies.filters import confirmation_gates
+
+    def cfg(**kw):
+        c = TradingConfig()
+        c.donchian_lookback = 20
+        for k, v in kw.items():
+            setattr(c, k, v)
+        return c
+
+    ctx = _box_breakout_ctx(vol=100.0)          # breakout, volume == SMA(vol)
+    for name in ("prop_breakout", "vbo"):
+        # all knobs off -> both strategies fire exactly as before
+        assert make_strategy(name, cfg()).evaluate(ctx) is not None, name
+        # volume gate: a no-volume poke out of the box is refused...
+        s = make_strategy(name, cfg(volume_gate_mult=2.0))
+        assert s.evaluate(ctx) is None, name
+        # ...and the same break WITH volume (4x average) passes
+        loud = _box_breakout_ctx(vol=400.0)
+        assert s.evaluate(loud) is not None, name
+        d = s.diagnose(ctx)                     # active knob shows as a gate row
+        assert any(x["key"] == "volume" and not x["ok"] for x in d["gates"]), d
+        # chop gate: HTF whipsawing around its EMA -> stand aside (관망)
+        s = make_strategy(name, cfg(chop_gate_flips=4))
+        assert s.evaluate(_box_breakout_ctx(htf_choppy=True)) is None, name
+        assert s.evaluate(ctx) is not None, name   # clean trend still trades
+
+    # engulf gate (장악형): breakout body must exceed the previous body
+    c = cfg(engulf_gate=True)
+    ef = [_c(i * 900000, 100, 101, 99, 100, 100) for i in range(25)]
+    ef.append(_c(25 * 900000, 99.0, 101.0, 98.8, 101.0, 100))       # body 2.0
+    ef.append(_c(26 * 900000, 101.0, 104, 100.9, 103.5, 100))       # body 2.5 > 2.0
+    htf = _box_breakout_ctx().htf_candles
+    assert confirmation_gates(c, htf, ef)["engulf_ok"]
+    small = ef[:-1] + [_c(26 * 900000, 101.0, 104, 100.9, 101.05, 100)]  # body 0.05
+    conf = confirmation_gates(c, htf, small)
+    assert not conf["engulf_ok"] and not conf["ok"]
+    print("ok  trend-reinforcement gates (volume/engulf/chop, defaults off)")
+
+
 def test_backtest_replay():
     from app.trading.backtest.engine import replay
     from app.trading.backtest.metrics import compute
@@ -383,6 +444,7 @@ if __name__ == "__main__":
     test_fsm_partial_then_trail()
     test_fsm_breakeven_step()
     test_fsm_pyramiding()
+    test_trend_reinforcement_gates()
     test_backtest_replay()
     test_candles_export()
     test_state_persistence()

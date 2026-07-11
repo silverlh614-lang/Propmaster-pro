@@ -90,6 +90,15 @@ class TradingConfig:
     squeeze_gate: bool = False            # 직전 봉 BB(20,2) ⊂ Keltner(20,1.5ATR) 요구
     breakeven_at_r: float = 0.0           # N R 도달 시 손절→본전 (0=off, 부분익절 전 단계)
 
+    # --- 추세강화 확인 게이트 (박스권 휩쏘 방어 — 전 돌파 전략 공용, 기본 OFF) ---
+    # 출처 이론: 거래량=세력(돌파 확인), 장악형 몸통(변동성 군집·range 에너지),
+    # 횡보장도 추세의 일종 → 인지되면 관망. 켜는 것도 백테스트 게이트 A/B로만.
+    volume_gate_mult: float = 0.0         # 돌파봉 거래량 ≥ mult×SMA(vol) 요구 (0=off)
+    volume_ma_period: int = 20            # 거래량 SMA 기간
+    engulf_gate: bool = False             # 돌파봉 몸통 > 직전봉 몸통(장악형) 요구
+    chop_gate_flips: int = 0              # 최근 window HTF봉 EMA 플립 ≥ N이면 관망 (0=off)
+    chop_window: int = 20                 # 플립 계수 구간 (HTF 봉 수)
+
     # --- 애드업 / pyramiding (손실 뒤 증액과 한 끗 — prop 기본 OFF) ----------
     pyramid_enabled: bool = False
     pyramid_max_adds: int = 2            # never add more than this many units

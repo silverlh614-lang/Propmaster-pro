@@ -20,6 +20,7 @@ from __future__ import annotations
 from ..indicators import atr, ema
 from ..models import Side, TradeSignal
 from .base import TradingContext, TradingStrategy
+from .filters import confirmation_gates, confirmation_rows
 
 
 class VolatilityBreakoutStrategy(TradingStrategy):
@@ -51,9 +52,12 @@ class VolatilityBreakoutStrategy(TradingStrategy):
             stop = (cur.close - a * c.atr_stop_mult if allowed is Side.LONG
                     else cur.close + a * c.atr_stop_mult)
 
+        conf = confirmation_gates(c, htf, ef)   # 추세강화 게이트 (기본 전부 OFF)
         return {"allowed": allowed, "htf_ema": htf_ema, "range": rng,
                 "level": level, "broke": broke, "atr": a, "stop": stop,
-                "ready": bool(broke and rng > 0 and stop is not None),
+                "conf": conf,
+                "ready": bool(broke and rng > 0 and conf["ok"]
+                              and stop is not None),
                 "entry_ref": cur.close}
 
     def evaluate(self, ctx: TradingContext) -> TradeSignal | None:
@@ -80,6 +84,7 @@ class VolatilityBreakoutStrategy(TradingStrategy):
             {"key": "atr", "label": "ATR 스탑 확보", "ok": bool(g["atr"]),
              "info": f"ATR {g['atr']:.4f}" if g["atr"] else "–"},
         ]
+        gates += confirmation_rows(self.cfg, g["conf"])
         passed = sum(1 for x in gates if x["ok"])
         return {"allowed": allowed, "ready": g["ready"],
                 "passed": passed, "total": len(gates), "gates": gates,
