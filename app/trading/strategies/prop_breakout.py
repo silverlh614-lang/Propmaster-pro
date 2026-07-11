@@ -14,6 +14,8 @@ Optional vetoes, OFF by default (A/B via the backtest gate only):
   far side (NFI pump protection: don't buy the blow-off).
   squeeze_gate    — require the PREVIOUS bar in a volatility squeeze
   (BB(20,2) inside Keltner(20,1.5*ATR)): breakouts out of contraction.
+  volume/engulf/chop — trend-reinforcement confirmations against box-range
+  whipsaw, shared via strategies/filters.py (also OFF by default).
 
 Stops stay ATR-anchored; position size is NOT this module's job — prop
 budget sizing lives in the position FSM.
@@ -23,6 +25,7 @@ from __future__ import annotations
 from ..indicators import atr, ema
 from ..models import Side, TradeSignal
 from .base import TradingContext, TradingStrategy
+from .filters import confirmation_gates, confirmation_rows
 
 
 class PropBreakoutStrategy(TradingStrategy):
@@ -68,12 +71,14 @@ class PropBreakoutStrategy(TradingStrategy):
             stop = (cur.close - a * c.atr_stop_mult if allowed is Side.LONG
                     else cur.close + a * c.atr_stop_mult)
 
+        conf = confirmation_gates(c, htf, ef)   # 추세강화 게이트 (기본 전부 OFF)
+
         return {
             "allowed": allowed, "htf_ema": htf_ema,
             "channel_hi": ch_hi, "channel_lo": ch_lo,
             "broke": broke, "atr": a, "stop": stop,
-            "pump_ok": pump_ok, "squeeze_ok": squeeze_ok,
-            "ready": bool(broke and pump_ok and squeeze_ok
+            "pump_ok": pump_ok, "squeeze_ok": squeeze_ok, "conf": conf,
+            "ready": bool(broke and pump_ok and squeeze_ok and conf["ok"]
                           and stop is not None),
             "entry_ref": cur.close,
         }
@@ -114,6 +119,7 @@ class PropBreakoutStrategy(TradingStrategy):
         if self.cfg.squeeze_gate:
             gates.append({"key": "squeeze", "label": "변동성 스퀴즈",
                           "ok": bool(g["squeeze_ok"]), "info": "BB⊂KC"})
+        gates += confirmation_rows(self.cfg, g["conf"])
         passed = sum(1 for x in gates if x["ok"])
         return {"allowed": allowed, "ready": g["ready"],
                 "passed": passed, "total": len(gates), "gates": gates,

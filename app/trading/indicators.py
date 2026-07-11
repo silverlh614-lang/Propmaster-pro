@@ -30,6 +30,18 @@ def sma(values: list[float], period: int) -> float | None:
     return sum(values[-period:]) / period
 
 
+def ema_flip_count(values: list[float], period: int, window: int) -> int | None:
+    """How many times the value flipped sides against its EMA over the last
+    `window` values (None if too few). A trending series flips rarely; a
+    range-bound (박스권) series whipsaws across its mean — high counts mark
+    the chop regime where breakout entries bleed."""
+    if window < 2 or len(values) < window:
+        return None
+    e = ema(values, period)
+    sides = [1 if v >= m else -1 for v, m in zip(values[-window:], e[-window:])]
+    return sum(1 for a, b in zip(sides, sides[1:]) if a != b)
+
+
 def atr(candles: list[Candle], period: int) -> float | None:
     """Wilder's Average True Range over the last `period` bars (None if too
     few). True range includes gaps (prev close), so it survives the violent

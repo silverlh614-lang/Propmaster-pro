@@ -105,8 +105,9 @@ for atr in 1.0 1.5 2.0 2.5; do
   | python -c "import sys,json;d=json.load(sys.stdin);m=d['metrics'];print(f\"ATR={$atr} trades={m['trades']} winR={m['win_rate']} expR={m['expectancy_r']} PF={m['profit_factor']} MDD={m['max_drawdown_usd']}\")"
 done
 ```
-바꿀 knob: `atr_stop_mult`, `rr_target`, `box_lookback`, `vol_mult`, `breakout_buffer_pct`,
-`ema_period`, `pyramid_max_adds`.
+바꿀 knob: `atr_stop_mult`, `rr_target`, `donchian_lookback`, `vbo_k`,
+`pyramid_max_adds`, 그리고 §7-1 확인 게이트(`volume_gate_mult`, `engulf_gate`,
+`chop_gate_flips`).
 
 ## 7. 지표 해석 & 통과 기준
 
@@ -127,6 +128,33 @@ done
 > 공개 API는 요청당 **최대 1000봉** → 15m ≈ **10일**, 1h ≈ **41일**. 표본이 짧으면 방향성
 > 판단용. `trades`가 한 자릿수면 아직 게이트 판정 불가 → 페이퍼를 오래 돌려 캔들 아카이브를
 > 쌓는 확장이 다음 과제.
+
+## 7-1. 박스권(횡보장) 대응 — 추세강화 확인 게이트
+
+돌파 전략(Donchian·VBO)의 구조적 약점은 **박스권 횡보장**이다: 채널을 살짝 찌르고
+되돌아오는 가짜 돌파에 반복 손절당해, 추세장에서 번 것을 횡보장에서 뱉는다.
+추세추종 이론이 제시하는 방어는 세 가지이며 전부 **진입 확인(confirmation)** 이다
+— 예측이 아니라, 돌파가 진짜인지 한 번 더 검증하는 필터다.
+
+| 이론 | 요지 | 노브 (`TRADING_*`, 기본 OFF) |
+|---|---|---|
+| **거래량 = 세력** | 거래량 없는 돌파는 가짜다. 돌파봉 거래량이 평균의 배수 이상일 때만 진입 | `VOLUME_GATE_MULT` (0=off, 예 1.5~2.0) · `VOLUME_MA_PERIOD` (20) |
+| **변동성 군집 / 장악형** | 이탈한 range의 에너지가 다음 봉으로 전달되려면 돌파봉 몸통이 직전봉 몸통보다 커야 한다 | `ENGULF_GATE` (false) |
+| **횡보장도 추세다** | HTF 종가가 EMA를 자주 넘나들면(플립) 박스권 — 관망이 포지션이다 | `CHOP_GATE_FLIPS` (0=off, 예 4~6) · `CHOP_WINDOW` (20) |
+
+구현: `app/trading/strategies/filters.py` (두 전략 공용) · 지표 `ema_flip_count`.
+대시보드 게이트 패널에 켠 노브만 행으로 추가 표시된다.
+
+**운영 원칙 (불변식 5 — hand-tune 금지):**
+- 세 노브 모두 기본 OFF. 켜는 결정은 **이 페이지의 백테스트 게이트 A/B로만** 한다
+  (예: `overrides: {"volume_gate_mult": 1.5}` vs `{}` 를 같은 기간에 비교).
+- 확인 게이트는 거래 수를 줄인다 — `trades ≥ 20` 표본 기준이 깨지면 판정 불가이므로
+  `months=` 아카이브 모드로 기간을 늘려 비교한다.
+- 기대 효과는 승률·expectancy_r 상승 + MDD 감소, 대가는 진입 기회 감소. **횡보 구간이
+  포함된 기간**에서 개선이 재현될 때만 채택한다.
+- 기존 노브와의 결합: `squeeze_gate`(수축 후 돌파만), `time_stop_bars`(N봉 무진행 청산 —
+  "횡보하면 정리하고 관망"의 기계화), `cooldown_after_losses`(연패 쿨다운)도 같은
+  횡보장 방어 계열이다. 한 번에 하나씩 A/B 하라 — 동시에 켜면 원인 분리가 안 된다.
 
 ## 8. 결과 공유
 
