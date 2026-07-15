@@ -53,6 +53,8 @@
 | `GET /api/trading/trades` | 트레이드 저널 + 승률/PnL 집계 (`?symbol=BTC`) |
 | `GET /api/trading/trades.csv` | 저널 엑셀(CSV) 다운로드 (`?symbol=BTC`) |
 | `GET /api/trading/config` | 트레이딩 설정 (환경변수 `TRADING_*`로 오버라이드) |
+| `GET /api/trading/discovery` | 자동 종목 발굴 랭킹·상태 (`docs/auto_discovery.md`, 기본 OFF) |
+| `POST /api/trading/discovery/scan` | 유니버스 수동 스캔 (로테이션은 `TRADING_AUTO_DISCOVERY=1`일 때만) |
 | `POST /api/trading/backtest` | 리플레이 백테스트 (전략·파라미터 스윕 → 승률/기대값/PF/Z/MDD 표) |
 | `GET /docs` | OpenAPI 문서 |
 

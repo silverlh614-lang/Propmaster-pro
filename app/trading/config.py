@@ -114,6 +114,16 @@ class TradingConfig:
     max_total_open_risk_pct: float = 2.0 # sum of open-position risk cap (adds!)
     max_consecutive_errors: int = 5
 
+    # --- 자동 종목 발굴 (auto-discovery — 기본 OFF, 연구 단계) ---------------
+    # 코어(TRADING_SYMBOLS, 게이트 검증)는 절대 로테이션하지 않는다. 위성
+    # 슬롯만 스캐너가 유동성·변동성·추세효율 랭킹으로 채운다. 열린 포지션이
+    # 있는 심볼은 랭킹에서 밀려도 유지(히스테리시스). 상세: docs/auto_discovery.md
+    auto_discovery: bool = False          # TRADING_AUTO_DISCOVERY=1 로 켠다
+    discovery_top_n: int = 2              # 위성 슬롯 수 (코어와 별개)
+    discovery_interval_min: int = 240     # 스캔 주기 (분)
+    discovery_min_quote_vol_usdt: float = 5_000_000.0  # 24진입봉 명목 거래대금 플로어
+    discovery_er_window: int = 20         # 추세효율(Kaufman ER) HTF 봉 수
+
     # --- poll / data -------------------------------------------------------
     poll_sec: float = 2.0
 
@@ -174,6 +184,28 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
                        tick_size=0.001, leverage_cap=2.0),
     "LTC": SymbolSpec("LTC", "LTCUSDT", qty_step=0.001, min_qty=0.001,
                       tick_size=0.01, leverage_cap=2.0),
+    # --- 확장 유니버스 (auto-discovery 후보 풀) — 전부 알트 2x 클래스.
+    # Binance USDⓈ-M / OKX 스왑 양쪽에 상장된 심볼만 (폴백 유지 조건).
+    "DOT": SymbolSpec("DOT", "DOTUSDT", qty_step=0.1, min_qty=0.1,
+                      tick_size=0.001, leverage_cap=2.0),
+    "ATOM": SymbolSpec("ATOM", "ATOMUSDT", qty_step=0.01, min_qty=0.01,
+                       tick_size=0.001, leverage_cap=2.0),
+    "NEAR": SymbolSpec("NEAR", "NEARUSDT", qty_step=1.0, min_qty=1.0,
+                       tick_size=0.001, leverage_cap=2.0),
+    "APT": SymbolSpec("APT", "APTUSDT", qty_step=0.1, min_qty=0.1,
+                      tick_size=0.001, leverage_cap=2.0),
+    "ARB": SymbolSpec("ARB", "ARBUSDT", qty_step=0.1, min_qty=0.1,
+                      tick_size=0.0001, leverage_cap=2.0),
+    "OP": SymbolSpec("OP", "OPUSDT", qty_step=0.1, min_qty=0.1,
+                     tick_size=0.0001, leverage_cap=2.0),
+    "SUI": SymbolSpec("SUI", "SUIUSDT", qty_step=0.1, min_qty=0.1,
+                      tick_size=0.0001, leverage_cap=2.0),
+    "UNI": SymbolSpec("UNI", "UNIUSDT", qty_step=1.0, min_qty=1.0,
+                      tick_size=0.001, leverage_cap=2.0),
+    "INJ": SymbolSpec("INJ", "INJUSDT", qty_step=0.1, min_qty=0.1,
+                      tick_size=0.001, leverage_cap=2.0),
+    "TON": SymbolSpec("TON", "TONUSDT", qty_step=0.1, min_qty=0.1,
+                      tick_size=0.0001, leverage_cap=2.0),
 }
 
 # 2026-07 게이트: 같은 프로필이 ETH 에서 무보정 아웃오브샘플로 통과

@@ -31,6 +31,7 @@ from .models import Side
 from .risk import RiskManager
 from .store import AccountStore, BotState, Journal, PositionStore
 from .config import strategy_for
+from .discovery import AutoDiscovery
 from .strategies import STRATEGIES, make_strategy
 from .strategies.base import TradingContext
 
@@ -283,13 +284,19 @@ class TradingManager:
         self.prop = PropDesk(ledger=self.ledger, on_breach=self._on_prop_breach)
         self.risk.attach_prop(self.prop)
         self.bots: dict[str, SymbolBot] = {
-            spec.key: SymbolBot(spec, cfg, self.journal, self.risk,
-                                self.pos_store, self.ledger,
-                                prop_tick=self.prop_tick)
-            for spec in enabled_symbols()
+            spec.key: self._make_bot(spec) for spec in enabled_symbols()
         }
         self.mode = "paper"
         self.strategy_name = "prop_breakout"
+        # 자동 종목 발굴 (기본 OFF): 코어는 불변, 위성 슬롯만 로테이션.
+        self.discovery = AutoDiscovery(self)
+
+    def _make_bot(self, spec: SymbolSpec) -> SymbolBot:
+        """Single SymbolBot factory — boot roster and discovery rotation both
+        wire the same shared journal/risk/ledger/prop-tick objects."""
+        return SymbolBot(spec, self.cfg, self.journal, self.risk,
+                         self.pos_store, self.ledger,
+                         prop_tick=self.prop_tick)
 
     @property
     def running(self) -> bool:
@@ -308,6 +315,7 @@ class TradingManager:
         self.strategy_name = strategy
         for b in self.bots.values():
             await b.start(mode, strategy)
+        self.discovery.start()          # no-op unless TRADING_AUTO_DISCOVERY
         st = self.state_store.load()
         st.update({"mode": mode, "strategy": strategy, "running": True})
         self.state_store.save(st)
@@ -324,6 +332,7 @@ class TradingManager:
             await b.stop_feed()
 
     async def shutdown(self) -> None:
+        await self.discovery.stop()
         for b in self.bots.values():
             await b.shutdown()
 
@@ -425,6 +434,7 @@ class TradingManager:
             "note": ("running: " + ",".join(self.bots)) if self.running else "stopped",
             "risk": self.risk.status(),
             "symbols": {k: b.status() for k, b in self.bots.items()},
+            "discovery": self.discovery.status(),
             "by_symbol": self.journal.by_symbol(list(self.bots)),
             "server_time": time.time(),
         }

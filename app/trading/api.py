@@ -64,6 +64,22 @@ def reset_kill():
     return {"ok": True}
 
 
+@router.get("/discovery")
+def discovery():
+    """Auto-discovery snapshot: candidate ranking + rotation state."""
+    return MANAGER.discovery.status()
+
+
+@router.post("/discovery/scan")
+async def discovery_scan():
+    """Force one scan now. Ranking always returns; rotation applies only
+    when TRADING_AUTO_DISCOVERY is on AND the engine is running."""
+    try:
+        return await MANAGER.discovery.scan_once()
+    except Exception as e:  # noqa: BLE001 — surfaced to the operator
+        raise HTTPException(502, f"scan failed: {type(e).__name__}: {e}")
+
+
 @router.get("/candles")
 def candles(symbol: str = "BTC", tf: str = "entry", limit: int = 120):
     if symbol.upper() not in SYMBOL_SPECS:

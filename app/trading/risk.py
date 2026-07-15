@@ -80,6 +80,11 @@ class RiskManager:
         book — a bot restart never double-counts."""
         self._books[key] = book
 
+    def unregister_book(self, key: str) -> None:
+        """Drop a rotated-out symbol's book (auto-discovery removes a bot
+        only when flat, so no live exposure ever leaves the sums)."""
+        self._books.pop(key, None)
+
     def global_exposure(self) -> tuple[int, float]:
         """(open position count, open risk USD) summed across all registered
         symbols — the input allow_entry's concurrent/open-risk caps expect."""
