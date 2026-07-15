@@ -131,8 +131,13 @@ class AutoDiscovery:
         self.last_ranking: list[dict] = []
         self.note = "off" if not self.cfg.auto_discovery else "idle"
 
+    def _protected(self) -> list[str]:
+        """코어 + 수동 토글 종목 — 로테이션·후보에서 모두 제외한다."""
+        return self.mgr.protected_keys()
+
     def candidates(self) -> list[SymbolSpec]:
-        return [s for k, s in SYMBOL_SPECS.items() if k not in self.core]
+        prot = self._protected()
+        return [s for k, s in SYMBOL_SPECS.items() if k not in prot]
 
     # ------------------------------------------------------------- scan
 
@@ -186,7 +191,8 @@ class AutoDiscovery:
         """Rotate satellite bots toward the ranking. Core bots and any bot
         holding an open position are untouchable."""
         mgr = self.mgr
-        active = [k for k in mgr.bots if k not in self.core]
+        prot = self._protected()
+        active = [k for k in mgr.bots if k not in prot]
         held = [k for k in active
                 if mgr.bots[k].pm and mgr.bots[k].pm.pos
                 and mgr.bots[k].pm.pos.state.value == "OPEN"]
@@ -208,7 +214,7 @@ class AutoDiscovery:
             mgr.bots[k] = bot
             await bot.start(mgr.mode, mgr.strategy_name)
             added.append(k)
-        return {"active": self.core + target, "added": added,
+        return {"active": prot + target, "added": added,
                 "dropped": dropped, "held": held}
 
     # ------------------------------------------------------------- loop

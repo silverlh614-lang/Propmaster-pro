@@ -158,6 +158,21 @@
     color:var(--dim);font:inherit;font-size:11px;padding:3px 10px;letter-spacing:.06em}
   .symtabs button:last-child{border-right:0}
   .symtabs button.on{background:var(--brand);color:#171204;font-weight:800}
+  .symtabs button{transition:background .18s ease,color .18s ease}
+
+  /* 종목 토글 선택기 — 유니버스 전체 칩 (코어 잠금 / 가동 중 강조) */
+  .sympick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+    padding:9px 14px;border-bottom:1px solid var(--border);background:#07090b;
+    animation:panelIn .32s var(--ease) both}
+  .sympick .pl{font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);margin-right:4px}
+  .sympick .chip{background:var(--panel-2);border:1px solid var(--border);color:var(--faint);
+    font:700 11px var(--mono);letter-spacing:.05em;padding:4px 10px;border-radius:3px;
+    cursor:pointer;transition:border-color .18s ease,color .18s ease,background .18s ease,transform .11s var(--ease)}
+  .sympick .chip:hover:not(:disabled){border-color:var(--ink);color:var(--ink);transform:translateY(-1px)}
+  .sympick .chip.on{border-color:var(--up-dim);color:var(--up);background:rgba(46,229,138,.07)}
+  .sympick .chip.core{border-color:var(--brand);color:var(--brand);background:rgba(247,147,26,.08);
+    cursor:default;opacity:.9}
 
   /* FSM stages */
   .stages{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
@@ -342,7 +357,8 @@
   <span class="kv">TRADES <b id="sTrades">0</b>/<span id="sTradesMax">20</span></span>
   <span class="kv">DAILY <b id="sDaily">$0.00</b></span>
   <span class="sp"></span>
-  <span class="kv"><span class="symtabs" id="symTabs"><button class="on">BTC</button></span></span>
+  <span class="kv"><span class="symtabs" id="symTabs"><button class="on">BTC</button></span>
+    <button class="bell" id="symPickBtn" onclick="toggleSymPicker()" title="종목 선택 (토글)">＋종목</button></span>
   <span class="kv">전략 <select id="stratSel"></select></span>
   <span class="ctrls" id="ctrls">
     <button class="go" id="btnStart" onclick="startBot()">▶ START</button>
@@ -352,6 +368,8 @@
   <button class="bell" id="bellBtn" onclick="toggleAlerts()" title="알림 토글">🔔</button>
   <button class="bell" id="layoutBtn" onclick="toggleLayoutEdit()" title="레이아웃 편집">🧩</button>
 </div>
+
+<div class="sympick" id="symPicker" style="display:none"></div>
 
 <div class="ticker"><div class="rail" id="rail"><span class="it">로딩 중…</span></div></div>
 
@@ -554,9 +572,11 @@ const $=id=>document.getElementById(id);
 const fmt=(n,d=2)=>(n==null||n===""||isNaN(n)?"–":Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}));
 const money=n=>(n==null||isNaN(n)?"–":(n<0?"-$":"$")+fmt(Math.abs(n)));
 
-// ---- 심볼 탭 (TRADING_SYMBOLS로 켠 심볼 사이 전환 — 뷰만 전환, 봇은 전부 가동) ----
+// ---- 심볼 탭 (가동 중인 봇 사이 뷰 전환) + 종목 토글 선택기 ----
 let SYM=localStorage.getItem("terminal_sym")||"BTC";
-let SYMS=["BTC"];
+let SYMS=["BTC"];         // 현재 가동 중(코어+수동+위성)
+let UNIV=["BTC"];         // 토글 가능한 전체 후보 유니버스
+let CORE=["BTC"];         // 항상 ON (토글 불가)
 function renderSymTabs(){
   const box=$("symTabs");if(!box)return;
   if(!SYMS.includes(SYM))SYM=SYMS[0]||"BTC";
@@ -568,6 +588,40 @@ function setSym(k){
   SYM=k;localStorage.setItem("terminal_sym",k);renderSymTabs();
   window._candles=null;drawChart();      // 이전 심볼 캔들 잔상 제거
   refresh();loadCandles();
+}
+// 종목 토글 선택기: 유니버스 전체를 칩으로 — 코어는 항상 ON(잠금), 나머지는
+// 클릭으로 위성 봇을 켜고 끈다. 열린 포지션이 있으면 서버가 거부(토스트로 안내).
+function toggleSymPicker(){
+  const box=$("symPicker");if(!box)return;
+  const show=box.style.display==="none"||!box.style.display;
+  box.style.display=show?"flex":"none";
+  $("symPickBtn").classList.toggle("on",show);
+  if(show)renderSymPicker();
+}
+function renderSymPicker(){
+  const box=$("symPicker");if(!box||box.style.display==="none")return;
+  const active=new Set(SYMS);
+  const chips=UNIV.map(k=>{
+    const isCore=CORE.includes(k),on=active.has(k);
+    const cls="chip"+(on?" on":"")+(isCore?" core":"");
+    return `<button class="${cls}" ${isCore?"disabled":""} onclick="toggleSym('${k}')">`
+      +`${k}${isCore?" ●":(on?" ✓":"")}</button>`;
+  }).join("");
+  box.innerHTML=`<span class="pl">종목 선택 <span class="muted">· ● 코어(고정) · ✓ 가동 중 `
+    +`· ${active.size}/${UNIV.length}</span></span>`+chips;
+}
+async function toggleSym(k){
+  if(CORE.includes(k))return;
+  const wasActive=SYMS.includes(k);
+  try{
+    await api("/api/trading/symbols",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({symbol:k,active:!wasActive})});
+    notify("brand",k+(wasActive?" 제거":" 추가"),
+      wasActive?"봇 정지·차트 종료":"위성 봇 가동",false);
+    await loadConfig();                 // SYMS/active 갱신 → 탭·칩 재렌더
+    renderSymTabs();refresh();
+  }catch(e){notify("warn","종목 토글 실패",(e&&e.message)||"",true);}
 }
 
 // ---- 이벤트 알림: 토스트 + Web Audio 합성음 (음원 파일 없음) ----
@@ -653,7 +707,10 @@ async function loadConfig(){try{
   const d=await api("/api/trading/config");const sel=$("stratSel");sel.innerHTML="";
   d.strategies.forEach(s=>{const o=document.createElement("option");o.value=o.textContent=s;sel.appendChild(o)});
   const c=d.config;window._cfg=c;
+  if(Array.isArray(d.universe))UNIV=d.universe;
+  if(Array.isArray(d.core))CORE=d.core;
   if(Array.isArray(d.symbols)&&d.symbols.length){SYMS=d.symbols;renderSymTabs();}
+  renderSymPicker();
   $("cLev").textContent="≤ "+fmt(c.leverage_max,1)+"x (목표 "+fmt(c.leverage,1)+"x)";
   $("cRisk").textContent=c.prop_mode
     ?("잔여 일일예산 "+Math.round((c.risk_daily_budget_frac||0)*100)+"% · DD예산 "

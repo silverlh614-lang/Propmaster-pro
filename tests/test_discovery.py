@@ -132,6 +132,64 @@ def test_manager_wiring():
     print("ok  manager wiring (off by default, shared objects, core fixed)")
 
 
+# ------------------------------------------------- symbol toggle (offline)
+
+def test_symbol_toggle():
+    """토글 UI 백엔드: 후보 종목 켜고 끄기 + 코어 보호 + 재시작 영속 +
+    discovery 로테이션 보호(수동 핀은 후보/로테이션에서 제외)."""
+    import asyncio
+    from app.trading.bot import TradingManager
+
+    cfg = TradingConfig()
+    mgr = TradingManager(cfg)
+    core = set(mgr.core)
+
+    # 켜기: 위성 봇 생성 + 수동 핀 + protected 에 포함
+    r = asyncio.run(mgr.toggle_symbol("ARB", True))
+    assert r["ok"] and "ARB" in mgr.bots and "ARB" in mgr.protected_keys()
+    # 켠 봇도 공유 객체를 쓴다
+    assert mgr.bots["ARB"].risk is mgr.risk and mgr.bots["ARB"].ledger is mgr.ledger
+    # discovery 는 수동 핀을 후보로 보지 않는다 (로테이션 보호)
+    assert "ARB" not in [s.key for s in mgr.discovery.candidates()]
+
+    # 코어는 끌 수 없다
+    core_key = next(iter(core))
+    r = asyncio.run(mgr.toggle_symbol(core_key, False))
+    assert not r["ok"] and "코어" in r["error"]
+
+    # 미지 심볼 거부
+    assert not asyncio.run(mgr.toggle_symbol("FOO", True))["ok"]
+
+    # 영속: 새 매니저가 수동 선택(ARB)을 복원 (같은 DATA_DIR)
+    mgr2 = TradingManager(cfg)
+    assert "ARB" in mgr2.bots and "ARB" in mgr2.protected_keys()
+
+    # 끄기: 봇 제거 + 핀 해제 + 장부 정리
+    r = asyncio.run(mgr2.toggle_symbol("ARB", False))
+    assert r["ok"] and "ARB" not in mgr2.bots and "ARB" not in mgr2.protected_keys()
+    # 다시 새 매니저: ARB 안 돌아옴
+    assert "ARB" not in TradingManager(cfg).bots
+    print("ok  symbol toggle (add/core-lock/persist/discovery-protect/remove)")
+
+
+def test_toggle_refuses_open_position():
+    """열린 포지션이 있는 종목은 끌 수 없다 (청산 우선)."""
+    import asyncio
+    from app.trading.bot import TradingManager
+
+    mgr = TradingManager(TradingConfig())
+    asyncio.run(mgr.toggle_symbol("SUI", True))
+
+    class _P:                       # 최소 오픈 포지션 스텁
+        class state: value = "OPEN"
+    class _PM:
+        pos = _P()
+    mgr.bots["SUI"].pm = _PM()
+    r = asyncio.run(mgr.toggle_symbol("SUI", False))
+    assert not r["ok"] and "포지션" in r["error"] and "SUI" in mgr.bots
+    print("ok  toggle refuses removing a symbol with an open position")
+
+
 if __name__ == "__main__":
     test_efficiency_ratio()
     test_compute_metrics()
@@ -139,4 +197,6 @@ if __name__ == "__main__":
     test_select_satellites()
     test_config_defaults_and_universe()
     test_manager_wiring()
+    test_symbol_toggle()
+    test_toggle_refuses_open_position()
     print("\nALL DISCOVERY TESTS PASSED")

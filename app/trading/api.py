@@ -29,6 +29,11 @@ class ManualRequest(BaseModel):
     symbol: str = "BTC"
 
 
+class SymbolToggleRequest(BaseModel):
+    symbol: str
+    active: bool = True
+
+
 @router.get("/status")
 def status():
     return MANAGER.status()
@@ -62,6 +67,16 @@ def manual(req: ManualRequest):
 def reset_kill():
     MANAGER.risk.reset_kill()
     return {"ok": True}
+
+
+@router.post("/symbols")
+async def toggle_symbol(req: SymbolToggleRequest):
+    """토글 UI: 후보 유니버스의 한 종목을 켜고(위성 봇 가동) 끈다(청산 상태만).
+    코어 종목은 거부, 열린 포지션이 있으면 거부. 선택은 재시작에도 유지."""
+    res = await MANAGER.toggle_symbol(req.symbol, req.active)
+    if not res.get("ok"):
+        raise HTTPException(409, res.get("error", "toggle failed"))
+    return res
 
 
 @router.get("/discovery")
@@ -314,6 +329,8 @@ def backtest_sweep_preset(months: int = 12, symbol: str = "BTC",
 @router.get("/config")
 def config():
     return {"config": CONFIG.as_dict(),
-            "symbols": list(MANAGER.bots),
+            "symbols": list(MANAGER.bots),          # 현재 가동 중(코어+수동+위성)
+            "universe": list(SYMBOL_SPECS),         # 토글 가능한 전체 후보
+            "core": MANAGER.core,                   # 항상 ON (토글 불가)
             "strategies": list(STRATEGIES),
             "phase": "1 (paper only)"}

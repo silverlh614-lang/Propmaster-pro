@@ -283,13 +283,65 @@ class TradingManager:
         # 객체를 공유해야 하므로 여기(단일 조립점)서만 만든다.
         self.prop = PropDesk(ledger=self.ledger, on_breach=self._on_prop_breach)
         self.risk.attach_prop(self.prop)
-        self.bots: dict[str, SymbolBot] = {
-            spec.key: self._make_bot(spec) for spec in enabled_symbols()
-        }
+        # 코어 = 게이트 검증 종목(TRADING_SYMBOLS). 수동 = 토글 UI 로 켠 위성.
+        # 부팅 로스터 = 코어 ∪ (재시작 전 저장된 수동 선택).
+        self._core = [s.key for s in enabled_symbols()]
+        self._manual = [k for k in self.state_store.load().get("manual_symbols", [])
+                        if k in SYMBOL_SPECS and k not in self._core]
+        self.bots: dict[str, SymbolBot] = {}
+        for k in self._core + self._manual:
+            if k in SYMBOL_SPECS:
+                self.bots[k] = self._make_bot(SYMBOL_SPECS[k])
         self.mode = "paper"
         self.strategy_name = "prop_breakout"
-        # 자동 종목 발굴 (기본 OFF): 코어는 불변, 위성 슬롯만 로테이션.
+        # 자동 종목 발굴 (기본 OFF): 코어·수동은 불변, 위성 슬롯만 로테이션.
         self.discovery = AutoDiscovery(self)
+
+    @property
+    def core(self) -> list[str]:
+        return list(self._core)
+
+    def protected_keys(self) -> list[str]:
+        """코어 + 수동 핀 — auto-discovery 로테이션이 절대 건드리지 않는 집합."""
+        return list(dict.fromkeys(self._core + self._manual))
+
+    async def toggle_symbol(self, key: str, active: bool) -> dict:
+        """토글 UI: 후보 종목을 런타임에 켜거나(위성 봇 가동) 끈다(청산 상태만).
+        코어는 항상 ON. 새 봇도 리스크 관문·전역 캡을 그대로 통과하므로 리스크는
+        늘지 않고 기회만 는다. 선택은 상태에 저장돼 재시작에도 유지된다."""
+        key = key.upper()
+        if key not in SYMBOL_SPECS:
+            return {"ok": False, "error": f"unknown symbol '{key}'"}
+        if key in self._core:
+            return {"ok": False, "error": f"'{key}' 는 코어 종목 — 항상 가동"}
+        if active:
+            if key not in self.bots:
+                bot = self._make_bot(SYMBOL_SPECS[key])
+                self.bots[key] = bot
+                if self.running:
+                    await bot.start(self.mode, self.strategy_name)
+                else:
+                    bot.start_feed()
+            if key not in self._manual:
+                self._manual.append(key)
+        else:
+            bot = self.bots.get(key)
+            if (bot and bot.pm and bot.pm.pos
+                    and bot.pm.pos.state.value == "OPEN"):
+                return {"ok": False,
+                        "error": f"'{key}' 열린 포지션 있음 — 먼저 청산하세요"}
+            if bot is not None:
+                await bot.shutdown()
+                await bot.stop_feed()
+                self.risk.unregister_book(key)
+                self.bots.pop(key, None)
+            if key in self._manual:
+                self._manual.remove(key)
+        st = self.state_store.load()
+        st["manual_symbols"] = self._manual
+        self.state_store.save(st)
+        return {"ok": True, "symbol": key, "active": active,
+                "symbols": list(self.bots)}
 
     def _make_bot(self, spec: SymbolSpec) -> SymbolBot:
         """Single SymbolBot factory — boot roster and discovery rotation both
