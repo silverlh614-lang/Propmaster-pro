@@ -110,7 +110,11 @@ class TradingConfig:
     # --- risk caps (GLOBAL across symbols) ---------------------------------
     max_trades_per_day: int = 20
     daily_loss_cap_pct: float = 6.0      # halt entries at -6% of equity/day
-    max_concurrent_positions: int = 1    # one clean trade at a time
+    # 여러 종목 동시 보유 허용 (개수 상한). 진짜 리스크 관문은 아래
+    # max_total_open_risk_pct — 동시 포지션 수가 늘어도 전 심볼 오픈리스크 합은
+    # 그대로 전역 상한에 묶인다 (프롭 모드는 예산 사이징으로 자동 축소). 우회가
+    # 아니라 파라미터 조정 — allow_entry 가 두 캡을 모두 계속 강제한다.
+    max_concurrent_positions: int = 5    # was 1; 다종목 동시 진입 허용
     max_total_open_risk_pct: float = 2.0 # sum of open-position risk cap (adds!)
     max_consecutive_errors: int = 5
 

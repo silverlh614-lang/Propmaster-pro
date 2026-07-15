@@ -492,6 +492,25 @@
       </div>
     </section>
 
+    <!-- 종합 포지션 보유창 (전 심볼 열린 포지션 한눈에) -->
+    <section data-panel="allpos" class="panel full">
+      <div class="phead"><span class="mk">◆</span> 종합 포지션 <span class="sp"></span>
+        <span class="r" id="allposCap">보유 0 · 미실현 –</span></div>
+      <div class="pbody">
+        <div class="scroll">
+          <table id="allposTbl">
+            <thead><tr>
+              <th class="l">심볼</th><th class="l">방향</th><th>진입가</th><th>현재가</th>
+              <th>수량</th><th>미실현 $</th><th>R</th><th>스탑</th><th>목표</th>
+            </tr></thead>
+            <tbody id="allposBody">
+              <tr><td class="l muted" colspan="9">열린 포지션 없음 — 다종목 동시 진입 시 여기에 모두 표시됩니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- 리스크 규칙 -->
     <section data-panel="risk" class="panel col-4">
       <div class="phead"><span class="mk">◆</span> 리스크 규칙 (하드캡)</div>
@@ -752,6 +771,40 @@ function renderStages(pos){
     return `<div class="stage ${cls}"><div class="n">${s[0]}</div><div class="t">${s[1]}</div></div>`;}).join("");
 }
 
+// 종합 포지션 보유창: 전 심볼의 열린 포지션을 한 표에 — 현재 탭과 무관.
+function renderAllPositions(s){
+  const body=$("allposBody"),cap=$("allposCap");if(!body)return;
+  const rows=[];let totUnreal=0,anyUnreal=false;
+  for(const [k,bo] of Object.entries(s.symbols||{})){
+    const m=bo.manager||{},p=m.position,px=(bo.collector||{}).last_price;
+    if(!p||p.state!=="OPEN")continue;
+    const ur=(p.unrealized_usd!=null)?p.unrealized_usd
+             :(px!=null?(p.side==="LONG"?1:-1)*(px-p.avg_entry)*p.open_qty:null);
+    if(ur!=null){totUnreal+=ur;anyUnreal=true;}
+    const rcls=(ur!=null?(ur>=0?"up":"dn"):"muted");
+    const sideCls=p.side==="LONG"?"long":"short";
+    rows.push(`<tr>
+      <td class="l"><b>${k}</b></td>
+      <td class="l"><span class="tag ${sideCls}">${p.side}${p.adds?`+${p.adds}`:""}</span></td>
+      <td>${fmt(p.avg_entry,4)}</td>
+      <td>${px!=null?fmt(px,4):"–"}</td>
+      <td>${fmt(p.open_qty,4)}</td>
+      <td class="${rcls}">${ur!=null?money(ur):"–"}</td>
+      <td class="${rcls}">${p.r_multiple!=null?fmt(p.r_multiple,2)+"R":"–"}</td>
+      <td class="muted">${p.stop_price!=null?fmt(p.stop_price,4):"–"}</td>
+      <td class="muted">${p.target_price!=null?fmt(p.target_price,4):"–"}</td>
+    </tr>`);
+  }
+  if(rows.length){
+    body.innerHTML=rows.join("");
+    cap.textContent="보유 "+rows.length+" · 미실현 "+(anyUnreal?money(totUnreal):"–");
+    cap.className="r "+(anyUnreal?(totUnreal>=0?"up":"dn"):"");
+  }else{
+    body.innerHTML='<tr><td class="l muted" colspan="9">열린 포지션 없음 — 다종목 동시 진입 시 여기에 모두 표시됩니다.</td></tr>';
+    cap.textContent="보유 0 · 미실현 –";cap.className="r";
+  }
+}
+
 function renderPosition(pos, px){
   renderStages(pos);
   if(!pos||pos.state!=="OPEN"){
@@ -874,6 +927,7 @@ async function refresh(){
   setNum($("sDaily"),money(_dp),_dDir);
   window._lastDaily=_dp;
   try{renderProp(s.prop);}catch(e){}
+  try{renderAllPositions(s);}catch(e){}      // 종합 포지션 — 전 심볼(현재 탭 무관)
 
   const b=(s.symbols||{})[SYM]; if(!b)return;
   const mgr=b.manager||{}, col=b.collector||{}, dg=b.diagnostics;

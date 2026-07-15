@@ -69,6 +69,27 @@ def test_restart_reregisters_without_double_count():
     print("ok  restart re-registers the book (no double counting)")
 
 
+def test_default_allows_multi_symbol_positions():
+    """새 기본값(max_concurrent_positions=5): 두 심볼이 동시에 포지션을 들 수
+    있어야 한다. 단, 총 오픈리스크 캡은 여전히 전역으로 구속한다 (우회 아님)."""
+    cfg = TradingConfig()
+    assert cfg.max_concurrent_positions >= 2, "default must permit multi-symbol"
+    cfg.max_total_open_risk_pct = 10.0        # 캡을 넉넉히 — 개수 허용만 검증
+    risk, btc, eth = _pair(cfg)
+    assert btc.try_open(SIG_BTC, 100, 2.0, 0)
+    assert eth.try_open(SIG_ETH, 1750, 8.0, 1), eth.note   # 2번째 심볼도 진입
+    n, _r = risk.global_exposure()
+    assert n == 2, (n, "both symbols should hold positions at once")
+    # 그러나 오픈리스크 캡을 조이면 두 번째는 여전히 막힌다 (관문 유효)
+    cfg2 = TradingConfig()
+    cfg2.max_total_open_risk_pct = 1.5
+    r2, b2, e2 = _pair(cfg2)
+    assert b2.try_open(SIG_BTC, 100, 2.0, 0)
+    assert not e2.try_open(SIG_ETH, 1750, 8.0, 1)
+    assert "total_open_risk" in e2.note, e2.note
+    print("ok  default allows multi-symbol positions (open-risk cap still binds)")
+
+
 def test_backtest_shim_fallback():
     """The backtest's permissive risk shim has no book registry — the manager
     must fall back to own-symbol exposure and still fill."""
@@ -83,6 +104,7 @@ def test_backtest_shim_fallback():
 if __name__ == "__main__":
     test_concurrent_cap_across_symbols()
     test_open_risk_cap_across_symbols()
+    test_default_allows_multi_symbol_positions()
     test_restart_reregisters_without_double_count()
     test_backtest_shim_fallback()
     print("\nall global risk-cap tests passed ✅")
