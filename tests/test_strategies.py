@@ -146,8 +146,32 @@ def test_per_symbol_strategy_map():
     print("ok  per-symbol strategy map (SOL:vbo, BTC default)")
 
 
+def test_default_symbol_strategy_fallback():
+    """env(TRADING_SYMBOL_STRATEGY) 미설정 시 게이트 검증 기본 매핑이 적용된다:
+    SOL/XRP는 vbo(Donchian이면 손실), ETH는 prop_breakout, 미지 심볼은 default."""
+    import os as _os
+    from app.trading.config import strategy_for, DEFAULT_SYMBOL_STRATEGY
+
+    saved = _os.environ.pop("TRADING_SYMBOL_STRATEGY", None)
+    try:
+        assert strategy_for("SOL", "prop_breakout") == "vbo"   # 폴백이 손실전략 방지
+        assert strategy_for("XRP", "prop_breakout") == "vbo"
+        assert strategy_for("ETH", "prop_breakout") == "prop_breakout"
+        assert strategy_for("ZZZ", "prop_breakout") == "prop_breakout"  # 미지 → default
+        assert DEFAULT_SYMBOL_STRATEGY["SOL"] == "vbo"
+        # env가 설정되면 그게 우선 (기본 매핑 무시)
+        _os.environ["TRADING_SYMBOL_STRATEGY"] = "SOL:prop_breakout"
+        assert strategy_for("SOL", "vbo") == "prop_breakout"
+    finally:
+        _os.environ.pop("TRADING_SYMBOL_STRATEGY", None)
+        if saved is not None:
+            _os.environ["TRADING_SYMBOL_STRATEGY"] = saved
+    print("ok  default symbol-strategy fallback (SOL/XRP->vbo, env overrides)")
+
+
 if __name__ == "__main__":
     test_per_symbol_strategy_map()
+    test_default_symbol_strategy_fallback()
     test_prop_breakout_donchian()
     test_prop_breakout_optional_filters()
     test_vbo_volatility_breakout()

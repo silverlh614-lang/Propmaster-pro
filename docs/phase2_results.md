@@ -45,8 +45,41 @@
 | XRP | vbo | 보통 (파라미터 민감) | 98% · 0% |
 
 - **BTC 제외** — 두 전략 모두 표본 부족(15~17건)·z<0.6.
-- 권장 env: `TRADING_SYMBOLS=ETH,SOL,XRP` · `TRADING_SYMBOL_STRATEGY=ETH:prop_breakout,SOL:vbo,XRP:vbo`.
-  3종목 동시 풀사이즈를 원하면 `TRADING_MAX_TOTAL_OPEN_RISK_PCT=3` (DD 플로어 6% 아래).
+
+## 유니버스 스캔 (전 19종목 × 두 전략, 6개월) — `/api/trading/backtest/scan`
+
+두 전략을 심볼마다 돌려 게이트로 랭킹. **핵심: 엣지는 소수 집중 — 7/19만 통과.**
+
+| 통과 | 최선 전략 | expR | PF | 창 | 미달(참고) |
+|---|---|---|---|---|---|
+| ETH | prop_breakout | 0.80 | 2.10 | 12mo | UNI 0.088/1.15, INJ 0.067/1.09, |
+| ARB | prop_breakout | 0.36 | 1.65 | 6mo | BNB 0.05/1.06, DOT 0.041/1.05, |
+| SUI | prop_breakout | 0.35 | 1.60 | 6mo | ATOM 0.024/1.02, APT 0.022/1.02, |
+| OP | vbo | 0.333 | 1.58 | 6mo | LINK 0.018/1.01 (전부 본전) |
+| XRP | vbo | 0.203 | 1.33 | 12mo | ADA -0.111, AVAX -0.111, |
+| SOL | vbo | 0.185 | 1.28 | 12mo | DOGE -0.183, LTC -0.211 (손실) |
+| NEAR | prop_breakout | 0.163 | 1.26 | 6mo | BTC: 표본<20 |
+
+- 전략은 **심볼별로 다름**(단순 메이저/알트 아님): ETH·ARB·SUI·NEAR→Donchian, SOL·XRP·OP→vbo.
+- 나머지 12종목은 본전(PF~1.0) 또는 손실 → **로스터에 넣으면 수수료만 희석.**
+
+## 최종 로스터 확정
+
+| 티어 | 심볼 | 근거 | 코드 반영 |
+|---|---|---|---|
+| **코어 (12mo 확정)** | ETH·SOL·XRP | 12개월 out-of-sample 통과 | `DEFAULT_SYMBOLS` + `DEFAULT_SYMBOL_STRATEGY` 기본값 |
+| **보강 (6mo 강세, 12mo 확인 대기)** | ARB·SUI·OP·NEAR | 6개월 PF 1.26~1.65 | env(`TRADING_SYMBOLS`)로만 추가 |
+
+- **코드 기본값 변경** (근거: 본 문서): `DEFAULT_SYMBOLS="ETH,SOL,XRP"`,
+  `DEFAULT_SYMBOL_STRATEGY={ETH:prop_breakout, SOL:vbo, XRP:vbo}`. env 미설정 시에도
+  SOL/XRP 가 손실 전략(Donchian)으로 돌지 않도록 baking.
+- **권장 env** (보강 포함, 운영자 선택):
+  ```
+  TRADING_SYMBOLS = ETH,SOL,XRP,ARB,SUI,OP,NEAR
+  TRADING_SYMBOL_STRATEGY = ETH:prop_breakout,ARB:prop_breakout,SUI:prop_breakout,NEAR:prop_breakout,SOL:vbo,XRP:vbo,OP:vbo
+  TRADING_MAX_TOTAL_OPEN_RISK_PCT = 3
+  ```
+- **BTC·나머지 12종목 제외.** ARB·OP·SUI 는 상장 역사가 짧아 12mo 재확인 시 재평가.
 
 ## 한계 (정직한 기록)
 

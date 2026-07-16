@@ -210,11 +210,16 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
                       tick_size=0.001, leverage_cap=2.0),
 }
 
-# 2026-07 게이트: 같은 프로필이 ETH 에서 무보정 아웃오브샘플로 통과
-# (12mo 35건 PF 2.10 +19.7% MDD -$15) — 두 심볼 기본 가동. 동시 포지션은
-# 여전히 전역 1개(max_concurrent_positions)라 리스크는 그대로, 기회만 늘어난다.
-# 되돌리려면 TRADING_SYMBOLS=BTC.
-DEFAULT_SYMBOLS = "BTC,ETH"
+# Phase 2 게이트 확정 로스터 (docs/phase2_results.md): 12개월 out-of-sample 로
+# expR>0·PF≥1.2·trades≥20 를 재현한 3종목이 검증된 코어. BTC 는 두 전략 모두
+# 표본<20 으로 탈락해 기본에서 제외. ARB·SUI·OP·NEAR 는 6개월 강세지만 12mo
+# 확인 전이라 env(TRADING_SYMBOLS)로만 추가한다. 되돌리려면 TRADING_SYMBOLS 로 오버라이드.
+DEFAULT_SYMBOLS = "ETH,SOL,XRP"
+
+# 심볼별 검증된 최적 전략 (게이트 A/B). env(TRADING_SYMBOL_STRATEGY) 미설정 시
+# 폴백 — SOL/XRP 를 Donchian 으로 잘못 돌리면 손실(SOL prop_breakout expR<0)이라
+# 이 매핑을 기본값으로 baking 한다.
+DEFAULT_SYMBOL_STRATEGY = {"ETH": "prop_breakout", "SOL": "vbo", "XRP": "vbo"}
 
 
 def enabled_symbols() -> list[SymbolSpec]:
@@ -224,18 +229,20 @@ def enabled_symbols() -> list[SymbolSpec]:
         k = k.strip().upper()
         if k in SYMBOL_SPECS:
             out.append(SYMBOL_SPECS[k])
-    return out or [SYMBOL_SPECS["BTC"]]
+    return out or [SYMBOL_SPECS["ETH"]]
 
 
 def strategy_for(symbol_key: str, default: str) -> str:
     """Per-symbol strategy resolution. The backtest gate found different
-    optima per asset (majors -> Donchian, choppy alts -> volatility
-    breakout), so TRADING_SYMBOL_STRATEGY lets each symbol run its own —
-    e.g. "BTC:prop_breakout,SOL:vbo". Symbols absent from the map fall back
-    to `default` (the strategy passed to /start). Empty env = uniform."""
+    optima per asset (some -> Donchian, some -> volatility breakout), so
+    TRADING_SYMBOL_STRATEGY lets each symbol run its own — e.g.
+    "ETH:prop_breakout,SOL:vbo". Symbols absent from the env map fall back
+    to `default` (the strategy passed to /start). When the env is unset the
+    gate-validated DEFAULT_SYMBOL_STRATEGY applies (so SOL/XRP never run the
+    losing Donchian by accident); unknown symbols still use `default`."""
     raw = os.getenv("TRADING_SYMBOL_STRATEGY", "").strip()
     if not raw:
-        return default
+        return DEFAULT_SYMBOL_STRATEGY.get(symbol_key.upper(), default)
     for pair in raw.split(","):
         if ":" in pair:
             k, v = pair.split(":", 1)

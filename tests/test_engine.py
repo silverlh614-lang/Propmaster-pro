@@ -348,7 +348,7 @@ def test_candles_export():
     from app.trading.bot import TradingManager
     from app.trading.config import TradingConfig
     mgr = TradingManager(TradingConfig())
-    bot = mgr.bots["BTC"]
+    bot = next(iter(mgr.bots.values()))     # 기본 로스터 첫 심볼 (BTC 고정 아님)
     col = bot.collector
     px = 63000.0
     for i in range(30):
