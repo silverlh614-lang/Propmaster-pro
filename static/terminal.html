@@ -279,10 +279,11 @@
       padding:7px 10px;margin-bottom:7px}
     #allposTbl td{border:0;text-align:left;padding:2px 0;white-space:normal;
       display:flex;justify-content:space-between;gap:10px}
-    #allposTbl td::before{content:attr(data-l);color:var(--faint);font-size:9.5px;
-      letter-spacing:.08em;text-transform:uppercase;flex:none}
+    #allposTbl td::before{content:attr(data-l);color:var(--dim);font-size:10px;
+      letter-spacing:.06em;text-transform:uppercase;flex:none}
     #allposTbl td[colspan]{display:block}          /* 빈 상태 행 */
     #allposTbl td[colspan]::before{content:""}
+    #allposTbl td.muted{color:var(--dim)}          /* 스탑·목표 값도 읽히게 */
     .panel[data-panel="allpos"] .scroll{max-height:none;overflow:visible}
 
     /* 심볼 탭 행: 모바일에서 전체 너비 차지 → 많은 종목이 깔끔히 줄바꿈 */
@@ -301,12 +302,13 @@
       padding:6px 9px;margin-bottom:6px}
     #jbody td{border:0;text-align:left;padding:2px 0;white-space:normal;
       display:flex;justify-content:space-between;gap:10px}
-    #jbody td::before{content:attr(data-l);color:var(--faint);font-size:9.5px;
-      letter-spacing:.08em;text-transform:uppercase;flex:none}
+    #jbody td::before{content:attr(data-l);color:var(--dim);font-size:10px;
+      letter-spacing:.06em;text-transform:uppercase;flex:none}
     #jbody td:nth-child(3),#jbody td:nth-child(7),#jbody td:nth-child(8){display:none}
     #jbody td[colspan]{display:block} #jbody td[colspan]::before{content:""}
+    #jbody td.muted{color:var(--dim)}              /* 시각 등 muted 값 읽히게 */
     /* 사유는 긴 자유텍스트 → 라벨 위, 값은 아래 전체폭 좌측정렬(우측정렬·어색한 줄바꿈 방지) */
-    #jbody td[data-l="사유"]{display:block;color:var(--faint);word-break:break-word}
+    #jbody td[data-l="사유"]{display:block;color:var(--dim);word-break:break-word}
     #jbody td[data-l="사유"]::before{display:block;margin-bottom:1px}
   }
 
