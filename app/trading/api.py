@@ -326,6 +326,75 @@ def backtest_sweep_preset(months: int = 12, symbol: str = "BTC",
                     "state=done 이 되면 결과가 이 자리에 표시됩니다"}
 
 
+# ── 유니버스 스캔 (전 심볼 × 두 전략 백테스트 랭킹) — 프리셋 스윕과 같은
+# 백그라운드 잡 + 폴링 패턴. "다른 종목들은 어떤가"를 한 URL로 답한다.
+_SCAN = {"state": "idle", "key": None, "done": 0, "total": 0,
+         "results": None, "error": ""}
+_SCAN_LOCK = None
+SCAN_STRATEGIES = ["prop_breakout", "vbo"]
+
+
+def _scan_worker(key: str, symbols: list, months: int) -> None:
+    import copy
+
+    from .backtest.engine import scan_universe
+
+    def tick(done, total, rows):
+        _SCAN["done"], _SCAN["total"] = done, total
+        if rows is not None:
+            _SCAN["results"] = list(rows)     # 부분 결과도 폴링에 노출
+
+    try:
+        rows = scan_universe(symbols, SCAN_STRATEGIES, copy.copy(CONFIG),
+                             months=months, on_progress=tick)
+        _SCAN.update(state="done", results=rows)
+    except Exception as e:                        # noqa: BLE001 — surfaced via poll
+        _SCAN.update(state="error", error=f"{type(e).__name__}: {e}"[:300])
+
+
+@router.get("/backtest/scan")
+def backtest_scan(months: int = 12, symbols: str = "", refresh: int = 0):
+    """전 유니버스(또는 symbols=BNB,ADA,…)를 prop_breakout·vbo 두 전략으로
+    백테스트해 게이트 통과·expectancy_r 순으로 랭킹한다. 프리셋 스윕처럼 이 URL
+    하나를 새로고침하며 진행률을 보고, state=done 이면 표가 나온다. 심볼당 캔들을
+    한 번만 받으므로 느리지만(첫 실행), 아카이브는 디스크 캐시된다."""
+    import threading
+    global _SCAN_LOCK
+    if _SCAN_LOCK is None:
+        _SCAN_LOCK = threading.Lock()
+    if not (0 <= months <= 60):
+        raise HTTPException(422, "months must be 0..60")
+    if symbols.strip():
+        syms = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+        bad = [s for s in syms if s not in SYMBOL_SPECS]
+        if bad:
+            raise HTTPException(422, f"unknown symbols: {', '.join(bad)}")
+    else:
+        syms = list(SYMBOL_SPECS)
+    key = f"scan:{months}:{','.join(syms)}"
+    with _SCAN_LOCK:
+        if _SCAN["state"] == "running":
+            return {"state": "running", "key": _SCAN["key"],
+                    "progress": f"{_SCAN['done']}/{_SCAN['total'] or '?'} 심볼",
+                    "partial": _SCAN["results"] or [],
+                    "hint": "이 URL을 새로고침하면 진행률·부분결과가 갱신됩니다"}
+        if _SCAN["state"] == "done" and _SCAN["key"] == key and not refresh:
+            return {"state": "done", "months": months,
+                    "strategies": SCAN_STRATEGIES, "symbols": syms,
+                    "rows": len(_SCAN["results"]), "results": _SCAN["results"]}
+        if _SCAN["state"] == "error" and _SCAN["key"] == key and not refresh:
+            return {"state": "error", "error": _SCAN["error"],
+                    "hint": "?refresh=1 로 재시도"}
+        _SCAN.update(state="running", key=key, done=0, total=len(syms),
+                     results=None, error="")
+        threading.Thread(target=_scan_worker, args=(key, syms, months),
+                         daemon=True, name="scan-universe").start()
+    return {"state": "started", "key": key, "symbols": syms,
+            "strategies": SCAN_STRATEGIES,
+            "hint": "계산 시작 — 이 URL을 30초~1분 간격으로 새로고침하세요. "
+                    "심볼당 캔들 다운로드라 첫 실행은 수 분 걸립니다"}
+
+
 @router.get("/config")
 def config():
     return {"config": CONFIG.as_dict(),

@@ -231,3 +231,59 @@ def sweep(symbol: str, strategy_name: str, base_cfg: TradingConfig,
     rows.sort(key=lambda x: (x["expectancy_r"] is None,
                              -(x["expectancy_r"] or 0)))
     return rows
+
+
+def _gate_pass(m: dict) -> bool:
+    """Phase 2 하드기준: expR>0 · PF≥1.2 · trades≥20 (MDD 감내는 사람 판단)."""
+    return bool(m["expectancy_r"] is not None and m["expectancy_r"] > 0
+                and m["profit_factor"] is not None and m["profit_factor"] >= 1.2
+                and m["trades"] >= 20)
+
+
+def scan_universe(symbols: list[str], strategies: list[str],
+                  base_cfg: TradingConfig, months: int = 0,
+                  on_progress=None) -> list[dict]:
+    """유니버스 전 심볼을 각 전략으로 백테스트 (디폴트 config). 심볼당 캔들을
+    한 번만 받아 여러 전략에 공유하므로 다운로드가 심볼 수만큼만 발생한다.
+    expectancy_r 내림차순(게이트 통과 우선) 정렬된 행 리스트를 반환한다."""
+    import copy
+
+    from .metrics import compute
+    rows: list[dict] = []
+    total = len(symbols)
+    for i, sym in enumerate(symbols):
+        spec = SYMBOL_SPECS[sym.upper()]
+        try:
+            if months > 0:
+                from .history import fetch_history
+                entry = fetch_history(spec.symbol, base_cfg.entry_interval, months)
+                htf = fetch_history(spec.symbol, base_cfg.htf_interval, months)
+            else:
+                entry = fetch_klines(spec.symbol, base_cfg.entry_interval)
+                htf = fetch_klines(spec.symbol, base_cfg.htf_interval)
+        except Exception as e:                    # noqa: BLE001 — 심볼 스킵, 표에 기록
+            rows.append({"symbol": sym.upper(), "strategy": "-",
+                         "error": f"{type(e).__name__}: {str(e)[:60]}",
+                         "trades": 0, "win_rate": None, "expectancy_r": None,
+                         "profit_factor": None, "max_drawdown_usd": None,
+                         "gate_pass": False})
+            if on_progress is not None:
+                on_progress(i + 1, total, rows)
+            continue
+        for strat in strategies:
+            cfg = copy.copy(base_cfg)
+            r = replay(sym, strat, cfg, entry_candles=entry, htf_candles=htf)
+            m = compute(r["closes"], cfg.equity_usd,
+                        r.get("final_equity", cfg.equity_usd))
+            rows.append({"symbol": sym.upper(), "strategy": strat,
+                         "trades": m["trades"], "win_rate": m["win_rate"],
+                         "expectancy_r": m["expectancy_r"],
+                         "profit_factor": m["profit_factor"],
+                         "return_pct": m["return_pct"],
+                         "max_drawdown_usd": m["max_drawdown_usd"],
+                         "gate_pass": _gate_pass(m)})
+        if on_progress is not None:
+            on_progress(i + 1, total, rows)
+    rows.sort(key=lambda x: (not x["gate_pass"], x["expectancy_r"] is None,
+                             -(x["expectancy_r"] or -999)))
+    return rows
