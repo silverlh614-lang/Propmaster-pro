@@ -86,6 +86,13 @@
   .phead .r{color:var(--faint);font-weight:400;letter-spacing:.06em}
   .pbody{padding:12px;flex:1;min-height:0}
 
+  /* EQUITY 히어로 카드 — "하나의 숫자로 시작": 위쪽 1px 하이라이트로 미묘한 층(elevation) */
+  .hero{background:linear-gradient(180deg,rgba(255,255,255,.028),transparent 52%) ,var(--panel-2);
+    border:1px solid var(--border);border-top-color:var(--border-hi);border-radius:6px;
+    padding:10px 12px 9px;margin-bottom:12px}
+  .daychip{margin-left:auto;font-size:10.5px;font-weight:800;letter-spacing:.04em;
+    padding:2px 8px;border-radius:3px;font-variant-numeric:tabular-nums}
+  .daychip.up{background:var(--up-dim);color:var(--up)} .daychip.dn{background:var(--dn-dim);color:var(--dn)}
   .wallet{display:flex;gap:8px;align-items:center;font-size:10.5px;color:var(--faint);letter-spacing:.1em}
   .wallet .tag{background:var(--up-dim);color:var(--up);padding:1px 7px;border-radius:2px;font-weight:800}
   .meganum{font-size:clamp(30px,3.2vw,42px);font-weight:800;letter-spacing:.01em;
@@ -486,11 +493,15 @@
       <div class="phead"><span class="mk">◆</span> ACCOUNT (PAPER) <span class="sp"></span>
         <span class="r"><span class="tag paper">PAPER-SIM</span></span></div>
       <div class="pbody">
-        <div class="wallet"><span class="tag">EQUITY</span><span id="eqPath">시작 대비 --</span></div>
-        <div class="meganum" id="equityBig">$0.00</div>
-        <div class="subline" id="equitySub">실현손익 --</div>
-        <div class="subline" id="equityMark" style="margin-top:3px">평가액 --</div>
-        <canvas id="eqSpark" height="40" style="width:100%;height:40px;margin-top:9px;display:block"></canvas>
+        <!-- 히어로: 한 숫자(EQUITY)가 주인공 — 오늘 변화 칩 + 스파크까지 한 카드 -->
+        <div class="hero">
+          <div class="wallet"><span class="tag">EQUITY</span><span id="eqPath">시작 대비 --</span>
+            <span class="daychip" id="heroDay" style="display:none">–</span></div>
+          <div class="meganum" id="equityBig">$0.00</div>
+          <div class="subline" id="equitySub">실현손익 --</div>
+          <div class="subline" id="equityMark" style="margin-top:3px">평가액 --</div>
+          <canvas id="eqSpark" height="40" style="width:100%;height:40px;margin-top:9px;display:block"></canvas>
+        </div>
         <div class="stat3">
           <div><div class="label">승률</div><div class="val" id="mWr">–</div></div>
           <div><div class="label">R 기대값</div><div class="val" id="mR">–</div></div>
@@ -760,6 +771,12 @@ function drawEquitySpark(rows){
   g.strokeStyle="#2a323c";g.setLineDash([3,3]);                                   // 시작금 기준선
   g.beginPath();g.moveTo(0,y(start));g.lineTo(W,y(start));g.stroke();g.setLineDash([]);
   const up=pts[pts.length-1]>=start;
+  // 곡선 아래 그라디언트 필 — 방향색이 은은하게 스며들고 아래로 사라진다
+  const grad=g.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,up?"rgba(46,229,138,.16)":"rgba(255,77,92,.16)");
+  grad.addColorStop(1,"rgba(0,0,0,0)");
+  g.beginPath();pts.forEach((v,i)=>i?g.lineTo(x(i),y(v)):g.moveTo(x(i),y(v)));
+  g.lineTo(x(pts.length-1),H);g.lineTo(x(0),H);g.closePath();g.fillStyle=grad;g.fill();
   g.strokeStyle=up?"#2ee58a":"#ff4d5c";g.lineWidth=1.6;g.beginPath();
   pts.forEach((v,i)=>i?g.lineTo(x(i),y(v)):g.moveTo(x(i),y(v)));g.stroke();
   g.fillStyle=g.strokeStyle;g.beginPath();g.arc(x(pts.length-1),y(pts[pts.length-1]),2.2,0,7);g.fill();
@@ -948,6 +965,14 @@ function drawChart(){
   const dash=(v,col)=>{if(v==null)return;g.strokeStyle=col;g.setLineDash([5,4]);g.beginPath();
     g.moveTo(padL,Y(v));g.lineTo(padL+cw,Y(v));g.stroke();g.setLineDash([]);};
   dash(ov.box_hi,"rgba(148,163,178,.45)");dash(ov.box_lo,"rgba(148,163,178,.45)");
+  // EMA 아래 그라디언트 필 (TradingView 풍 깊이 — 캔들 아래 레이어, 아주 은은하게)
+  if(ema.length>1){
+    const eg=g.createLinearGradient(0,padT,0,padT+ch);
+    eg.addColorStop(0,"rgba(126,147,168,.10)");eg.addColorStop(1,"rgba(126,147,168,0)");
+    g.beginPath();ema.forEach((v,i)=>{const x=X(i),y=Y(v);i?g.lineTo(x,y):g.moveTo(x,y);});
+    g.lineTo(X(ema.length-1),padT+ch);g.lineTo(X(0),padT+ch);g.closePath();
+    g.fillStyle=eg;g.fill();
+  }
   // candles
   const bw=Math.max(1.5,cw/cs.length*0.62);
   cs.forEach((c,i)=>{const x=X(i);const up=c[4]>=c[1];g.strokeStyle=g.fillStyle=up?"#2ee58a":"#ff4d5c";
@@ -1019,6 +1044,10 @@ async function refresh(){
   $("sDaily").className=_dp>=0?"pos":"neg";        // 색상 먼저 — setNum 이 glow 클래스를 덧붙임
   setNum($("sDaily"),money(_dp),_dDir);
   window._lastDaily=_dp;
+  // 히어로 "오늘" 칩 — 잔고 옆에서 오늘 변화를 한눈에
+  const hd=$("heroDay");
+  if(hd){hd.style.display="inline-block";hd.className="daychip "+(_dp>=0?"up":"dn");
+    hd.textContent=(_dp>=0?"▲":"▼")+" "+money(Math.abs(_dp))+" 오늘";}
   try{renderProp(s.prop);}catch(e){}
   try{renderAllPositions(s);}catch(e){}      // 종합 포지션 — 전 심볼(현재 탭 무관)
 
