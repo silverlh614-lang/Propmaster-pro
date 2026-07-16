@@ -265,6 +265,24 @@
       background:rgba(5,6,7,.97);border-top:1px solid var(--border)}
     .ctrls button{flex:1;padding:13px 0;font-size:13px}
     .wrap{padding-bottom:72px}
+
+    /* 모바일 가로 스크롤 방지 1: 종합 포지션을 9열 표 대신 카드로 스택 */
+    #allposTbl thead{display:none}
+    #allposTbl, #allposTbl tbody, #allposTbl tr, #allposTbl td{display:block;width:auto}
+    #allposTbl tr{border:1px solid var(--border);border-radius:4px;background:var(--panel-2);
+      padding:7px 10px;margin-bottom:7px}
+    #allposTbl td{border:0;text-align:left;padding:2px 0;white-space:normal;
+      display:flex;justify-content:space-between;gap:10px}
+    #allposTbl td::before{content:attr(data-l);color:var(--faint);font-size:9.5px;
+      letter-spacing:.08em;text-transform:uppercase;flex:none}
+    #allposTbl td[colspan]{display:block}          /* 빈 상태 행 */
+    #allposTbl td[colspan]::before{content:""}
+    .panel[data-panel="allpos"] .scroll{max-height:none;overflow:visible}
+
+    /* 모바일 가로 스크롤 방지 2: 종목 선택 칩을 더 촘촘히 (wrap 유지) */
+    .sympick{padding:8px 11px;gap:5px}
+    .sympick .chip{padding:4px 8px;font-size:10.5px}
+    .sympick .pl{width:100%;margin:0 0 2px}         /* 라벨은 한 줄 차지 → 칩 정렬 깔끔 */
   }
 
   /* ═══ 모션 레이어 (v2) — 값 변화 피드백 · 살아있는 인디케이터 · 진입 · 접근성 ═══ */
@@ -784,15 +802,15 @@ function renderAllPositions(s){
     const rcls=(ur!=null?(ur>=0?"up":"dn"):"muted");
     const sideCls=p.side==="LONG"?"long":"short";
     rows.push(`<tr>
-      <td class="l"><b>${k}</b></td>
-      <td class="l"><span class="tag ${sideCls}">${p.side}${p.adds?`+${p.adds}`:""}</span></td>
-      <td>${fmt(p.avg_entry,4)}</td>
-      <td>${px!=null?fmt(px,4):"–"}</td>
-      <td>${fmt(p.open_qty,4)}</td>
-      <td class="${rcls}">${ur!=null?money(ur):"–"}</td>
-      <td class="${rcls}">${p.r_multiple!=null?fmt(p.r_multiple,2)+"R":"–"}</td>
-      <td class="muted">${p.stop_price!=null?fmt(p.stop_price,4):"–"}</td>
-      <td class="muted">${p.target_price!=null?fmt(p.target_price,4):"–"}</td>
+      <td class="l" data-l="심볼"><b>${k}</b></td>
+      <td class="l" data-l="방향"><span class="tag ${sideCls}">${p.side}${p.adds?`+${p.adds}`:""}</span></td>
+      <td data-l="진입가">${fmt(p.avg_entry,4)}</td>
+      <td data-l="현재가">${px!=null?fmt(px,4):"–"}</td>
+      <td data-l="수량">${fmt(p.open_qty,4)}</td>
+      <td class="${rcls}" data-l="미실현 $">${ur!=null?money(ur):"–"}</td>
+      <td class="${rcls}" data-l="R">${p.r_multiple!=null?fmt(p.r_multiple,2)+"R":"–"}</td>
+      <td class="muted" data-l="스탑">${p.stop_price!=null?fmt(p.stop_price,4):"–"}</td>
+      <td class="muted" data-l="목표">${p.target_price!=null?fmt(p.target_price,4):"–"}</td>
     </tr>`);
   }
   if(rows.length){
