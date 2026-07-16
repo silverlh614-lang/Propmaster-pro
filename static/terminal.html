@@ -305,7 +305,9 @@
       letter-spacing:.08em;text-transform:uppercase;flex:none}
     #jbody td:nth-child(3),#jbody td:nth-child(7),#jbody td:nth-child(8){display:none}
     #jbody td[colspan]{display:block} #jbody td[colspan]::before{content:""}
-    #jbody td[data-l="사유"]{color:var(--faint)}
+    /* 사유는 긴 자유텍스트 → 라벨 위, 값은 아래 전체폭 좌측정렬(우측정렬·어색한 줄바꿈 방지) */
+    #jbody td[data-l="사유"]{display:block;color:var(--faint);word-break:break-word}
+    #jbody td[data-l="사유"]::before{display:block;margin-bottom:1px}
   }
 
   /* ═══ 모션 레이어 (v2) — 값 변화 피드백 · 살아있는 인디케이터 · 진입 · 접근성 ═══ */
