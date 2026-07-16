@@ -105,9 +105,13 @@ def test_config_defaults_and_universe():
     assert cfg.discovery_top_n >= 1 and cfg.discovery_interval_min >= 60
     # expanded universe: every new alt stays in the 2x class (roster
     # invariant also asserted in test_engine)
-    for k in ("DOT", "ATOM", "NEAR", "APT", "ARB", "OP", "SUI", "UNI", "INJ"):
+    # 유니버스 = Phase 2 게이트 통과분(+BTC 기준심볼)만. 검증 알트는 2x 클래스.
+    for k in ("NEAR", "ARB", "OP", "SUI"):
         assert k in SYMBOL_SPECS and SYMBOL_SPECS[k].leverage_cap == 2.0
-    assert "TON" not in SYMBOL_SPECS, "TON was removed from the universe"
+    # 백테스트 탈락 종목은 유니버스에서 제거돼 매매로직에 못 들어온다
+    for k in ("BNB", "DOGE", "ADA", "AVAX", "LINK", "LTC", "DOT", "ATOM",
+              "APT", "UNI", "INJ", "TON"):
+        assert k not in SYMBOL_SPECS, f"{k} should be removed from the universe"
     print("ok  config (discovery OFF by default, expanded universe 2x)")
 
 
@@ -145,12 +149,12 @@ def test_symbol_toggle():
     core = set(mgr.core)
 
     # 켜기: 위성 봇 생성 + 수동 핀 + protected 에 포함
-    r = asyncio.run(mgr.toggle_symbol("ARB", True))
-    assert r["ok"] and "ARB" in mgr.bots and "ARB" in mgr.protected_keys()
+    r = asyncio.run(mgr.toggle_symbol("BTC", True))
+    assert r["ok"] and "BTC" in mgr.bots and "BTC" in mgr.protected_keys()
     # 켠 봇도 공유 객체를 쓴다
-    assert mgr.bots["ARB"].risk is mgr.risk and mgr.bots["ARB"].ledger is mgr.ledger
+    assert mgr.bots["BTC"].risk is mgr.risk and mgr.bots["BTC"].ledger is mgr.ledger
     # discovery 는 수동 핀을 후보로 보지 않는다 (로테이션 보호)
-    assert "ARB" not in [s.key for s in mgr.discovery.candidates()]
+    assert "BTC" not in [s.key for s in mgr.discovery.candidates()]
 
     # 코어는 끌 수 없다
     core_key = next(iter(core))
@@ -160,15 +164,15 @@ def test_symbol_toggle():
     # 미지 심볼 거부
     assert not asyncio.run(mgr.toggle_symbol("FOO", True))["ok"]
 
-    # 영속: 새 매니저가 수동 선택(ARB)을 복원 (같은 DATA_DIR)
+    # 영속: 새 매니저가 수동 선택(BTC)을 복원 (같은 DATA_DIR)
     mgr2 = TradingManager(cfg)
-    assert "ARB" in mgr2.bots and "ARB" in mgr2.protected_keys()
+    assert "BTC" in mgr2.bots and "BTC" in mgr2.protected_keys()
 
     # 끄기: 봇 제거 + 핀 해제 + 장부 정리
-    r = asyncio.run(mgr2.toggle_symbol("ARB", False))
-    assert r["ok"] and "ARB" not in mgr2.bots and "ARB" not in mgr2.protected_keys()
-    # 다시 새 매니저: ARB 안 돌아옴
-    assert "ARB" not in TradingManager(cfg).bots
+    r = asyncio.run(mgr2.toggle_symbol("BTC", False))
+    assert r["ok"] and "BTC" not in mgr2.bots and "BTC" not in mgr2.protected_keys()
+    # 다시 새 매니저: BTC 안 돌아옴
+    assert "BTC" not in TradingManager(cfg).bots
     print("ok  symbol toggle (add/core-lock/persist/discovery-protect/remove)")
 
 
@@ -178,15 +182,15 @@ def test_toggle_refuses_open_position():
     from app.trading.bot import TradingManager
 
     mgr = TradingManager(TradingConfig())
-    asyncio.run(mgr.toggle_symbol("SUI", True))
+    asyncio.run(mgr.toggle_symbol("BTC", True))
 
     class _P:                       # 최소 오픈 포지션 스텁
         class state: value = "OPEN"
     class _PM:
         pos = _P()
-    mgr.bots["SUI"].pm = _PM()
-    r = asyncio.run(mgr.toggle_symbol("SUI", False))
-    assert not r["ok"] and "포지션" in r["error"] and "SUI" in mgr.bots
+    mgr.bots["BTC"].pm = _PM()
+    r = asyncio.run(mgr.toggle_symbol("BTC", False))
+    assert not r["ok"] and "포지션" in r["error"] and "BTC" in mgr.bots
     print("ok  toggle refuses removing a symbol with an open position")
 
 

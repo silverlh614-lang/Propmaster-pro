@@ -165,8 +165,12 @@ class SymbolSpec:
         return min(global_cap, self.leverage_cap)
 
 
-# 메이저(BTC/ETH) 5x, 알트 2x — Breakout 레버리지 클래스. step/tick 은
-# Binance USDⓈ-M 근사치 (페이퍼 시뮬 반올림용).
+# 거래 유니버스 = Phase 2 게이트 통과분만 (docs/phase2_results.md). 백테스트에서
+# 엣지가 없던 11개 알트(BNB·DOGE·ADA·AVAX·LINK·LTC·DOT·ATOM·APT·UNI·INJ)는
+# 매매로직에 아예 들어오지 못하게 유니버스에서 제거했다 — enabled_symbols()·토글·
+# auto-discovery 모두 이 dict 로 필터하므로, env·수동선택에 남아 있어도 자동 정리된다.
+# BTC 는 게이트(표본<20) 미달이라 기본 로스터에는 빠지지만, 메이저 기준 심볼이라
+# 유니버스에는 남긴다(명시적으로 켤 때만 거래). 메이저 5x, 알트 2x (Breakout 클래스).
 SYMBOL_SPECS: dict[str, SymbolSpec] = {
     "BTC": SymbolSpec("BTC", "BTCUSDT", qty_step=0.001, min_qty=0.001,
                       tick_size=0.1, leverage_cap=5.0),
@@ -176,50 +180,26 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
                       tick_size=0.001, leverage_cap=2.0),
     "XRP": SymbolSpec("XRP", "XRPUSDT", qty_step=0.1, min_qty=0.1,
                       tick_size=0.0001, leverage_cap=2.0),
-    "BNB": SymbolSpec("BNB", "BNBUSDT", qty_step=0.01, min_qty=0.01,
-                      tick_size=0.01, leverage_cap=2.0),
-    "DOGE": SymbolSpec("DOGE", "DOGEUSDT", qty_step=1.0, min_qty=1.0,
-                       tick_size=0.00001, leverage_cap=2.0),
-    "ADA": SymbolSpec("ADA", "ADAUSDT", qty_step=1.0, min_qty=1.0,
-                      tick_size=0.0001, leverage_cap=2.0),
-    "AVAX": SymbolSpec("AVAX", "AVAXUSDT", qty_step=1.0, min_qty=1.0,
-                       tick_size=0.001, leverage_cap=2.0),
-    "LINK": SymbolSpec("LINK", "LINKUSDT", qty_step=0.01, min_qty=0.01,
-                       tick_size=0.001, leverage_cap=2.0),
-    "LTC": SymbolSpec("LTC", "LTCUSDT", qty_step=0.001, min_qty=0.001,
-                      tick_size=0.01, leverage_cap=2.0),
-    # --- 확장 유니버스 (auto-discovery 후보 풀) — 전부 알트 2x 클래스.
-    # Binance USDⓈ-M / OKX 스왑 양쪽에 상장된 심볼만 (폴백 유지 조건).
-    "DOT": SymbolSpec("DOT", "DOTUSDT", qty_step=0.1, min_qty=0.1,
-                      tick_size=0.001, leverage_cap=2.0),
-    "ATOM": SymbolSpec("ATOM", "ATOMUSDT", qty_step=0.01, min_qty=0.01,
-                       tick_size=0.001, leverage_cap=2.0),
     "NEAR": SymbolSpec("NEAR", "NEARUSDT", qty_step=1.0, min_qty=1.0,
                        tick_size=0.001, leverage_cap=2.0),
-    "APT": SymbolSpec("APT", "APTUSDT", qty_step=0.1, min_qty=0.1,
-                      tick_size=0.001, leverage_cap=2.0),
     "ARB": SymbolSpec("ARB", "ARBUSDT", qty_step=0.1, min_qty=0.1,
                       tick_size=0.0001, leverage_cap=2.0),
     "OP": SymbolSpec("OP", "OPUSDT", qty_step=0.1, min_qty=0.1,
                      tick_size=0.0001, leverage_cap=2.0),
     "SUI": SymbolSpec("SUI", "SUIUSDT", qty_step=0.1, min_qty=0.1,
                       tick_size=0.0001, leverage_cap=2.0),
-    "UNI": SymbolSpec("UNI", "UNIUSDT", qty_step=1.0, min_qty=1.0,
-                      tick_size=0.001, leverage_cap=2.0),
-    "INJ": SymbolSpec("INJ", "INJUSDT", qty_step=0.1, min_qty=0.1,
-                      tick_size=0.001, leverage_cap=2.0),
 }
 
-# Phase 2 게이트 확정 로스터 (docs/phase2_results.md): 12개월 out-of-sample 로
-# expR>0·PF≥1.2·trades≥20 를 재현한 3종목이 검증된 코어. BTC 는 두 전략 모두
-# 표본<20 으로 탈락해 기본에서 제외. ARB·SUI·OP·NEAR 는 6개월 강세지만 12mo
-# 확인 전이라 env(TRADING_SYMBOLS)로만 추가한다. 되돌리려면 TRADING_SYMBOLS 로 오버라이드.
-DEFAULT_SYMBOLS = "ETH,SOL,XRP"
+# Phase 2 게이트 확정 로스터 (docs/phase2_results.md): 게이트 통과 7종목.
+# 코어 3(ETH·SOL·XRP)은 12mo 검증, 보강 4(ARB·SUI·OP·NEAR)는 6mo 강세.
+# 되돌리려면 TRADING_SYMBOLS 로 오버라이드(단 유니버스에 있는 심볼만 유효).
+DEFAULT_SYMBOLS = "ETH,SOL,XRP,ARB,SUI,OP,NEAR"
 
 # 심볼별 검증된 최적 전략 (게이트 A/B). env(TRADING_SYMBOL_STRATEGY) 미설정 시
-# 폴백 — SOL/XRP 를 Donchian 으로 잘못 돌리면 손실(SOL prop_breakout expR<0)이라
-# 이 매핑을 기본값으로 baking 한다.
-DEFAULT_SYMBOL_STRATEGY = {"ETH": "prop_breakout", "SOL": "vbo", "XRP": "vbo"}
+# 폴백 — SOL/XRP/OP 를 Donchian 으로 잘못 돌리면 손실이라 이 매핑을 baking 한다.
+DEFAULT_SYMBOL_STRATEGY = {"ETH": "prop_breakout", "SOL": "vbo", "XRP": "vbo",
+                          "ARB": "prop_breakout", "SUI": "prop_breakout",
+                          "OP": "vbo", "NEAR": "prop_breakout"}
 
 
 def enabled_symbols() -> list[SymbolSpec]:
