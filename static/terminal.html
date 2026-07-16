@@ -48,7 +48,11 @@
   .badge.live{background:var(--up);color:#04150a;animation:blink 1.4s steps(2) infinite}
   .badge.off{background:#20262e;color:var(--dim)}
   @keyframes blink{50%{opacity:.55}}
-  .strip .kv{color:var(--dim)} .strip .kv b{color:var(--ink)} .strip .sp{flex:1}
+  .strip{max-width:100%}
+  .strip .kv{color:var(--dim);min-width:0} .strip .kv b{color:var(--ink)} .strip .sp{flex:1}
+  /* 가동 심볼 목록(note)은 길이가 무제한 → 말줄임으로 크기 고정 (전 심볼은 아래 탭에 표시).
+     이게 없으면 공백 없는 긴 문자열이 스트립을 가로로 밀어 페이지 전체가 밀린다. */
+  #botNote{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .strip select{background:var(--panel-2);color:var(--ink);border:1px solid var(--border);
     font:11px var(--mono);padding:3px 5px;border-radius:3px}
   button{font:11px var(--mono);font-weight:800;letter-spacing:.08em;border:1px solid var(--border-hi);
