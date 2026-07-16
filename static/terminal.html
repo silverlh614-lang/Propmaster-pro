@@ -28,8 +28,9 @@
   html{background:var(--bg)}
   body{margin:0;background:var(--bg);color:var(--ink);font:12.5px/1.45 var(--mono);
     -webkit-font-smoothing:antialiased;overflow-x:hidden}
+  /* 스캔라인 완화: 데이터-잉크 비율 우선 — 강도 절반·피치 확대 (레트로 힌트만 남김) */
   body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:90;
-    background:repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 3px)}
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,.011) 0 1px,transparent 1px 4px)}
   a{color:var(--brand);text-decoration:none} a:hover{text-decoration:underline}
 
   .top{display:flex;align-items:center;gap:14px;padding:9px 14px;
@@ -72,29 +73,31 @@
   .ticker .it b{color:var(--ink)}
   .pos{color:var(--up)!important} .neg{color:var(--dn)!important}
 
-  .wrap{max-width:1440px;margin:0 auto;padding:10px 12px 74px}
-  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
+  /* 여백 리듬: 4px 그리드 — 거터 12, 패널 내부 12, 헤더 8/12 */
+  .wrap{max-width:1440px;margin:0 auto;padding:12px 16px 74px}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
   .panel{grid-column:span 4;background:var(--panel);border:1px solid var(--border);
     border-radius:4px;min-width:0;display:flex;flex-direction:column}
   .panel.full{grid-column:1/-1} .panel.half{grid-column:span 6}
   .col5{grid-column:span 5} .col7{grid-column:span 7} .col8{grid-column:span 8}
-  .phead{display:flex;align-items:center;gap:8px;padding:7px 11px;border-bottom:1px solid var(--border);
+  .phead{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);
     font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
   .phead .mk{color:var(--brand)} .phead .sp{flex:1}
   .phead .r{color:var(--faint);font-weight:400;letter-spacing:.06em}
-  .pbody{padding:11px;flex:1;min-height:0}
+  .pbody{padding:12px;flex:1;min-height:0}
 
   .wallet{display:flex;gap:8px;align-items:center;font-size:10.5px;color:var(--faint);letter-spacing:.1em}
   .wallet .tag{background:var(--up-dim);color:var(--up);padding:1px 7px;border-radius:2px;font-weight:800}
   .meganum{font-size:clamp(30px,3.2vw,42px);font-weight:800;letter-spacing:.01em;
-    font-variant-numeric:tabular-nums;margin:6px 0 2px;text-shadow:0 0 22px rgba(46,229,138,.35)}
+    font-variant-numeric:tabular-nums;margin:8px 0 4px;text-shadow:0 0 22px rgba(46,229,138,.35)}
   .meganum.neg-glow{text-shadow:0 0 22px rgba(255,77,92,.35)}
   .subline{color:var(--dim);font-size:11px;letter-spacing:.08em}
-  .stat3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:13px}
-  .stat3 .label{color:var(--faint);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase}
+  .stat3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px}
+  /* 라벨→값 위계: 라벨은 dim(읽히되 종속), 값은 ink(주인공) */
+  .stat3 .label{color:var(--dim);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase}
   .stat3 .val{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
   .wrbar{margin-top:13px}
-  .wrbar .cap{display:flex;justify-content:space-between;font-size:9.5px;color:var(--faint);
+  .wrbar .cap{display:flex;justify-content:space-between;font-size:9.5px;color:var(--dim);
     letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px}
   .wrbar .tr{height:5px;background:#161b21;border-radius:3px;overflow:hidden}
   .wrbar .tr i{display:block;height:100%;background:var(--brand);width:0%;transition:width .6s}
@@ -212,10 +215,10 @@
   .lvl.price .mk{background:var(--ink);box-shadow:0 0 10px rgba(215,224,231,.8)}
   .lvl.price .lab{color:var(--ink);font-weight:800}
   .posrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px}
-  .prow{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border);font-size:11px}
+  .prow{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--border);font-size:11px}
   .prow .l{color:var(--faint)} .prow .v{font-variant-numeric:tabular-nums}
 
-  .row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--border)}
+  .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border)}
   .row:last-child{border:0} .row .l{color:var(--faint)} .row .v{font-variant-numeric:tabular-nums}
   .tag{display:inline-block;padding:1px 7px;border-radius:2px;font-size:10px;font-weight:800;letter-spacing:.06em}
   .tag.long{background:var(--up-dim);color:var(--up)} .tag.short{background:var(--dn-dim);color:var(--dn)}
