@@ -153,12 +153,13 @@
   @keyframes tin{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
   .bell{background:none;border:1px solid var(--border);border-radius:3px;cursor:pointer;
     font-size:12px;padding:2px 7px;line-height:1.4}
-  .symtabs{display:inline-flex;gap:0;border:1px solid var(--border);border-radius:3px;overflow:hidden}
-  .symtabs button{background:none;border:0;border-right:1px solid var(--border);cursor:pointer;
-    color:var(--dim);font:inherit;font-size:11px;padding:3px 10px;letter-spacing:.06em}
-  .symtabs button:last-child{border-right:0}
-  .symtabs button.on{background:var(--brand);color:#171204;font-weight:800}
-  .symtabs button{transition:background .18s ease,color .18s ease}
+  /* 심볼 탭 = wrap 되는 칩 (심볼 수가 많아도 화면 밖으로 넘치지 않고 줄바꿈) */
+  .symtabs{display:flex;flex-wrap:wrap;gap:3px;max-width:100%;min-width:0}
+  .symtabs button{background:var(--panel-2);border:1px solid var(--border);border-radius:3px;
+    cursor:pointer;color:var(--dim);font:inherit;font-size:11px;padding:3px 9px;letter-spacing:.06em;
+    transition:background .18s ease,color .18s ease,border-color .18s ease}
+  .symtabs button.on{background:var(--brand);color:#171204;font-weight:800;border-color:var(--brand)}
+  .symrow{min-width:0}                    /* 탭+종목 버튼 묶음 — 칩이 안에서 wrap */
 
   /* 종목 토글 선택기 — 유니버스 전체 칩 (코어 잠금 / 가동 중 강조) */
   .sympick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
@@ -279,6 +280,9 @@
     #allposTbl td[colspan]::before{content:""}
     .panel[data-panel="allpos"] .scroll{max-height:none;overflow:visible}
 
+    /* 심볼 탭 행: 모바일에서 전체 너비 차지 → 많은 종목이 깔끔히 줄바꿈 */
+    .strip .symrow{flex:1 1 100%}
+
     /* 모바일 가로 스크롤 방지 2: 종목 선택 칩을 더 촘촘히 (wrap 유지) */
     .sympick{padding:8px 11px;gap:5px}
     .sympick .chip{padding:4px 8px;font-size:10.5px}
@@ -389,7 +393,8 @@
   <span class="kv">TRADES <b id="sTrades">0</b>/<span id="sTradesMax">20</span></span>
   <span class="kv">DAILY <b id="sDaily">$0.00</b></span>
   <span class="sp"></span>
-  <span class="kv"><span class="symtabs" id="symTabs"><button class="on">BTC</button></span>
+  <span class="kv symrow" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+    <span class="symtabs" id="symTabs"><button class="on">BTC</button></span>
     <button class="bell" id="symPickBtn" onclick="toggleSymPicker()" title="종목 선택 (토글)">＋종목</button></span>
   <span class="kv">전략 <select id="stratSel"></select></span>
   <span class="ctrls" id="ctrls">
