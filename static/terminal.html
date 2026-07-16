@@ -283,6 +283,20 @@
     .sympick{padding:8px 11px;gap:5px}
     .sympick .chip{padding:4px 8px;font-size:10.5px}
     .sympick .pl{width:100%;margin:0 0 2px}         /* 라벨은 한 줄 차지 → 칩 정렬 깔끔 */
+
+    /* 모바일 가로 스크롤 방지 3: 트레이드 저널도 카드형 (기존 스크롤 박스 안에서
+       세로 스크롤 — 가로 스크롤 제거). 부가 필드(이벤트·수량·레버)는 숨겨 높이 억제 */
+    [data-panel="journal"] thead{display:none}
+    #jbody, #jbody tr, #jbody td{display:block;width:auto}
+    #jbody tr{border:1px solid var(--border);border-radius:4px;background:var(--panel-2);
+      padding:6px 9px;margin-bottom:6px}
+    #jbody td{border:0;text-align:left;padding:2px 0;white-space:normal;
+      display:flex;justify-content:space-between;gap:10px}
+    #jbody td::before{content:attr(data-l);color:var(--faint);font-size:9.5px;
+      letter-spacing:.08em;text-transform:uppercase;flex:none}
+    #jbody td:nth-child(3),#jbody td:nth-child(7),#jbody td:nth-child(8){display:none}
+    #jbody td[colspan]{display:block} #jbody td[colspan]::before{content:""}
+    #jbody td[data-l="사유"]{color:var(--faint)}
   }
 
   /* ═══ 모션 레이어 (v2) — 값 변화 피드백 · 살아있는 인디케이터 · 진입 · 접근성 ═══ */
@@ -1085,16 +1099,16 @@ async function loadJournal(){let d;try{d=await api("/api/trading/trades?limit=12
     const res=r.result||(r.event==="PARTIAL"?"부분익절":"");
     const rcls=res==="WIN"?"up":res==="LOSS"?"dn":"muted";
     const pnl=r.pnl_usd===""?"":money(Number(r.pnl_usd));
-    return `<tr><td class="l muted">${(r.ts||"").slice(5,19).replace("T"," ")}</td>
-      <td class="l">${esc(r.symbol||"")}</td>
-      <td class="l">${esc(r.event||"")}</td>
-      <td class="l">${side?`<span class="tag ${scls}">${side}</span>`:""}</td>
-      <td>${fmt(r.entry_price,2)}</td><td>${r.exit_price?fmt(r.exit_price,2):"–"}</td>
-      <td>${fmt(r.qty,4)}</td><td>${r.leverage?fmt(r.leverage,1)+"x":"–"}</td>
-      <td class="${rcls}">${esc(res)||"–"}</td>
-      <td class="${Number(r.pnl_usd)>=0?'up':'dn'}">${pnl||"–"}</td>
-      <td>${r.r_multiple!==""&&r.r_multiple!=null?fmt(r.r_multiple,2):"–"}</td>
-      <td class="l muted" title="${esc(r.reason||"")}">${esc((r.signal_detail||r.reason||"").slice(0,60))}</td></tr>`;
+    return `<tr><td class="l muted" data-l="시각">${(r.ts||"").slice(5,19).replace("T"," ")}</td>
+      <td class="l" data-l="심볼">${esc(r.symbol||"")}</td>
+      <td class="l" data-l="이벤트">${esc(r.event||"")}</td>
+      <td class="l" data-l="방향">${side?`<span class="tag ${scls}">${side}</span>`:""}</td>
+      <td data-l="진입">${fmt(r.entry_price,2)}</td><td data-l="청산">${r.exit_price?fmt(r.exit_price,2):"–"}</td>
+      <td data-l="수량">${fmt(r.qty,4)}</td><td data-l="레버">${r.leverage?fmt(r.leverage,1)+"x":"–"}</td>
+      <td class="${rcls}" data-l="결과">${esc(res)||"–"}</td>
+      <td class="${Number(r.pnl_usd)>=0?'up':'dn'}" data-l="PnL$">${pnl||"–"}</td>
+      <td data-l="R">${r.r_multiple!==""&&r.r_multiple!=null?fmt(r.r_multiple,2):"–"}</td>
+      <td class="l muted" data-l="사유" title="${esc(r.reason||"")}">${esc((r.signal_detail||r.reason||"").slice(0,60))}</td></tr>`;
   }).join(""):'<tr><td class="l muted" colspan="12">거래 없음</td></tr>';
 }
 
