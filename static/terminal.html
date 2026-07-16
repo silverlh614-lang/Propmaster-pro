@@ -100,6 +100,16 @@
   /* chart */
   .chartwrap{position:relative;height:340px}
   canvas{display:block;width:100%;height:100%}
+  /* 봉 가격 트래킹: 크로스헤어 + OHLCV 툴팁 (터치·마우스). touch-action:pan-y 로
+     세로 스크롤은 유지하면서 가로 드래그/탭으로 봉을 추적한다. */
+  #chart{touch-action:pan-y}
+  .chart-cross{position:absolute;top:0;bottom:0;width:0;pointer-events:none;z-index:5;
+    border-left:1px dashed rgba(215,224,231,.4);display:none}
+  .chart-tip{position:absolute;z-index:6;pointer-events:none;display:none;
+    background:rgba(5,6,7,.93);border:1px solid var(--border-hi);border-radius:4px;
+    padding:6px 9px;font-size:10.5px;line-height:1.6;color:var(--dim);white-space:nowrap;
+    box-shadow:0 4px 16px rgba(0,0,0,.5);backdrop-filter:blur(3px)}
+  .chart-tip b{color:var(--ink)} .chart-tip .up{color:var(--up)} .chart-tip .dn{color:var(--dn)}
   .flash{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%) scale(.6);z-index:4;
     font-size:42px;font-weight:800;opacity:0;pointer-events:none;text-shadow:0 0 34px currentColor}
   .flash.show{animation:pop 2.6s ease-out forwards}
@@ -505,6 +515,8 @@
           </div>
           <div class="flash" id="flash"></div>
           <canvas id="chart"></canvas>
+          <div class="chart-cross" id="chartCross"></div>
+          <div class="chart-tip" id="chartTip"></div>
         </div>
       </div>
     </section>
@@ -948,7 +960,37 @@ function drawChart(){
   // last price marker
   const last=cs[cs.length-1][4];g.fillStyle="#38d5ff";g.beginPath();
   g.arc(X(cs.length-1),Y(last),3,0,7);g.fill();
+  // 크로스헤어가 봉↔픽셀 매핑을 재구성할 수 있게 지오메트리 저장
+  window._chartGeo={cs,padL,cw,W};
 }
+
+// ---- 봉 가격 트래킹: 크로스헤어 + OHLCV 툴팁 (터치·마우스 공용) ----
+function setupChartCrosshair(){
+  const cv=$("chart"),cross=$("chartCross"),tip=$("chartTip");
+  if(!cv||cv._xhair)return; cv._xhair=true;
+  const hide=()=>{cross.style.display="none";tip.style.display="none";};
+  const show=(clientX)=>{
+    const geo=window._chartGeo; if(!geo||!geo.cs.length)return;
+    const {cs,padL,cw}=geo, n=cs.length, r=cv.getBoundingClientRect();
+    let i=Math.round((clientX-r.left-padL)/(cw||1)*(n-1)); i=Math.max(0,Math.min(n-1,i));
+    const c=cs[i], px=padL+cw*(i/(n-1||1));
+    const o=c[1],h=c[2],l=c[3],cl=c[4],v=c[5];
+    const dp=cl>=1000?1:cl>=10?2:4, chg=o?((cl-o)/o*100):0;
+    const t=new Date(c[0]).toISOString().slice(5,16).replace("T"," ");
+    cross.style.left=px+"px"; cross.style.display="block";
+    tip.innerHTML=`<b>${t} UTC</b><br>시 ${fmt(o,dp)} · 고 <span class="up">${fmt(h,dp)}</span>`
+      +` · 저 <span class="dn">${fmt(l,dp)}</span> · 종 <b>${fmt(cl,dp)}</b><br>`
+      +`<span class="${chg>=0?'up':'dn'}">${chg>=0?'+':''}${fmt(chg,2)}%</span> · 거래량 ${fmt(v,1)}`;
+    tip.style.display="block";
+    let tl=px+12; if(tl+tip.offsetWidth>r.width-4) tl=px-tip.offsetWidth-12;
+    tip.style.left=Math.max(4,tl)+"px"; tip.style.top="8px";
+  };
+  cv.addEventListener("pointermove",e=>show(e.clientX));
+  cv.addEventListener("pointerdown",e=>show(e.clientX));
+  cv.addEventListener("pointerleave",hide);
+  cv.addEventListener("dblclick",hide);        // 데스크톱에서 수동 해제
+}
+setupChartCrosshair();
 async function loadCandles(){try{const d=await api("/api/trading/candles?symbol="+SYM+"&tf=entry&limit=120");
   window._candles=d;drawChart();}catch(e){}}
 window.addEventListener("resize",drawChart);
