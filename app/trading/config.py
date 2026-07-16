@@ -208,8 +208,6 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
                       tick_size=0.001, leverage_cap=2.0),
     "INJ": SymbolSpec("INJ", "INJUSDT", qty_step=0.1, min_qty=0.1,
                       tick_size=0.001, leverage_cap=2.0),
-    "TON": SymbolSpec("TON", "TONUSDT", qty_step=0.1, min_qty=0.1,
-                      tick_size=0.0001, leverage_cap=2.0),
 }
 
 # 2026-07 게이트: 같은 프로필이 ETH 에서 무보정 아웃오브샘플로 통과

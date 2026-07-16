@@ -105,9 +105,9 @@ def test_config_defaults_and_universe():
     assert cfg.discovery_top_n >= 1 and cfg.discovery_interval_min >= 60
     # expanded universe: every new alt stays in the 2x class (roster
     # invariant also asserted in test_engine)
-    for k in ("DOT", "ATOM", "NEAR", "APT", "ARB", "OP", "SUI", "UNI",
-              "INJ", "TON"):
+    for k in ("DOT", "ATOM", "NEAR", "APT", "ARB", "OP", "SUI", "UNI", "INJ"):
         assert k in SYMBOL_SPECS and SYMBOL_SPECS[k].leverage_cap == 2.0
+    assert "TON" not in SYMBOL_SPECS, "TON was removed from the universe"
     print("ok  config (discovery OFF by default, expanded universe 2x)")
 
 
