@@ -19,7 +19,9 @@
     --bg:#050607; --panel:#0a0c0e; --panel-2:#0e1114; --border:#1b2027; --border-hi:#2a323c;
     --ink:#d7e0e7; --dim:#8b96a3; --faint:#4e5864;
     --up:#2ee58a; --up-dim:#14663f; --dn:#ff4d5c; --dn-dim:#6e2129;
-    --yel:#ffd54a; --cyn:#38d5ff; --mag:#ff5cf0; --brand:#f7931a;
+    /* 컬러 규율(2026 정제): 액센트 = 브랜드 오렌지 1개 + 손익(up/dn) + 경고(yel).
+       --cyn 은 비비드 시안에서 차분한 스틸 톤으로 강등 — 정보성 요소 전용. */
+    --yel:#ffd54a; --cyn:#7e93a8; --brand:#f7931a;
     --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,"Noto Sans KR",monospace;
   }
   *{box-sizing:border-box}
@@ -28,7 +30,7 @@
     -webkit-font-smoothing:antialiased;overflow-x:hidden}
   body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:90;
     background:repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 3px)}
-  a{color:var(--cyn);text-decoration:none} a:hover{text-decoration:underline}
+  a{color:var(--brand);text-decoration:none} a:hover{text-decoration:underline}
 
   .top{display:flex;align-items:center;gap:14px;padding:9px 14px;
     border-bottom:1px solid var(--border);background:#07090b}
@@ -95,7 +97,7 @@
   .wrbar .cap{display:flex;justify-content:space-between;font-size:9.5px;color:var(--faint);
     letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px}
   .wrbar .tr{height:5px;background:#161b21;border-radius:3px;overflow:hidden}
-  .wrbar .tr i{display:block;height:100%;background:var(--cyn);width:0%;transition:width .6s}
+  .wrbar .tr i{display:block;height:100%;background:var(--brand);width:0%;transition:width .6s}
 
   /* chart */
   .chartwrap{position:relative;height:340px}
@@ -207,8 +209,8 @@
   .lvl.tgt .mk{background:var(--up)} .lvl.tgt .lab{color:var(--up)}
   .lvl.entry .mk{background:#fff} .lvl.stop .mk{background:var(--dn)} .lvl.stop .lab{color:var(--dn)}
   .lvl.trail .mk{background:var(--brand)} .lvl.trail .lab{color:var(--brand)}
-  .lvl.price .mk{background:var(--cyn);box-shadow:0 0 10px var(--cyn)}
-  .lvl.price .lab{color:var(--cyn);font-weight:800}
+  .lvl.price .mk{background:var(--ink);box-shadow:0 0 10px rgba(215,224,231,.8)}
+  .lvl.price .lab{color:var(--ink);font-weight:800}
   .posrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px}
   .prow{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border);font-size:11px}
   .prow .l{color:var(--faint)} .prow .v{font-variant-numeric:tabular-nums}
@@ -217,7 +219,7 @@
   .row:last-child{border:0} .row .l{color:var(--faint)} .row .v{font-variant-numeric:tabular-nums}
   .tag{display:inline-block;padding:1px 7px;border-radius:2px;font-size:10px;font-weight:800;letter-spacing:.06em}
   .tag.long{background:var(--up-dim);color:var(--up)} .tag.short{background:var(--dn-dim);color:var(--dn)}
-  .tag.paper{background:var(--yel);color:#171204}
+  .tag.paper{background:rgba(255,213,74,.09);border:1px solid #6b5416;color:#e0bb54}
 
   .feed{max-height:280px;overflow-y:auto;display:grid;gap:3px;scrollbar-width:thin}
   .frow{display:flex;gap:9px;align-items:center;font-size:11px;padding:3px 6px;border-radius:3px;
@@ -341,7 +343,7 @@
   .gate.ok .dot{animation:dotPulse 2s ease-in-out infinite}
   @keyframes dotPulse{0%,100%{box-shadow:0 0 8px var(--up)}50%{box-shadow:0 0 17px var(--up)}}
   .lvl.price .mk{animation:pxPulse 1.6s ease-in-out infinite}
-  @keyframes pxPulse{0%,100%{box-shadow:0 0 8px var(--cyn)}50%{box-shadow:0 0 17px var(--cyn)}}
+  @keyframes pxPulse{0%,100%{box-shadow:0 0 8px rgba(215,224,231,.55)}50%{box-shadow:0 0 17px rgba(215,224,231,.9)}}
   .stage.act{animation:stagePulse 2.4s ease-in-out infinite}
   @keyframes stagePulse{0%,100%{box-shadow:0 0 12px rgba(247,147,26,.14) inset}
     50%{box-shadow:0 0 21px rgba(247,147,26,.3) inset}}
@@ -507,7 +509,7 @@
         <div class="chartwrap">
           <div class="chiplegend">
             <span><i style="border-color:var(--cyn)"></i>EMA</span>
-            <span><i style="border-color:var(--yel);border-top-style:dashed"></i>박스</span>
+            <span><i style="border-color:#94a3b2;border-top-style:dashed"></i>박스</span>
             <span><i style="border-color:#fff"></i>진입</span>
             <span><i style="border-color:var(--up)"></i>2R</span>
             <span><i style="border-color:var(--dn)"></i>손절</span>
@@ -942,14 +944,14 @@ function drawChart(){
   // box lines
   const dash=(v,col)=>{if(v==null)return;g.strokeStyle=col;g.setLineDash([5,4]);g.beginPath();
     g.moveTo(padL,Y(v));g.lineTo(padL+cw,Y(v));g.stroke();g.setLineDash([]);};
-  dash(ov.box_hi,"rgba(255,213,74,.5)");dash(ov.box_lo,"rgba(255,213,74,.5)");
+  dash(ov.box_hi,"rgba(148,163,178,.45)");dash(ov.box_lo,"rgba(148,163,178,.45)");
   // candles
   const bw=Math.max(1.5,cw/cs.length*0.62);
   cs.forEach((c,i)=>{const x=X(i);const up=c[4]>=c[1];g.strokeStyle=g.fillStyle=up?"#2ee58a":"#ff4d5c";
     g.beginPath();g.moveTo(x,Y(c[2]));g.lineTo(x,Y(c[3]));g.stroke();
     const yo=Y(c[1]),yc=Y(c[4]);g.fillRect(x-bw/2,Math.min(yo,yc),bw,Math.max(1,Math.abs(yc-yo)));});
   // ema overlay
-  if(ema.length){g.strokeStyle="#38d5ff";g.lineWidth=1.5;g.beginPath();
+  if(ema.length){g.strokeStyle="#7e93a8";g.lineWidth=1.5;g.beginPath();
     ema.forEach((v,i)=>{const x=X(i),y=Y(v);i?g.lineTo(x,y):g.moveTo(x,y);});g.stroke();g.lineWidth=1;}
   // position overlays
   const oline=(v,col,dsh)=>{if(v==null)return;g.strokeStyle=col;if(dsh)g.setLineDash([4,3]);
@@ -958,7 +960,7 @@ function drawChart(){
     g.font="8px monospace";g.fillText(fmt(v,1),padL+cw+4,Y(v)+3);};
   oline(ov.entry,"#ffffff");oline(ov.stop,"#ff4d5c");oline(ov.target,"#2ee58a");oline(ov.trail,"#f7931a",true);
   // last price marker
-  const last=cs[cs.length-1][4];g.fillStyle="#38d5ff";g.beginPath();
+  const last=cs[cs.length-1][4];g.fillStyle="#d7e0e7";g.beginPath();
   g.arc(X(cs.length-1),Y(last),3,0,7);g.fill();
   // 크로스헤어가 봉↔픽셀 매핑을 재구성할 수 있게 지오메트리 저장
   window._chartGeo={cs,padL,cw,W};
