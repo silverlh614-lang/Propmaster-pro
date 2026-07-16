@@ -133,6 +133,10 @@ class TradingConfig:
 
     # --- mode (Paper-First) ------------------------------------------------
     live_enabled: bool = False           # Phase 3: TRADING_LIVE_ENABLED=1 + creds
+    # Phase 3 라이브 자격증명 — env 전용(TRADING_API_KEY/SECRET), 리포 커밋 금지.
+    # 어댑터 미구현이라 현재는 미사용 (make_broker 가 PaperBroker 만 반환).
+    api_key: str = ""
+    api_secret: str = ""
 
     def __post_init__(self):
         for f in fields(self):
@@ -140,8 +144,17 @@ class TradingConfig:
         # invariant: leverage can never exceed the hard cap, whatever env says
         self.leverage = min(self.leverage, self.leverage_max)
 
+    # 노출 금지 필드 — as_dict(표시용)에서 마스킹 (설정된 값은 절대 응답에 싣지 않음).
+    _SECRET_FIELDS = ("api_key", "api_secret")
+
     def as_dict(self) -> dict:
-        return {f.name: getattr(self, f.name) for f in fields(self)}
+        out = {}
+        for f in fields(self):
+            v = getattr(self, f.name)
+            if f.name in self._SECRET_FIELDS:
+                v = "***set***" if v else ""      # 값은 숨기고 설정 여부만 표시
+            out[f.name] = v
+        return out
 
 
 CONFIG = TradingConfig()

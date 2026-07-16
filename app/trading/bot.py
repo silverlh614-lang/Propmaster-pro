@@ -32,6 +32,7 @@ from .risk import RiskManager
 from .store import AccountStore, BotState, Journal, PositionStore
 from .config import strategy_for
 from .discovery import AutoDiscovery
+from .execution.broker import make_broker
 from .strategies import STRATEGIES, make_strategy
 from .strategies.base import TradingContext
 
@@ -296,6 +297,7 @@ class TradingManager:
         self.strategy_name = "prop_breakout"
         # 자동 종목 발굴 (기본 OFF): 코어·수동은 불변, 위성 슬롯만 로테이션.
         self.discovery = AutoDiscovery(self)
+        self.broker = make_broker(cfg)   # Phase 3 배관 — 게이트 전엔 PaperBroker
 
     @property
     def core(self) -> list[str]:
@@ -487,6 +489,7 @@ class TradingManager:
             "risk": self.risk.status(),
             "symbols": {k: b.status() for k, b in self.bots.items()},
             "discovery": self.discovery.status(),
+            "execution": {"broker": self.broker.name, "live": self.broker.live},
             "by_symbol": self.journal.by_symbol(list(self.bots)),
             "server_time": time.time(),
         }

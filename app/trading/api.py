@@ -395,6 +395,22 @@ def backtest_scan(months: int = 12, symbols: str = "", refresh: int = 0):
                     "심볼당 캔들 다운로드라 첫 실행은 수 분 걸립니다"}
 
 
+@router.get("/live/status")
+def live_status():
+    """Phase 3 라이브 게이트 상태 (배관). 현재 브로커·라이브 준비 여부·미충족 사유를
+    보고한다. 어댑터 미구현이라 ready 는 항상 False (페이퍼-퍼스트). 실주문 경로 없음."""
+    from .execution.broker import live_ready
+    ready, why = live_ready(CONFIG)
+    return {"broker": MANAGER.broker.name, "live": MANAGER.broker.live,
+            "live_ready": ready, "reason": why,
+            "checklist": {
+                "backtest_passed": "docs/phase2_results.md (운영자 확인)",
+                "TRADING_LIVE_ENABLED": bool(CONFIG.live_enabled),
+                "credentials": bool(CONFIG.api_key and CONFIG.api_secret),
+                "adapter_implemented": False},
+            "note": "Phase 3 미적용 — 모든 집행은 페이퍼(PositionManager) 시뮬레이션"}
+
+
 @router.get("/config")
 def config():
     return {"config": CONFIG.as_dict(),

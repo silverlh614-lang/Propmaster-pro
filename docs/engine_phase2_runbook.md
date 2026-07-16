@@ -163,14 +163,26 @@ done
 
 ## 9. 다음 — Phase 3 (백테스트 통과 후에만)
 
-연동 거래소를 먼저 확정한다 (프롭 컨셉상 Kraken Futures 등 Tier-1 후보). Railway
-**Variables**에 `TRADING_API_KEY`, `TRADING_API_SECRET` (테스트넷/데모 키; 리포 커밋 금지)
-추가 후 `exchange_client.py`(서명·주문·레버리지·트레이딩스톱)를 `live_enabled` 게이트 뒤에
-작성, 테스트넷 검증 → `TRADING_LIVE_ENABLED=1` + 소액 라이브. 리스크 단일 관문은
-라이브에서도 유지.
+**배관은 설치됨** (`app/trading/execution/broker.py`): 실행 어댑터 인터페이스(`Broker`
+프로토콜) + `PaperBroker`(현재 기본) + `BreakoutBroker`(**stub — 모든 주문 메서드가
+`NotImplementedError`**) + 라이브 게이트(`live_ready`)와 단일 조립점(`make_broker`,
+`TradingManager.broker`). 상태 확인: `GET /api/trading/live/status`.
+
+**아직 실주문 경로는 없다** (불변식 #1). `make_broker` 는 게이트가 완전히 열리기
+전까지 항상 `PaperBroker` 를 반환하고, `live_ready` 는 어댑터 미구현이라 절대 True 를
+반환하지 않는다. 자격증명(`TRADING_API_KEY/SECRET`)은 env 전용·`/config` 응답에서
+마스킹된다.
+
+Phase 3 구현 순서:
+1. Breakout API 문서·자격증명 확보 (support@breakoutprop.com).
+2. `BreakoutBroker` 의 `place_order/close_position/fetch_*` 를 실제 REST·서명으로 구현.
+3. 포지션 FSM(`execution/position.py`)이 라이브일 때 `broker` 로 주문을 라우팅하도록
+   배선 (리스크 단일 관문 `allow_entry` 는 라이브에서도 그대로 통과).
+4. `broker.live_ready` 의 "어댑터 미구현" 가드 줄 제거 → 게이트 개방.
+5. 데모/테스트넷 검증 → `TRADING_LIVE_ENABLED=1` + 자격증명 + 소액 라이브.
 
 > 키 보안: 파생상품 거래 권한만, **출금 권한 끄기**, IP 화이트리스트(Railway egress IP),
-> 환경변수로만.
+> 환경변수로만. 리스크 단일 관문·킬스위치·프롭 룰 엔진은 라이브에서도 유지.
 
 ---
 
