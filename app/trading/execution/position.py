@@ -319,6 +319,12 @@ class PositionManager:
             "pnl_usd": pnl if (result or event == "PARTIAL") else "",
             "r_multiple": r if r is not None else "",
             "fee_usd": fee, "reason": self.note,
+            # 표시 전용(텔레그램 알림) — CSV FIELDS 밖이라 저널엔 안 남고 sink 로만
+            # 전달된다. 진입 알림의 목표가·손절가 표시에 쓰인다.
+            "target_price": (round(p.target_price, 6)
+                             if p and p.target_price else ""),
+            "stop_price": (round(p.stop_price, 6)
+                           if p and p.stop_price is not None else ""),
         })
 
     # ------------------------------------------------------------- view

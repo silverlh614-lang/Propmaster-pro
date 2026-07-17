@@ -78,7 +78,7 @@
    | `PROP_*` | — | 프롭 설정: `PROP_MIN_PAYOUT`·`PROP_FEE_MULT`·`PROP_SCALE_MAX`·`PROP_CONDUCT_ENFORCE` |
    | `TELEGRAM_BOT_TOKEN` | — | 텔레그램 봇 토큰 (BotFather 발급). 미설정 시 알림 OFF |
    | `TELEGRAM_CHAT_ID` | — | 알림 수신 챗 ID. 토큰과 함께 있어야 발송 활성화 |
-   | `TELEGRAM_ALERT_EVENTS` | `OPEN,CLOSE` | 알림 대상 이벤트 (예: `OPEN,CLOSE,PARTIAL,ADD`) |
+   | `TELEGRAM_ALERT_EVENTS` | `OPEN,CLOSE,PARTIAL` | 알림 대상 이벤트. 기본은 진입·청산·목표가도달(부분익절). `ADD`(애드업) 추가 가능 |
 
 4. 상태를 재배포 간에 유지하려면 Railway Volume을 붙이고 `DATA_DIR`를 마운트 경로로 지정하세요 (필수).
 
