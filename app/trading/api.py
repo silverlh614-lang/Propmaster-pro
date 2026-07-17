@@ -216,6 +216,26 @@ def backtest_sweep(req: SweepRequest):
             "months": req.months, "combos": len(rows), "results": rows}
 
 
+def _apply_query_overrides(cfg, params, reserved: tuple) -> dict:
+    """모든 여분 쿼리 파라미터를 cfg 필드 오버라이드로 적용한다 (URL-only 백테스트/
+    스캔이 공유). reserved 키는 건너뛰고, 나머지는 필드 존재·타입을 검증해 캐스팅한다."""
+    applied: dict = {}
+    for k, v in params.items():
+        if k in reserved:
+            continue
+        if not hasattr(cfg, k):
+            raise HTTPException(422, f"unknown config field '{k}'")
+        cur = getattr(cfg, k)
+        try:
+            val = (v.strip().lower() in ("1", "true", "yes", "on")
+                   if isinstance(cur, bool) else type(cur)(v))
+        except (TypeError, ValueError):
+            raise HTTPException(422, f"bad value for '{k}': {v!r}")
+        setattr(cfg, k, val)
+        applied[k] = val
+    return applied
+
+
 @router.get("/backtest/quick")
 def backtest_quick(request: Request, months: int = 12, symbol: str = "BTC",
                    strategy: str = "prop_breakout"):
@@ -234,20 +254,8 @@ def backtest_quick(request: Request, months: int = 12, symbol: str = "BTC",
     if not (0 <= months <= 60):
         raise HTTPException(422, "months must be 0..60")
     cfg = copy.copy(CONFIG)
-    applied: dict = {}
-    for k, v in request.query_params.items():
-        if k in ("months", "symbol", "strategy"):
-            continue
-        if not hasattr(cfg, k):
-            raise HTTPException(422, f"unknown config field '{k}'")
-        cur = getattr(cfg, k)
-        try:
-            val = (v.strip().lower() in ("1", "true", "yes", "on")
-                   if isinstance(cur, bool) else type(cur)(v))
-        except (TypeError, ValueError):
-            raise HTTPException(422, f"bad value for '{k}': {v!r}")
-        setattr(cfg, k, val)
-        applied[k] = val
+    applied = _apply_query_overrides(cfg, request.query_params,
+                                     ("months", "symbol", "strategy"))
     try:
         r = replay(symbol, strategy, cfg, months=months)
     except Exception as e:
@@ -334,7 +342,7 @@ _SCAN_LOCK = None
 SCAN_STRATEGIES = ["prop_breakout", "vbo"]
 
 
-def _scan_worker(key: str, symbols: list, months: int) -> None:
+def _scan_worker(key: str, symbols: list, months: int, overrides: dict) -> None:
     import copy
 
     from .backtest.engine import scan_universe
@@ -345,7 +353,10 @@ def _scan_worker(key: str, symbols: list, months: int) -> None:
             _SCAN["results"] = list(rows)     # 부분 결과도 폴링에 노출
 
     try:
-        rows = scan_universe(symbols, SCAN_STRATEGIES, copy.copy(CONFIG),
+        cfg = copy.copy(CONFIG)
+        for k, v in overrides.items():
+            setattr(cfg, k, v)
+        rows = scan_universe(symbols, SCAN_STRATEGIES, cfg,
                              months=months, on_progress=tick)
         _SCAN.update(state="done", results=rows)
     except Exception as e:                        # noqa: BLE001 — surfaced via poll
@@ -353,11 +364,15 @@ def _scan_worker(key: str, symbols: list, months: int) -> None:
 
 
 @router.get("/backtest/scan")
-def backtest_scan(months: int = 12, symbols: str = "", refresh: int = 0):
+def backtest_scan(request: Request, months: int = 12, symbols: str = "",
+                  refresh: int = 0):
     """전 유니버스(또는 symbols=BNB,ADA,…)를 prop_breakout·vbo 두 전략으로
     백테스트해 게이트 통과·expectancy_r 순으로 랭킹한다. 프리셋 스윕처럼 이 URL
     하나를 새로고침하며 진행률을 보고, state=done 이면 표가 나온다. 심볼당 캔들을
-    한 번만 받으므로 느리지만(첫 실행), 아카이브는 디스크 캐시된다."""
+    한 번만 받으므로 느리지만(첫 실행), 아카이브는 디스크 캐시된다. 여분 쿼리
+    파라미터는 config 오버라이드 — ?trail_atr_mult=3&partial_tp_frac=0.33 처럼
+    청산 관리를 A/B 하려면 이 URL 하나로 전 로스터를 재백테스트한다."""
+    import copy
     import threading
     global _SCAN_LOCK
     if _SCAN_LOCK is None:
@@ -371,7 +386,10 @@ def backtest_scan(months: int = 12, symbols: str = "", refresh: int = 0):
             raise HTTPException(422, f"unknown symbols: {', '.join(bad)}")
     else:
         syms = list(SYMBOL_SPECS)
-    key = f"scan:{months}:{','.join(syms)}"
+    overrides = _apply_query_overrides(copy.copy(CONFIG), request.query_params,
+                                       ("months", "symbols", "refresh"))
+    ov_key = ",".join(f"{k}={overrides[k]}" for k in sorted(overrides))
+    key = f"scan:{months}:{','.join(syms)}:{ov_key}"
     with _SCAN_LOCK:
         if _SCAN["state"] == "running":
             return {"state": "running", "key": _SCAN["key"],
@@ -379,7 +397,7 @@ def backtest_scan(months: int = 12, symbols: str = "", refresh: int = 0):
                     "partial": _SCAN["results"] or [],
                     "hint": "이 URL을 새로고침하면 진행률·부분결과가 갱신됩니다"}
         if _SCAN["state"] == "done" and _SCAN["key"] == key and not refresh:
-            return {"state": "done", "months": months,
+            return {"state": "done", "months": months, "overrides": overrides,
                     "strategies": SCAN_STRATEGIES, "symbols": syms,
                     "rows": len(_SCAN["results"]), "results": _SCAN["results"]}
         if _SCAN["state"] == "error" and _SCAN["key"] == key and not refresh:
@@ -387,10 +405,11 @@ def backtest_scan(months: int = 12, symbols: str = "", refresh: int = 0):
                     "hint": "?refresh=1 로 재시도"}
         _SCAN.update(state="running", key=key, done=0, total=len(syms),
                      results=None, error="")
-        threading.Thread(target=_scan_worker, args=(key, syms, months),
+        threading.Thread(target=_scan_worker,
+                         args=(key, syms, months, overrides),
                          daemon=True, name="scan-universe").start()
     return {"state": "started", "key": key, "symbols": syms,
-            "strategies": SCAN_STRATEGIES,
+            "strategies": SCAN_STRATEGIES, "overrides": overrides,
             "hint": "계산 시작 — 이 URL을 30초~1분 간격으로 새로고침하세요. "
                     "심볼당 캔들 다운로드라 첫 실행은 수 분 걸립니다"}
 
