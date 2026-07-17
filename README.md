@@ -82,6 +82,26 @@
 
 4. 상태를 재배포 간에 유지하려면 Railway Volume을 붙이고 `DATA_DIR`를 마운트 경로로 지정하세요 (필수).
 
+### 텔레그램 알림 설정 (단방향 매매 알람)
+
+진입(매수/매도)·청산 시그널을 텔레그램으로 받는 단순 알람입니다 (계정 연동·수신 명령 없음).
+
+1. 텔레그램에서 **@BotFather** → `/newbot` → 봇 토큰 발급.
+2. 방금 만든 봇에게 **아무 메시지나 1건** 전송 (그룹이면 봇을 추가하고 그룹에 글 작성).
+3. `chat_id` 찾기 — 셋업 도구 실행 (프로젝트 의존성 없이 stdlib만 사용):
+   ```bash
+   TELEGRAM_BOT_TOKEN=<발급토큰> python scripts/telegram_chat_id.py
+   # → 봇에게 말 건 chat_id 목록 출력
+   ```
+4. Railway 변수에 `TELEGRAM_BOT_TOKEN`·`TELEGRAM_CHAT_ID` 설정 (선택: `TELEGRAM_ALERT_EVENTS`).
+5. 배선 확인 — 실제 메시지 1건 발송:
+   ```bash
+   TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... python scripts/telegram_chat_id.py --test
+   ```
+   배포 후에는 `POST /api/trading/notify/test` 로도 확인할 수 있고, `GET /api/trading/notify` 로 설정 상태를 조회합니다.
+
+> 미설정 시 알림은 조용히 OFF이며, 발송 실패는 트레이딩 루프에 영향을 주지 않습니다.
+
 ### 로컬 실행
 
 ```bash
