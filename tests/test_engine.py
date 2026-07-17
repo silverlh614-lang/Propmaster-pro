@@ -43,7 +43,16 @@ def test_indicators():
     chop = [100 + (5 if i % 2 == 0 else -5) for i in range(30)]
     assert ind.ema_flip_count(chop, 20, 20) >= 15
     assert ind.ema_flip_count([1, 2, 3], 5, 20) is None
-    print("ok  indicators (ema/sma/atr/flip-count)")
+
+    # adx: strong trend -> high, whipsaw range -> low, too few -> None
+    up = [_c(i * 60000, 100 + i, 100 + i + 1.5, 100 + i - 0.3, 100 + i + 1.2)
+          for i in range(40)]
+    chop = [_c(i * 60000, 100 + (2 if i % 2 == 0 else -2), 103, 97,
+               100 + (2 if i % 2 == 0 else -2)) for i in range(40)]
+    assert ind.adx(up, 14) > 40
+    assert ind.adx(chop, 14) < 15
+    assert ind.adx(up[:10], 14) is None
+    print("ok  indicators (ema/sma/atr/flip-count/adx)")
 
 
 # ------------------------------------------------------------- sizing
@@ -324,7 +333,20 @@ def test_trend_reinforcement_gates():
     small = ef[:-1] + [_c(26 * 900000, 101.0, 104, 100.9, 101.05, 100)]  # body 0.05
     conf = confirmation_gates(c, htf, small)
     assert not conf["engulf_ok"] and not conf["ok"]
-    print("ok  trend-reinforcement gates (volume/engulf/chop, defaults off)")
+
+    # adx gate (추세강도): a weak-ADX (range) break is refused, a trending one
+    # passes; default (adx_gate_min=0) leaves every series untouched.
+    htf0 = _box_breakout_ctx().htf_candles
+    trend_ef = [_c(i * 900000, 100 + i, 100 + i + 1.5, 100 + i - 0.3,
+                   100 + i + 1.2, 100) for i in range(40)]
+    chop_ef = [_c(i * 900000, 100 + (2 if i % 2 == 0 else -2), 103, 97,
+                  100 + (2 if i % 2 == 0 else -2), 100) for i in range(40)]
+    cadx = cfg(adx_gate_min=25.0)
+    assert confirmation_gates(cadx, htf0, trend_ef)["adx_ok"]
+    weak = confirmation_gates(cadx, htf0, chop_ef)
+    assert not weak["adx_ok"] and not weak["ok"]
+    assert confirmation_gates(cfg(), htf0, chop_ef)["adx_ok"]   # off -> untouched
+    print("ok  trend-reinforcement gates (volume/engulf/chop/adx, defaults off)")
 
 
 def test_backtest_replay():

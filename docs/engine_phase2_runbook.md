@@ -107,7 +107,7 @@ done
 ```
 바꿀 knob: `atr_stop_mult`, `rr_target`, `donchian_lookback`, `vbo_k`,
 `pyramid_max_adds`, 그리고 §7-1 확인 게이트(`volume_gate_mult`, `engulf_gate`,
-`chop_gate_flips`).
+`chop_gate_flips`, `adx_gate_min`).
 
 ## 7. 지표 해석 & 통과 기준
 
@@ -141,6 +141,7 @@ done
 | **거래량 = 세력** | 거래량 없는 돌파는 가짜다. 돌파봉 거래량이 평균의 배수 이상일 때만 진입 | `VOLUME_GATE_MULT` (0=off, 예 1.5~2.0) · `VOLUME_MA_PERIOD` (20) |
 | **변동성 군집 / 장악형** | 이탈한 range의 에너지가 다음 봉으로 전달되려면 돌파봉 몸통이 직전봉 몸통보다 커야 한다 | `ENGULF_GATE` (false) |
 | **횡보장도 추세다** | HTF 종가가 EMA를 자주 넘나들면(플립) 박스권 — 관망이 포지션이다 | `CHOP_GATE_FLIPS` (0=off, 예 4~6) · `CHOP_WINDOW` (20) |
+| **추세강도(ADX)** | 플립이 "진동"을 본다면 ADX는 "방향성 밀어붙임"을 본다. ADX가 낮은 돌파는 뒤에 추세가 없다 — 약한 추세장 돌파를 거부 | `ADX_GATE_MIN` (0=off, 예 20~25) · `ADX_PERIOD` (14) |
 
 구현: `app/trading/strategies/filters.py` (두 전략 공용) · 지표 `ema_flip_count`.
 대시보드 게이트 패널에 켠 노브만 행으로 추가 표시된다.
