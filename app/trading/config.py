@@ -225,17 +225,17 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
 # "종목을 더 찾기" 위한 깔때기: 여기 심볼은 /backtest/* 스캔·리플레이만 가능하고
 # 매매로직(enabled_symbols·토글·auto-discovery)에는 절대 들어오지 않는다.
 # 게이트(12mo, PF≥1.2·expR>0·trades≥20) 통과 시 SYMBOL_SPECS 로 승격한다.
-# 선정 기준: Binance USDⓈ-M + OKX 스왑 양쪽 상장 · 12mo+ 이력 · 밈코인 제외
-# (1000PEPE 등 배수 네이밍은 OKX 폴백과 인스트루먼트 불일치라 배제).
+# 선정 기준: Binance USDⓈ-M + OKX 스왑 양쪽 직명(direct) 상장 · 12mo+ 이력.
+# 진짜 배제 사유는 "밈코인"이 아니라 데이터 무결성 — Binance 1000x 배수 네이밍
+# (1000PEPE 등)은 OKX 폴백과 인스트루먼트 단위가 안 맞아 캔들이 어긋나므로 배제.
+# 밈이라도 양 거래소 직명 상장이면 후보로 넣는다.
 #
-# 후보 풀 = Breakout Prop 앱에서 실제 거래 가능한 종목(스크린샷 목록) 중 거래
-# 유니버스에 아직 없는 것들. Breakout 미지원 종목은 넣지 않는다(실거래 목록
-# 하위집합 원칙). SEI 는 목록에 없어 제외했다. 스펙(qty_step·tick_size)은
-# 리포 관례(가격 크기 기반)를 따르며, 게이트 통과로 SYMBOL_SPECS 로 승격할 때
-# 라이브 exchangeInfo 기준으로 재확정한다.
-# 미수록(대기): HYPE·PUMP·PENGU·MOODENG·POPCAT·PNUT·S(Sonic)·AIXBT·FARTCOIN·
-# XPL·ASTER — Binance USDⓈ-M 1000X 네이밍/OKX 폴백 불일치 위험 또는 12mo 미만
-# 신규라, 라이브 인스트루먼트 확인 후 편입한다(이 세션은 거래소 접근 차단).
+# 후보 풀 = Breakout Prop 앱 지원 종목(스크린샷 목록) 중 거래 유니버스에 아직
+# 없는 것. 앱 미지원 종목은 넣지 않는다(실거래 목록 하위집합 원칙). SEI 제외.
+# 스펙(qty_step·tick_size)은 리포 관례(가격 크기 기반)를 따르며, 게이트 통과로
+# SYMBOL_SPECS 승격 시 라이브 exchangeInfo 로 재확정한다.
+# 미수록(대기) 3종: PUMP·XPL·ASTER — 웹조사 결과 1000x 문제는 없으나(전부 직명)
+# 12mo 미만 신규(PUMP ~경계, XPL ~11mo, ASTER ~10mo)라 이력이 차면 편입한다.
 CANDIDATE_SPECS: dict[str, SymbolSpec] = {
     # 기존 후보 (모두 Breakout 목록 확인됨)
     "TRX": SymbolSpec("TRX", "TRXUSDT", 1.0, 1.0, 0.00001, 2.0),
@@ -265,6 +265,17 @@ CANDIDATE_SPECS: dict[str, SymbolSpec] = {
     "WIF": SymbolSpec("WIF", "WIFUSDT", 1.0, 1.0, 0.0001, 2.0),
     "KAITO": SymbolSpec("KAITO", "KAITOUSDT", 1.0, 1.0, 0.0001, 2.0),
     "GRASS": SymbolSpec("GRASS", "GRASSUSDT", 1.0, 1.0, 0.0001, 2.0),
+    # 미수록 11종 웹조사(2026-07-17) 편입 8종 — 전부 Binance USDⓈ-M 직명 퍼프
+    # + OKX 스왑 + 12mo+ 이력 확인. 1000x 네이밍 위험은 실제로 없었다(11종 모두
+    # 직명). S 는 반드시 SUSDT(≠ SONICUSDT, 다른 프로젝트). 보류 3종은 위 주석 참조.
+    "HYPE": SymbolSpec("HYPE", "HYPEUSDT", 0.01, 0.01, 0.01, 2.0),
+    "PENGU": SymbolSpec("PENGU", "PENGUUSDT", 1.0, 1.0, 0.000001, 2.0),
+    "MOODENG": SymbolSpec("MOODENG", "MOODENGUSDT", 1.0, 1.0, 0.00001, 2.0),
+    "POPCAT": SymbolSpec("POPCAT", "POPCATUSDT", 1.0, 1.0, 0.00001, 2.0),
+    "PNUT": SymbolSpec("PNUT", "PNUTUSDT", 1.0, 1.0, 0.00001, 2.0),
+    "S": SymbolSpec("S", "SUSDT", 1.0, 1.0, 0.00001, 2.0),
+    "AIXBT": SymbolSpec("AIXBT", "AIXBTUSDT", 1.0, 1.0, 0.00001, 2.0),
+    "FARTCOIN": SymbolSpec("FARTCOIN", "FARTCOINUSDT", 1.0, 1.0, 0.0001, 2.0),
 }
 
 
