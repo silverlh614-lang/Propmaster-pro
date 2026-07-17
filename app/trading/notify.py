@@ -107,7 +107,6 @@ class TelegramNotifier:
         HTML) so free-form notes never need escaping."""
         event = str(row.get("event", "")).upper()
         sym = row.get("symbol", "?")
-        paper = f"[{row.get('mode', 'paper')}]"
         if event == "OPEN":
             head = _SIDE_LABEL.get(str(row.get("side", "")).upper(),
                                    row.get("side", ""))
@@ -123,7 +122,6 @@ class TelegramNotifier:
                              + (f" ({lev}x)" if lev not in ("", None) else ""))
             if row.get("risk_usd", "") not in ("", None):
                 lines.append(f"리스크   {_amt(row.get('risk_usd'))}")
-            lines.append(paper)
             return "\n".join(lines)
         if event in ("CLOSE", "PARTIAL"):
             res = str(row.get("result", "")).upper()
@@ -137,13 +135,12 @@ class TelegramNotifier:
             lines.append(f"손익     {_money(row.get('pnl_usd', ''))}{tail}")
             if event == "CLOSE" and row.get("reason", ""):
                 lines.append(f"사유     {row.get('reason')}")
-            lines.append(paper)
             return "\n".join(lines)
         if event == "ADD":
             head = _SIDE_LABEL.get(str(row.get("side", "")).upper(),
                                    row.get("side", ""))
             return (f"➕ 애드업  {head}  {sym}\n"
-                    f"진입가   {_px(row.get('entry_price'))}\n{paper}")
+                    f"진입가   {_px(row.get('entry_price'))}")
         return f"{sym} {event} {row.get('side', '')}".strip()
 
     # ------------------------------------------------------------- dispatch

@@ -34,6 +34,7 @@ from .config import strategy_for
 from .discovery import AutoDiscovery
 from .execution.broker import make_broker
 from .notify import TelegramNotifier
+from .watch import proximity_scan
 from .strategies import STRATEGIES, make_strategy
 from .strategies.base import TradingContext
 
@@ -42,7 +43,7 @@ class SymbolBot:
     def __init__(self, spec: SymbolSpec, cfg: TradingConfig,
                  journal: Journal, risk: RiskManager,
                  pos_store: PositionStore, ledger: AccountLedger,
-                 prop_tick=None):
+                 prop_tick=None, notifier=None):
         self.spec = spec
         self.cfg = cfg
         self.journal = journal
@@ -50,6 +51,7 @@ class SymbolBot:
         self.pos_store = pos_store
         self.ledger = ledger
         self._prop_tick = prop_tick   # manager callback: one rule-engine mark
+        self.notifier = notifier      # 실시간 근접 알림용 (proximity_scan)
         self.collector = KlineCollector(spec.symbol, cfg.entry_interval,
                                         cfg.htf_interval, cfg.warmup_bars)
         self.mode = "paper"
@@ -62,8 +64,7 @@ class SymbolBot:
         self._last_pos_state: dict | None = None
         self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task] = []
-        # The kline feed runs independent of trading so the live chart warms up
-        # even while the bot is stopped.
+        # Feed runs independent of trading so the live chart warms while stopped.
         self._feed_stop = asyncio.Event()
         self._feed_task: asyncio.Task | None = None
 
@@ -168,6 +169,7 @@ class SymbolBot:
         """Act once per newly-closed entry candle: manage the open position
         against the bar, then let the strategy open or pyramid."""
         assert self.pm is not None
+        proximity_scan(self)            # 실시간 목표가·손절가 근접 알림 (매 폴링)
         entry = self.collector.entry_closed()
         if not entry:
             self.note = f"warming up ({self.collector.status()['entry_bars']} bars)"
@@ -276,11 +278,9 @@ class TradingManager:
         self.journal = Journal(sink=self.notifier.notify_trade)
         self.state_store = BotState()
         self.pos_store = PositionStore()
-        # 한 계좌 원칙: 전 심볼이 이 원장 하나에서 돈이 나간다. 계좌 레코드가
-        # 아직 없으면 운영 심볼(BTC)의 레거시 심볼별 equity 를 1회 승계한다.
+        # 한 계좌 원칙: 계좌 레코드가 없으면 운영 심볼(BTC) 레거시 equity 1회 승계.
         self.ledger = AccountLedger(cfg, AccountStore(),
-                                    legacy_equity=self.pos_store.load("BTC")
-                                    .get("equity"))
+            legacy_equity=self.pos_store.load("BTC").get("equity"))
         self.risk = RiskManager(cfg, self.journal, self.state_store)
         # 프롭 데스크: 챌린지 계좌 룰 엔진. 원장(잔고)·리스크 관문과 같은
         # 객체를 공유해야 하므로 여기(단일 조립점)서만 만든다.
@@ -352,7 +352,7 @@ class TradingManager:
         wire the same shared journal/risk/ledger/prop-tick objects."""
         return SymbolBot(spec, self.cfg, self.journal, self.risk,
                          self.pos_store, self.ledger,
-                         prop_tick=self.prop_tick)
+                         prop_tick=self.prop_tick, notifier=self.notifier)
 
     @property
     def running(self) -> bool:
