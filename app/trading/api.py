@@ -12,7 +12,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from .bot import MANAGER
-from .config import CONFIG, SYMBOL_SPECS
+from .config import CONFIG, SYMBOL_SPECS, CANDIDATE_SPECS, spec_for
 from .store import FIELDS
 from .strategies import STRATEGIES
 
@@ -147,7 +147,7 @@ def backtest(req: BacktestRequest):
     from .backtest.engine import replay
     from .backtest.metrics import compute
 
-    if req.symbol.upper() not in SYMBOL_SPECS:
+    if spec_for(req.symbol) is None:      # 후보 풀 포함 (백테스트 전용 허용)
         raise HTTPException(422, f"unknown symbol '{req.symbol}'")
     if req.strategy not in STRATEGIES:
         raise HTTPException(422, f"unknown strategy '{req.strategy}'")
@@ -194,7 +194,7 @@ def backtest_sweep(req: SweepRequest):
 
     from .backtest.engine import sweep
 
-    if req.symbol.upper() not in SYMBOL_SPECS:
+    if spec_for(req.symbol) is None:      # 후보 풀 포함 (백테스트 전용 허용)
         raise HTTPException(422, f"unknown symbol '{req.symbol}'")
     if req.strategy not in STRATEGIES:
         raise HTTPException(422, f"unknown strategy '{req.strategy}'")
@@ -227,7 +227,7 @@ def backtest_quick(request: Request, months: int = 12, symbol: str = "BTC",
     from .backtest.engine import replay
     from .backtest.metrics import compute
 
-    if symbol.upper() not in SYMBOL_SPECS:
+    if spec_for(symbol) is None:          # 후보 풀 포함 (백테스트 전용 허용)
         raise HTTPException(422, f"unknown symbol '{symbol}'")
     if strategy not in STRATEGIES:
         raise HTTPException(422, f"unknown strategy '{strategy}'")
@@ -297,7 +297,7 @@ def backtest_sweep_preset(months: int = 12, symbol: str = "BTC",
     if _SWEEP_LOCK is None:
         _SWEEP_LOCK = threading.Lock()
 
-    if symbol.upper() not in SYMBOL_SPECS:
+    if spec_for(symbol) is None:          # 후보 풀 포함 (백테스트 전용 허용)
         raise HTTPException(422, f"unknown symbol '{symbol}'")
     if not (0 <= months <= 60):
         raise HTTPException(422, "months must be 0..60")
@@ -366,7 +366,7 @@ def backtest_scan(months: int = 12, symbols: str = "", refresh: int = 0):
         raise HTTPException(422, "months must be 0..60")
     if symbols.strip():
         syms = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-        bad = [s for s in syms if s not in SYMBOL_SPECS]
+        bad = [s for s in syms if spec_for(s) is None]   # 후보 풀 포함
         if bad:
             raise HTTPException(422, f"unknown symbols: {', '.join(bad)}")
     else:
@@ -415,7 +415,8 @@ def live_status():
 def config():
     return {"config": CONFIG.as_dict(),
             "symbols": list(MANAGER.bots),          # 현재 가동 중(코어+수동+위성)
-            "universe": list(SYMBOL_SPECS),         # 토글 가능한 전체 후보
+            "universe": list(SYMBOL_SPECS),         # 거래 가능(토글) 유니버스
+            "scan_candidates": list(CANDIDATE_SPECS),  # 백테스트 스캔 전용 후보
             "core": MANAGER.core,                   # 항상 ON (토글 불가)
             "strategies": list(STRATEGIES),
             "phase": "1 (paper only)"}

@@ -203,6 +203,40 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
                       tick_size=0.0001, leverage_cap=2.0),
 }
 
+# ── 스캔 후보 풀 (백테스트 전용 — 거래 불가) ─────────────────────────────
+# "종목을 더 찾기" 위한 깔때기: 여기 심볼은 /backtest/* 스캔·리플레이만 가능하고
+# 매매로직(enabled_symbols·토글·auto-discovery)에는 절대 들어오지 않는다.
+# 게이트(12mo, PF≥1.2·expR>0·trades≥20) 통과 시 SYMBOL_SPECS 로 승격한다.
+# 선정 기준: Binance USDⓈ-M + OKX 스왑 양쪽 상장 · 12mo+ 이력 · 밈코인 제외
+# (1000PEPE 등 배수 네이밍은 OKX 폴백과 인스트루먼트 불일치라 배제).
+CANDIDATE_SPECS: dict[str, SymbolSpec] = {
+    "TRX": SymbolSpec("TRX", "TRXUSDT", 1.0, 1.0, 0.00001, 2.0),
+    "BCH": SymbolSpec("BCH", "BCHUSDT", 0.01, 0.01, 0.01, 2.0),
+    "ETC": SymbolSpec("ETC", "ETCUSDT", 0.1, 0.1, 0.001, 2.0),
+    "FIL": SymbolSpec("FIL", "FILUSDT", 0.1, 0.1, 0.001, 2.0),
+    "AAVE": SymbolSpec("AAVE", "AAVEUSDT", 0.01, 0.01, 0.01, 2.0),
+    "LDO": SymbolSpec("LDO", "LDOUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "CRV": SymbolSpec("CRV", "CRVUSDT", 0.1, 0.1, 0.0001, 2.0),
+    "POL": SymbolSpec("POL", "POLUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "HBAR": SymbolSpec("HBAR", "HBARUSDT", 1.0, 1.0, 0.00001, 2.0),
+    "ICP": SymbolSpec("ICP", "ICPUSDT", 0.1, 0.1, 0.001, 2.0),
+    "TIA": SymbolSpec("TIA", "TIAUSDT", 0.1, 0.1, 0.001, 2.0),
+    "SEI": SymbolSpec("SEI", "SEIUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "WLD": SymbolSpec("WLD", "WLDUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "JUP": SymbolSpec("JUP", "JUPUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "ENA": SymbolSpec("ENA", "ENAUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "TAO": SymbolSpec("TAO", "TAOUSDT", 0.01, 0.01, 0.01, 2.0),
+    "FET": SymbolSpec("FET", "FETUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "STX": SymbolSpec("STX", "STXUSDT", 1.0, 1.0, 0.0001, 2.0),
+}
+
+
+def spec_for(key: str) -> SymbolSpec | None:
+    """백테스트 전용 스펙 조회 — 거래 유니버스 우선, 없으면 스캔 후보 풀.
+    매매 경로는 이 함수를 쓰지 않는다 (SYMBOL_SPECS 직접 참조로 후보 차단)."""
+    k = key.upper()
+    return SYMBOL_SPECS.get(k) or CANDIDATE_SPECS.get(k)
+
 # Phase 2 게이트 확정 로스터 (docs/phase2_results.md): 12mo out-of-sample 통과
 # 5종목. 12mo 재확인에서 SUI 승격(PF 1.52·z 1.99), ARB 턱걸이 유지(PF 1.20),
 # OP(1.19)·NEAR(1.16)는 기준(PF≥1.2) 미달로 기본 로스터에서 강등 — 유니버스에는

@@ -115,6 +115,36 @@ def test_config_defaults_and_universe():
     print("ok  config (discovery OFF by default, expanded universe 2x)")
 
 
+def test_candidate_pool_scan_only():
+    """스캔 후보 풀(CANDIDATE_SPECS): 백테스트 조회(spec_for)는 되지만 거래
+    경로(enabled_symbols·토글)에는 절대 못 들어온다."""
+    import asyncio
+    import os as _os
+    from app.trading.bot import TradingManager
+    from app.trading.config import (CANDIDATE_SPECS, enabled_symbols,
+                                    spec_for)
+    # 유니버스와 겹치지 않고, spec_for 로 조회 가능
+    assert not set(CANDIDATE_SPECS) & set(SYMBOL_SPECS)
+    assert spec_for("TIA") is CANDIDATE_SPECS["TIA"]
+    assert spec_for("eth") is SYMBOL_SPECS["ETH"]
+    assert spec_for("NOPE") is None
+    # env 에 후보를 넣어도 로스터에서 걸러진다
+    saved = _os.environ.get("TRADING_SYMBOLS")
+    _os.environ["TRADING_SYMBOLS"] = "ETH,TIA,WLD"
+    try:
+        assert [s.key for s in enabled_symbols()] == ["ETH"]
+    finally:
+        if saved is None:
+            _os.environ.pop("TRADING_SYMBOLS", None)
+        else:
+            _os.environ["TRADING_SYMBOLS"] = saved
+    # 토글도 거부 (매매로직 차단)
+    mgr = TradingManager(TradingConfig())
+    r = asyncio.run(mgr.toggle_symbol("TIA", True))
+    assert not r["ok"] and "TIA" not in mgr.bots
+    print("ok  candidate pool is scan-only (backtest yes, trading blocked)")
+
+
 # ------------------------------------------------- manager wiring (offline)
 
 def test_manager_wiring():
@@ -200,6 +230,7 @@ if __name__ == "__main__":
     test_rank_liquidity_floor_and_order()
     test_select_satellites()
     test_config_defaults_and_universe()
+    test_candidate_pool_scan_only()
     test_manager_wiring()
     test_symbol_toggle()
     test_toggle_refuses_open_position()

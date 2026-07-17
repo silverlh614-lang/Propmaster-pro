@@ -9,7 +9,7 @@ FSM's own stop/target/trailing against each bar's high/low (no look-ahead).
 """
 from __future__ import annotations
 
-from ..config import SYMBOL_SPECS, TradingConfig, SymbolSpec
+from ..config import TradingConfig, SymbolSpec, spec_for
 from ..indicators import atr
 from ..models import Candle
 from ..strategies import make_strategy
@@ -110,7 +110,10 @@ def replay(symbol: str, strategy_name: str, cfg: TradingConfig,
     live (1000-bar REST cap) or, with months > 0, pulled from the Binance
     vision monthly archive (years of history — the Phase 2 default).
     Returns {trades, closes, equity_curve, snapshots}."""
-    spec: SymbolSpec = SYMBOL_SPECS[symbol.upper()]
+    # 후보 풀(CANDIDATE_SPECS)도 백테스트는 허용 — 거래 경로는 여전히 차단
+    spec: SymbolSpec | None = spec_for(symbol)
+    if spec is None:
+        raise KeyError(f"unknown symbol '{symbol}'")
     if entry_candles is None:
         if months > 0:
             from .history import fetch_history
@@ -199,7 +202,9 @@ def sweep(symbol: str, strategy_name: str, base_cfg: TradingConfig,
     combos = list(itertools.product(*(grid[k] for k in keys)))
     if len(combos) > max_combos:
         raise ValueError(f"{len(combos)} combos > cap {max_combos}")
-    spec = SYMBOL_SPECS[symbol.upper()]
+    spec = spec_for(symbol)
+    if spec is None:
+        raise KeyError(f"unknown symbol '{symbol}'")
     if entry_candles is None or htf_candles is None:
         if months > 0:
             from .history import fetch_history
@@ -252,7 +257,9 @@ def scan_universe(symbols: list[str], strategies: list[str],
     rows: list[dict] = []
     total = len(symbols)
     for i, sym in enumerate(symbols):
-        spec = SYMBOL_SPECS[sym.upper()]
+        spec = spec_for(sym)
+        if spec is None:
+            continue
         try:
             if months > 0:
                 from .history import fetch_history
