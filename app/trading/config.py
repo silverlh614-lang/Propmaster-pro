@@ -209,6 +209,16 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
     "WLD": SymbolSpec("WLD", "WLDUSDT", 1.0, 1.0, 0.0001, 2.0),
     "STX": SymbolSpec("STX", "STXUSDT", 1.0, 1.0, 0.0001, 2.0),
     "LDO": SymbolSpec("LDO", "LDOUSDT", 1.0, 1.0, 0.0001, 2.0),
+    # 2026-07-17 후보 게이트 라운드2 승격 7종 (docs/phase2_results.md): 12mo
+    # out-of-sample 통과 (expR>0·PF≥1.2·trades≥20). DOT 는 vbo, 나머지 6종은
+    # prop_breakout 이 최적. AVAX 는 통과했으나 27거래 소표본 — 재확인 대상 플래그.
+    "ZEC": SymbolSpec("ZEC", "ZECUSDT", 0.001, 0.001, 0.01, 2.0),
+    "RENDER": SymbolSpec("RENDER", "RENDERUSDT", 0.1, 0.1, 0.001, 2.0),
+    "JTO": SymbolSpec("JTO", "JTOUSDT", 0.1, 0.1, 0.0001, 2.0),
+    "TRUMP": SymbolSpec("TRUMP", "TRUMPUSDT", 0.1, 0.1, 0.001, 2.0),
+    "ALGO": SymbolSpec("ALGO", "ALGOUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "AVAX": SymbolSpec("AVAX", "AVAXUSDT", 1.0, 1.0, 0.001, 2.0),
+    "DOT": SymbolSpec("DOT", "DOTUSDT", 0.1, 0.1, 0.001, 2.0),
 }
 
 # ── 스캔 후보 풀 (백테스트 전용 — 거래 불가) ─────────────────────────────
@@ -238,26 +248,21 @@ CANDIDATE_SPECS: dict[str, SymbolSpec] = {
     "HBAR": SymbolSpec("HBAR", "HBARUSDT", 1.0, 1.0, 0.00001, 2.0),
     "TIA": SymbolSpec("TIA", "TIAUSDT", 0.1, 0.1, 0.001, 2.0),
     "JUP": SymbolSpec("JUP", "JUPUSDT", 1.0, 1.0, 0.0001, 2.0),
-    # Breakout 실거래 목록 정합 — 확립된 알트/L1/L2 (Binance USDⓈ-M + OKX 직명)
+    # Breakout 정합 알트 — 2026-07-17 라운드2 게이트 스캔 후 잔류분(전부 탈락).
+    # 통과 7종(ZEC·RENDER·JTO·TRUMP·ALGO·AVAX·DOT)은 SYMBOL_SPECS 로 승격됨.
+    # GRASS 는 PF 1.17~1.18로 문턱 근접(관찰) — 엑싯 A/B로 재도전 가치 있음.
     "ADA": SymbolSpec("ADA", "ADAUSDT", 1.0, 1.0, 0.0001, 2.0),
     "DOGE": SymbolSpec("DOGE", "DOGEUSDT", 1.0, 1.0, 0.00001, 2.0),
     "LINK": SymbolSpec("LINK", "LINKUSDT", 0.01, 0.01, 0.001, 2.0),
     "LTC": SymbolSpec("LTC", "LTCUSDT", 0.001, 0.001, 0.01, 2.0),
-    "DOT": SymbolSpec("DOT", "DOTUSDT", 0.1, 0.1, 0.001, 2.0),
     "UNI": SymbolSpec("UNI", "UNIUSDT", 1.0, 1.0, 0.001, 2.0),
-    "AVAX": SymbolSpec("AVAX", "AVAXUSDT", 1.0, 1.0, 0.001, 2.0),
     "BNB": SymbolSpec("BNB", "BNBUSDT", 0.01, 0.01, 0.01, 2.0),
     "ATOM": SymbolSpec("ATOM", "ATOMUSDT", 0.1, 0.1, 0.001, 2.0),
-    "ALGO": SymbolSpec("ALGO", "ALGOUSDT", 1.0, 1.0, 0.0001, 2.0),
     "APT": SymbolSpec("APT", "APTUSDT", 0.1, 0.1, 0.001, 2.0),
     "INJ": SymbolSpec("INJ", "INJUSDT", 0.1, 0.1, 0.001, 2.0),
-    "ZEC": SymbolSpec("ZEC", "ZECUSDT", 0.001, 0.001, 0.01, 2.0),
     "ONDO": SymbolSpec("ONDO", "ONDOUSDT", 1.0, 1.0, 0.0001, 2.0),
-    "RENDER": SymbolSpec("RENDER", "RENDERUSDT", 0.1, 0.1, 0.001, 2.0),
-    "JTO": SymbolSpec("JTO", "JTOUSDT", 0.1, 0.1, 0.0001, 2.0),
     "VIRTUAL": SymbolSpec("VIRTUAL", "VIRTUALUSDT", 1.0, 1.0, 0.0001, 2.0),
     "WIF": SymbolSpec("WIF", "WIFUSDT", 1.0, 1.0, 0.0001, 2.0),
-    "TRUMP": SymbolSpec("TRUMP", "TRUMPUSDT", 0.1, 0.1, 0.001, 2.0),
     "KAITO": SymbolSpec("KAITO", "KAITOUSDT", 1.0, 1.0, 0.0001, 2.0),
     "GRASS": SymbolSpec("GRASS", "GRASSUSDT", 1.0, 1.0, 0.0001, 2.0),
 }
@@ -270,11 +275,12 @@ def spec_for(key: str) -> SymbolSpec | None:
     return SYMBOL_SPECS.get(k) or CANDIDATE_SPECS.get(k)
 
 # Phase 2 게이트 확정 로스터 (docs/phase2_results.md): 12mo out-of-sample 통과분
-# 중 Breakout Prop 실거래 지원 종목만. 1차(ETH·SOL·XRP·ARB·SUI) + 후보 스캔 승격
-# 4종(TAO·WLD·STX·LDO). 게이트는 통과했으나 Breakout 미지원인 FET·ENA·ICP 는 제외
-# (실거래 목록 하위집합 원칙). OP·NEAR 는 기준 미달로 기본 제외(유니버스 잔류).
-# 되돌리려면 TRADING_SYMBOLS 로 오버라이드(단 유니버스에 있는 심볼만 유효).
-DEFAULT_SYMBOLS = "ETH,SOL,XRP,ARB,SUI,TAO,WLD,STX,LDO"
+# 중 Breakout Prop 실거래 지원 종목만. 1차(ETH·SOL·XRP·ARB·SUI) + 후보 승격
+# 4종(TAO·WLD·STX·LDO) + 라운드2 승격 7종(ZEC·RENDER·JTO·TRUMP·ALGO·AVAX·DOT).
+# 게이트는 통과했으나 Breakout 미지원인 FET·ENA·ICP 는 제외(실거래 하위집합 원칙).
+# OP·NEAR 는 기준 미달로 기본 제외(유니버스 잔류). 되돌리려면 TRADING_SYMBOLS 로.
+DEFAULT_SYMBOLS = ("ETH,SOL,XRP,ARB,SUI,TAO,WLD,STX,LDO,"
+                   "ZEC,RENDER,JTO,TRUMP,ALGO,AVAX,DOT")
 
 # 심볼별 검증된 최적 전략 (게이트 A/B). env(TRADING_SYMBOL_STRATEGY) 미설정 시
 # 폴백 — SOL/XRP 를 Donchian 으로 잘못 돌리면 손실이라 이 매핑을 baking 한다.
@@ -284,7 +290,12 @@ DEFAULT_SYMBOL_STRATEGY = {"ETH": "prop_breakout", "SOL": "vbo", "XRP": "vbo",
                           "OP": "vbo", "NEAR": "prop_breakout",
                           # 후보 스캔 승격분 (12mo 게이트, Breakout 지원분만)
                           "TAO": "prop_breakout", "WLD": "vbo",
-                          "STX": "prop_breakout", "LDO": "vbo"}
+                          "STX": "prop_breakout", "LDO": "vbo",
+                          # 라운드2 승격 7종 — DOT 만 vbo, 나머지는 prop_breakout
+                          "ZEC": "prop_breakout", "RENDER": "prop_breakout",
+                          "JTO": "prop_breakout", "TRUMP": "prop_breakout",
+                          "ALGO": "prop_breakout", "AVAX": "prop_breakout",
+                          "DOT": "vbo"}
 
 
 def enabled_symbols() -> list[SymbolSpec]:

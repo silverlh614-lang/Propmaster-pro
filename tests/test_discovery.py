@@ -108,8 +108,9 @@ def test_config_defaults_and_universe():
     # 유니버스 = Phase 2 게이트 통과분(+BTC 기준심볼)만. 검증 알트는 2x 클래스.
     for k in ("NEAR", "ARB", "OP", "SUI"):
         assert k in SYMBOL_SPECS and SYMBOL_SPECS[k].leverage_cap == 2.0
-    # 백테스트 탈락 종목은 유니버스에서 제거돼 매매로직에 못 들어온다
-    for k in ("BNB", "DOGE", "ADA", "AVAX", "LINK", "LTC", "DOT", "ATOM",
+    # 백테스트 탈락 종목은 유니버스에서 제거돼 매매로직에 못 들어온다.
+    # (AVAX·DOT 는 2026-07-17 라운드2 게이트를 통과해 승격 — 제외 목록에서 뺐다.)
+    for k in ("BNB", "DOGE", "ADA", "LINK", "LTC", "ATOM",
               "APT", "UNI", "INJ", "TON"):
         assert k not in SYMBOL_SPECS, f"{k} should be removed from the universe"
     print("ok  config (discovery OFF by default, expanded universe 2x)")
