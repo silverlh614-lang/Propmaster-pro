@@ -117,9 +117,14 @@ CANDIDATE_SPECS(스캔 전용 풀) 18종을 12mo 게이트로 스캔. **7종 통
 
 ## 최종 로스터 v2 (2026-07-17)
 
-**기본 12종:** ETH·SOL·XRP·ARB·SUI (1차) + FET·TAO·WLD·ENA·STX·LDO·ICP (2차 승격).
-`DEFAULT_SYMBOLS`·`DEFAULT_SYMBOL_STRATEGY` 반영. 유니버스 15종(+BTC·OP·NEAR 관리용).
+**게이트 통과 12종:** ETH·SOL·XRP·ARB·SUI (1차) + FET·TAO·WLD·ENA·STX·LDO·ICP (2차 승격).
 전략 분포: Donchian 7(ETH·ARB·SUI·FET·TAO·ENA·STX) · vbo 5(SOL·XRP·WLD·LDO·ICP).
+
+> **로스터 정정 (Breakout 실거래 정합):** Breakout Prop 앱 종목 목록(스크린샷)
+> 대조 결과 **FET·ENA·ICP 는 실거래 미지원**이라 기본 로스터에서 제외했다 —
+> 게이트는 통과했으나 실제로 매매할 수 없는 종목은 시뮬레이션에서도 거래하지
+> 않는다(실거래 목록 하위집합 원칙). 현재 `DEFAULT_SYMBOLS` = 9종
+> (ETH·SOL·XRP·ARB·SUI·TAO·WLD·STX·LDO). 유니버스 12종(+BTC·OP·NEAR 관리용).
 동시 포지션 5·총 오픈리스크 2% 전역 캡은 그대로 — 종목 증가 = 기회 밀도 증가, 리스크 불변.
 
 ## 유니버스 축소 = 매매로직 강제 (탈락 종목 원천 차단)
