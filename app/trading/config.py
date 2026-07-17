@@ -201,6 +201,14 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
                      tick_size=0.0001, leverage_cap=2.0),
     "SUI": SymbolSpec("SUI", "SUIUSDT", qty_step=0.1, min_qty=0.1,
                       tick_size=0.0001, leverage_cap=2.0),
+    # 2026-07-17 후보 스캔(12mo)에서 승격된 6종 (docs/phase2_results.md)
+    "FET": SymbolSpec("FET", "FETUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "TAO": SymbolSpec("TAO", "TAOUSDT", 0.01, 0.01, 0.01, 2.0),
+    "WLD": SymbolSpec("WLD", "WLDUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "ENA": SymbolSpec("ENA", "ENAUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "STX": SymbolSpec("STX", "STXUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "LDO": SymbolSpec("LDO", "LDOUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "ICP": SymbolSpec("ICP", "ICPUSDT", 0.1, 0.1, 0.001, 2.0),
 }
 
 # ── 스캔 후보 풀 (백테스트 전용 — 거래 불가) ─────────────────────────────
@@ -215,19 +223,12 @@ CANDIDATE_SPECS: dict[str, SymbolSpec] = {
     "ETC": SymbolSpec("ETC", "ETCUSDT", 0.1, 0.1, 0.001, 2.0),
     "FIL": SymbolSpec("FIL", "FILUSDT", 0.1, 0.1, 0.001, 2.0),
     "AAVE": SymbolSpec("AAVE", "AAVEUSDT", 0.01, 0.01, 0.01, 2.0),
-    "LDO": SymbolSpec("LDO", "LDOUSDT", 1.0, 1.0, 0.0001, 2.0),
     "CRV": SymbolSpec("CRV", "CRVUSDT", 0.1, 0.1, 0.0001, 2.0),
     "POL": SymbolSpec("POL", "POLUSDT", 1.0, 1.0, 0.0001, 2.0),
     "HBAR": SymbolSpec("HBAR", "HBARUSDT", 1.0, 1.0, 0.00001, 2.0),
-    "ICP": SymbolSpec("ICP", "ICPUSDT", 0.1, 0.1, 0.001, 2.0),
     "TIA": SymbolSpec("TIA", "TIAUSDT", 0.1, 0.1, 0.001, 2.0),
     "SEI": SymbolSpec("SEI", "SEIUSDT", 1.0, 1.0, 0.0001, 2.0),
-    "WLD": SymbolSpec("WLD", "WLDUSDT", 1.0, 1.0, 0.0001, 2.0),
     "JUP": SymbolSpec("JUP", "JUPUSDT", 1.0, 1.0, 0.0001, 2.0),
-    "ENA": SymbolSpec("ENA", "ENAUSDT", 1.0, 1.0, 0.0001, 2.0),
-    "TAO": SymbolSpec("TAO", "TAOUSDT", 0.01, 0.01, 0.01, 2.0),
-    "FET": SymbolSpec("FET", "FETUSDT", 1.0, 1.0, 0.0001, 2.0),
-    "STX": SymbolSpec("STX", "STXUSDT", 1.0, 1.0, 0.0001, 2.0),
 }
 
 
@@ -238,18 +239,21 @@ def spec_for(key: str) -> SymbolSpec | None:
     return SYMBOL_SPECS.get(k) or CANDIDATE_SPECS.get(k)
 
 # Phase 2 게이트 확정 로스터 (docs/phase2_results.md): 12mo out-of-sample 통과
-# 5종목. 12mo 재확인에서 SUI 승격(PF 1.52·z 1.99), ARB 턱걸이 유지(PF 1.20),
-# OP(1.19)·NEAR(1.16)는 기준(PF≥1.2) 미달로 기본 로스터에서 강등 — 유니버스에는
-# 남아 있어 열린 포지션 관리·수동 토글은 가능하나 기본으로는 거래하지 않는다.
+# 12종. 1차(ETH·SOL·XRP·ARB·SUI) + 2026-07-17 후보 스캔 승격 7종(FET·TAO·WLD·
+# ENA·STX·LDO·ICP). OP·NEAR 는 기준 미달로 기본 제외(유니버스 잔류 — 포지션 관리용).
 # 되돌리려면 TRADING_SYMBOLS 로 오버라이드(단 유니버스에 있는 심볼만 유효).
-DEFAULT_SYMBOLS = "ETH,SOL,XRP,ARB,SUI"
+DEFAULT_SYMBOLS = "ETH,SOL,XRP,ARB,SUI,FET,TAO,WLD,ENA,STX,LDO,ICP"
 
 # 심볼별 검증된 최적 전략 (게이트 A/B). env(TRADING_SYMBOL_STRATEGY) 미설정 시
 # 폴백 — SOL/XRP 를 Donchian 으로 잘못 돌리면 손실이라 이 매핑을 baking 한다.
 # OP/NEAR 매핑은 수동으로 켤 때를 위해 유지.
 DEFAULT_SYMBOL_STRATEGY = {"ETH": "prop_breakout", "SOL": "vbo", "XRP": "vbo",
                           "ARB": "prop_breakout", "SUI": "prop_breakout",
-                          "OP": "vbo", "NEAR": "prop_breakout"}
+                          "OP": "vbo", "NEAR": "prop_breakout",
+                          # 2026-07-17 후보 스캔 승격분 (12mo 게이트)
+                          "FET": "prop_breakout", "TAO": "prop_breakout",
+                          "WLD": "vbo", "ENA": "prop_breakout",
+                          "STX": "prop_breakout", "LDO": "vbo", "ICP": "vbo"}
 
 
 def enabled_symbols() -> list[SymbolSpec]:

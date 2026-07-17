@@ -130,7 +130,7 @@ def test_candidate_pool_scan_only():
     assert spec_for("NOPE") is None
     # env 에 후보를 넣어도 로스터에서 걸러진다
     saved = _os.environ.get("TRADING_SYMBOLS")
-    _os.environ["TRADING_SYMBOLS"] = "ETH,TIA,WLD"
+    _os.environ["TRADING_SYMBOLS"] = "ETH,TIA,SEI"
     try:
         assert [s.key for s in enabled_symbols()] == ["ETH"]
     finally:
