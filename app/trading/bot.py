@@ -33,6 +33,7 @@ from .store import AccountStore, BotState, Journal, PositionStore
 from .config import strategy_for
 from .discovery import AutoDiscovery
 from .execution.broker import make_broker
+from .notify import TelegramNotifier
 from .strategies import STRATEGIES, make_strategy
 from .strategies.base import TradingContext
 
@@ -271,7 +272,8 @@ class SymbolBot:
 class TradingManager:
     def __init__(self, cfg: TradingConfig = CONFIG):
         self.cfg = cfg
-        self.journal = Journal()
+        self.notifier = TelegramNotifier()   # 텔레그램 단방향 알람 (기본 OFF)
+        self.journal = Journal(sink=self.notifier.notify_trade)
         self.state_store = BotState()
         self.pos_store = PositionStore()
         # 한 계좌 원칙: 전 심볼이 이 원장 하나에서 돈이 나간다. 계좌 레코드가

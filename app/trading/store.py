@@ -42,9 +42,12 @@ def _utcnow() -> str:
 class Journal:
     """CSV-backed journal, mtime-cached so status polling doesn't reparse."""
 
-    def __init__(self):
+    def __init__(self, sink=None):
         self._cache_key: tuple | None = None
         self._cache_rows: list[dict] = []
+        # optional one-way notifier (e.g. TelegramNotifier.notify_trade). Kept
+        # generic so store.py owns no network dependency; must never raise.
+        self._sink = sink
 
     def append(self, rec: dict) -> dict:
         row = {k: rec.get(k, "") for k in FIELDS}
@@ -57,6 +60,11 @@ class Journal:
                 if new:
                     w.writeheader()
                 w.writerow(row)
+        if self._sink is not None:
+            try:
+                self._sink(row)
+            except Exception:
+                pass            # notification is a side channel — never block the journal
         return row
 
     def _rows(self) -> list[dict]:

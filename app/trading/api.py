@@ -69,6 +69,28 @@ def reset_kill():
     return {"ok": True}
 
 
+@router.get("/notify")
+def notify_status():
+    """텔레그램 알림 설정 상태 (토큰·챗ID 설정 여부, 알림 대상 이벤트). 값은
+    노출하지 않고 설정 여부만 반환한다."""
+    n = MANAGER.notifier
+    return {"enabled": n.enabled,
+            "token_configured": bool(n.token),
+            "chat_configured": bool(n.chat_id),
+            "events": sorted(n.events)}
+
+
+@router.post("/notify/test")
+def notify_test():
+    """테스트 메시지 1건 발송 — 봇 토큰·챗ID 배선을 트레이드 없이 확인한다."""
+    n = MANAGER.notifier
+    if not n.enabled:
+        raise HTTPException(
+            409, "텔레그램 미설정 — TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 를 설정하세요")
+    n.send_text("🔔 Propmaster Pro 알림 테스트 — 연결 정상")
+    return {"ok": True, "sent": True}
+
+
 @router.post("/symbols")
 async def toggle_symbol(req: SymbolToggleRequest):
     """토글 UI: 후보 유니버스의 한 종목을 켜고(위성 봇 가동) 끈다(청산 상태만).
