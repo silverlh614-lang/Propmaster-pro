@@ -714,7 +714,14 @@ async function toggleSym(k){
       wasActive?"봇 정지·차트 종료":"위성 봇 가동",false);
     await loadConfig();                 // SYMS/active 갱신 → 탭·칩 재렌더
     renderSymTabs();refresh();
-  }catch(e){notify("warn","종목 토글 실패",(e&&e.message)||"",true);}
+  }catch(e){
+    const msg=(e&&e.message)||"";
+    // 열린 포지션 때문에 못 끄는 경우: 해당 종목 탭으로 이동시켜 바로 수동 청산 유도
+    if(/포지션/.test(msg)&&SYMS.includes(k)){
+      setSym(k);
+      notify("warn","먼저 청산 필요",k+" 포지션을 이 탭의 ‘✕ 수동 청산’으로 닫은 뒤 다시 끄세요",true);
+    }else{notify("warn","종목 토글 실패",msg,true);}
+  }
 }
 
 // ---- 이벤트 알림: 토스트 + Web Audio 합성음 (음원 파일 없음) ----
