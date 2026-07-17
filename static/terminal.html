@@ -401,9 +401,25 @@
     .toast::after{display:none}
     button:hover:enabled,button:active:enabled{transform:none}
   }
+
+  /* ── 세로 고정: 폰이 가로로 돌아가면(가로 + 짧은 높이) 세로 안내 오버레이가
+     전 화면을 덮는다. 데스크톱/태블릿(높이 큼)은 절대 트리거되지 않는다.
+     PWA(홈화면 설치) 에선 매니페스트 orientation:portrait 가 실제로 회전을 잠근다. ── */
+  #rotateHint{display:none}
+  @media (orientation: landscape) and (max-height: 500px){
+    #rotateHint{display:flex;position:fixed;inset:0;z-index:9999;flex-direction:column;
+      align-items:center;justify-content:center;gap:14px;text-align:center;
+      background:var(--bg);color:var(--dim);padding:24px;font-size:14px;letter-spacing:.02em}
+    #rotateHint .ic{font-size:44px;animation:rotHint 2.2s ease-in-out infinite}
+    #rotateHint b{color:var(--ink);font-size:17px;letter-spacing:.06em}
+  }
+  @keyframes rotHint{0%,55%{transform:rotate(0)}80%,100%{transform:rotate(-90deg)}}
 </style>
 </head>
 <body>
+
+<div id="rotateHint"><div class="ic">📱</div><b>세로 모드 전용</b>
+  <div>기기를 세로로 돌려 주세요.<br>홈 화면에 추가(설치)하면 자동으로 세로 고정됩니다.</div></div>
 
 <div id="toasts"></div>
 
@@ -662,6 +678,9 @@
 
 <script>
 const $=id=>document.getElementById(id);
+// 세로 고정 베스트에포트 — 설치 PWA·지원 브라우저에서만 잠기고, 일반 탭에선
+// 조용히 실패한다(그 경우 #rotateHint 오버레이가 폴백). 무해.
+try{ if(screen.orientation&&screen.orientation.lock) screen.orientation.lock("portrait").catch(()=>{}); }catch(e){}
 const fmt=(n,d=2)=>(n==null||n===""||isNaN(n)?"–":Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}));
 const money=n=>(n==null||isNaN(n)?"–":(n<0?"-$":"$")+fmt(Math.abs(n)));
 
