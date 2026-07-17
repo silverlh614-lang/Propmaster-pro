@@ -219,6 +219,13 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
     "ALGO": SymbolSpec("ALGO", "ALGOUSDT", 1.0, 1.0, 0.0001, 2.0),
     "AVAX": SymbolSpec("AVAX", "AVAXUSDT", 1.0, 1.0, 0.001, 2.0),
     "DOT": SymbolSpec("DOT", "DOTUSDT", 0.1, 0.1, 0.001, 2.0),
+    # 2026-07-17 라운드3 승격 4종 (미수록 11종 편입분 스캔): 밈/고변동 종목은
+    # vbo(변동성 돌파)가 최적 — HYPE·POPCAT·PNUT = vbo. S(Sonic, =SUSDT)는 양
+    # 전략 통과했고 견고성(118거래·PF1.32)으로 prop_breakout 매핑.
+    "HYPE": SymbolSpec("HYPE", "HYPEUSDT", 0.01, 0.01, 0.01, 2.0),
+    "POPCAT": SymbolSpec("POPCAT", "POPCATUSDT", 1.0, 1.0, 0.00001, 2.0),
+    "PNUT": SymbolSpec("PNUT", "PNUTUSDT", 1.0, 1.0, 0.00001, 2.0),
+    "S": SymbolSpec("S", "SUSDT", 1.0, 1.0, 0.00001, 2.0),
 }
 
 # ── 스캔 후보 풀 (백테스트 전용 — 거래 불가) ─────────────────────────────
@@ -265,15 +272,10 @@ CANDIDATE_SPECS: dict[str, SymbolSpec] = {
     "WIF": SymbolSpec("WIF", "WIFUSDT", 1.0, 1.0, 0.0001, 2.0),
     "KAITO": SymbolSpec("KAITO", "KAITOUSDT", 1.0, 1.0, 0.0001, 2.0),
     "GRASS": SymbolSpec("GRASS", "GRASSUSDT", 1.0, 1.0, 0.0001, 2.0),
-    # 미수록 11종 웹조사(2026-07-17) 편입 8종 — 전부 Binance USDⓈ-M 직명 퍼프
-    # + OKX 스왑 + 12mo+ 이력 확인. 1000x 네이밍 위험은 실제로 없었다(11종 모두
-    # 직명). S 는 반드시 SUSDT(≠ SONICUSDT, 다른 프로젝트). 보류 3종은 위 주석 참조.
-    "HYPE": SymbolSpec("HYPE", "HYPEUSDT", 0.01, 0.01, 0.01, 2.0),
+    # 미수록 편입분 라운드3 스캔 후 잔류(탈락). 통과 4종(HYPE·POPCAT·PNUT·S)은
+    # SYMBOL_SPECS 승격. PENGU·MOODENG 은 +기대값이나 PF 1.1x 문턱 미달(관찰).
     "PENGU": SymbolSpec("PENGU", "PENGUUSDT", 1.0, 1.0, 0.000001, 2.0),
     "MOODENG": SymbolSpec("MOODENG", "MOODENGUSDT", 1.0, 1.0, 0.00001, 2.0),
-    "POPCAT": SymbolSpec("POPCAT", "POPCATUSDT", 1.0, 1.0, 0.00001, 2.0),
-    "PNUT": SymbolSpec("PNUT", "PNUTUSDT", 1.0, 1.0, 0.00001, 2.0),
-    "S": SymbolSpec("S", "SUSDT", 1.0, 1.0, 0.00001, 2.0),
     "AIXBT": SymbolSpec("AIXBT", "AIXBTUSDT", 1.0, 1.0, 0.00001, 2.0),
     "FARTCOIN": SymbolSpec("FARTCOIN", "FARTCOINUSDT", 1.0, 1.0, 0.0001, 2.0),
 }
@@ -291,7 +293,8 @@ def spec_for(key: str) -> SymbolSpec | None:
 # 게이트는 통과했으나 Breakout 미지원인 FET·ENA·ICP 는 제외(실거래 하위집합 원칙).
 # OP·NEAR 는 기준 미달로 기본 제외(유니버스 잔류). 되돌리려면 TRADING_SYMBOLS 로.
 DEFAULT_SYMBOLS = ("ETH,SOL,XRP,ARB,SUI,TAO,WLD,STX,LDO,"
-                   "ZEC,RENDER,JTO,TRUMP,ALGO,AVAX,DOT")
+                   "ZEC,RENDER,JTO,TRUMP,ALGO,AVAX,DOT,"
+                   "HYPE,POPCAT,PNUT,S")
 
 # 심볼별 검증된 최적 전략 (게이트 A/B). env(TRADING_SYMBOL_STRATEGY) 미설정 시
 # 폴백 — SOL/XRP 를 Donchian 으로 잘못 돌리면 손실이라 이 매핑을 baking 한다.
@@ -306,7 +309,10 @@ DEFAULT_SYMBOL_STRATEGY = {"ETH": "prop_breakout", "SOL": "vbo", "XRP": "vbo",
                           "ZEC": "prop_breakout", "RENDER": "prop_breakout",
                           "JTO": "prop_breakout", "TRUMP": "prop_breakout",
                           "ALGO": "prop_breakout", "AVAX": "prop_breakout",
-                          "DOT": "vbo"}
+                          "DOT": "vbo",
+                          # 라운드3 승격 4종 — 밈/고변동은 vbo, S는 견고성으로 prop
+                          "HYPE": "vbo", "POPCAT": "vbo", "PNUT": "vbo",
+                          "S": "prop_breakout"}
 
 
 def enabled_symbols() -> list[SymbolSpec]:
