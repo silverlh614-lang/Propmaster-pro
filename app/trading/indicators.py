@@ -58,3 +58,55 @@ def atr(candles: list[Candle], period: int) -> float | None:
     for tr in trs[period:]:
         atr_val = (atr_val * (period - 1) + tr) / period
     return atr_val
+
+
+def adx(candles: list[Candle], period: int) -> float | None:
+    """Wilder's Average Directional Index — trend STRENGTH, not direction.
+    A low ADX (~<20-25) marks a range where breakout entries whipsaw; a high
+    ADX confirms a directional regime worth breaking into. Complements the
+    EMA-flip chop count (which measures oscillation, not push). None until
+    enough bars for the double Wilder smoothing (±DM/TR over `period`, then
+    DX over `period`): needs >= 2*period+1 candles.
+
+    Direction-agnostic on purpose — the HTF EMA filter already sets the side;
+    ADX only vetoes entries when no side is trending (invariant: provider/
+    regime reads never choose Long vs Short)."""
+    if period <= 0 or len(candles) < 2 * period + 1:
+        return None
+    plus_dm: list[float] = []
+    minus_dm: list[float] = []
+    trs: list[float] = []
+    for i in range(1, len(candles)):
+        c, p = candles[i], candles[i - 1]
+        up = c.high - p.high
+        down = p.low - c.low
+        plus_dm.append(up if up > down and up > 0 else 0.0)
+        minus_dm.append(down if down > up and down > 0 else 0.0)
+        trs.append(max(c.high - c.low, abs(c.high - p.close),
+                       abs(c.low - p.close)))
+
+    def _smooth(xs: list[float]) -> list[float]:
+        """Wilder running total: seed = sum of first `period`, then
+        s = s - s/period + x (the smoothing the DI/ADX formula assumes)."""
+        s = sum(xs[:period])
+        out = [s]
+        for x in xs[period:]:
+            s = s - s / period + x
+            out.append(s)
+        return out
+
+    tr_s, pdm_s, mdm_s = _smooth(trs), _smooth(plus_dm), _smooth(minus_dm)
+    dxs: list[float] = []
+    for tr, pdm, mdm in zip(tr_s, pdm_s, mdm_s):
+        if tr <= 0:
+            dxs.append(0.0)
+            continue
+        pdi, mdi = 100.0 * pdm / tr, 100.0 * mdm / tr
+        denom = pdi + mdi
+        dxs.append(100.0 * abs(pdi - mdi) / denom if denom > 0 else 0.0)
+    if len(dxs) < period:
+        return None
+    adx_val = sum(dxs[:period]) / period
+    for dx in dxs[period:]:
+        adx_val = (adx_val * (period - 1) + dx) / period
+    return adx_val

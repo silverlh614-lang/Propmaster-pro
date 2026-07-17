@@ -92,12 +92,15 @@ class TradingConfig:
 
     # --- 추세강화 확인 게이트 (박스권 휩쏘 방어 — 전 돌파 전략 공용, 기본 OFF) ---
     # 출처 이론: 거래량=세력(돌파 확인), 장악형 몸통(변동성 군집·range 에너지),
-    # 횡보장도 추세의 일종 → 인지되면 관망. 켜는 것도 백테스트 게이트 A/B로만.
+    # 횡보장도 추세의 일종 → 인지되면 관망, ADX=추세강도(약한 추세 돌파 거부).
+    # 켜는 것도 백테스트 게이트 A/B로만.
     volume_gate_mult: float = 0.0         # 돌파봉 거래량 ≥ mult×SMA(vol) 요구 (0=off)
     volume_ma_period: int = 20            # 거래량 SMA 기간
     engulf_gate: bool = False             # 돌파봉 몸통 > 직전봉 몸통(장악형) 요구
     chop_gate_flips: int = 0              # 최근 window HTF봉 EMA 플립 ≥ N이면 관망 (0=off)
     chop_window: int = 20                 # 플립 계수 구간 (HTF 봉 수)
+    adx_gate_min: float = 0.0             # ADX(추세강도) ≥ N 요구 (0=off, 예 20~25)
+    adx_period: int = 14                  # ADX Wilder 스무딩 기간
 
     # --- 애드업 / pyramiding (손실 뒤 증액과 한 끗 — prop 기본 OFF) ----------
     pyramid_enabled: bool = False

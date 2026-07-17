@@ -1,7 +1,7 @@
 """@responsibility 추세강화 확인 게이트 — 거래량·장악형 몸통·횡보 플립 필터, 돌파 전략 공용 (기본 OFF)
 
 Trend-reinforcement confirmation gates shared by the breakout strategies.
-The source theory's defense against box-range (박스권) whipsaw, as three
+The source theory's defense against box-range (박스권) whipsaw, as four
 independent checks — every knob is OFF by default and may only be enabled
 through the Phase 2 backtest gate (no hand-tuning):
 
@@ -14,10 +14,14 @@ through the Phase 2 backtest gate (no hand-tuning):
   chop_gate_flips  — 횡보장도 추세다: if the HTF close flipped sides against
       its EMA >= N times over the last chop_window bars, the market is
       ranging — stand aside instead of trading every fake break.
+  adx_gate_min     — 추세강도(ADX): Wilder's ADX must be >= N on the entry
+      TF. Where chop_gate_flips reads oscillation, ADX reads directional
+      push — a weak-ADX break has no trend behind it. Direction-agnostic
+      (the HTF EMA already picks the side); this only vetoes weak regimes.
 """
 from __future__ import annotations
 
-from ..indicators import ema_flip_count, sma
+from ..indicators import adx, ema_flip_count, sma
 from ..models import Candle
 
 
@@ -27,7 +31,8 @@ def confirmation_gates(cfg, htf: list[Candle], ef: list[Candle]) -> dict:
     so all-default configs reproduce pre-gate behaviour exactly."""
     cur, prev = ef[-1], ef[-2]
     out: dict = {"volume_ok": True, "engulf_ok": True, "chop_ok": True,
-                 "vol_ratio": None, "flips": None}
+                 "adx_ok": True, "vol_ratio": None, "flips": None,
+                 "adx_val": None}
     if cfg.volume_gate_mult > 0:
         base = sma([x.volume for x in ef[:-1]], cfg.volume_ma_period)
         if base and base > 0:
@@ -42,7 +47,12 @@ def confirmation_gates(cfg, htf: list[Candle], ef: list[Candle]) -> dict:
                                cfg.donchian_htf_ema, cfg.chop_window)
         out["flips"] = flips
         out["chop_ok"] = flips is not None and flips < cfg.chop_gate_flips
-    out["ok"] = bool(out["volume_ok"] and out["engulf_ok"] and out["chop_ok"])
+    if cfg.adx_gate_min > 0:
+        val = adx(ef, cfg.adx_period)
+        out["adx_val"] = val
+        out["adx_ok"] = val is not None and val >= cfg.adx_gate_min
+    out["ok"] = bool(out["volume_ok"] and out["engulf_ok"]
+                     and out["chop_ok"] and out["adx_ok"])
     return out
 
 
@@ -65,4 +75,10 @@ def confirmation_rows(cfg, conf: dict) -> list[dict]:
                      "info": (f"{conf['flips']}회 < {cfg.chop_gate_flips}회"
                               f"/{cfg.chop_window}봉"
                               if conf["flips"] is not None else "표본 부족")})
+    if cfg.adx_gate_min > 0:
+        val = conf["adx_val"]
+        rows.append({"key": "adx", "label": "추세강도(ADX)",
+                     "ok": bool(conf["adx_ok"]),
+                     "info": (f"{val:.1f} ≥ {cfg.adx_gate_min:g}"
+                              if val is not None else "표본 부족")})
     return rows
