@@ -30,6 +30,7 @@
 | **트레이딩 엔진** (`app/trading/`) | 프롭 최적화 자동매매: kline 수집 → Donchian 돌파+HTF 추세 시그널(`prop_breakout` 기본) → ATR 스탑·2:1 R:R → 부분청산·트레일링. 사이징은 잔여 프롭 예산 기반(일일예산 25%·DD예산 10%), 당일 3패 시 정지, 애드업 OFF (Phase 1 = 페이퍼 전용, `TRADING_*`로 조정) | 온라인/상시 (봇 start 시, 저널은 `data/trades.csv`) |
 | **프롭 데스크** (`app/prop/`) | 챌린지 수명주기·룰 엔진·행위 감시·스케일링·페이아웃 + 통과 확률 몬테카를로 | 매 마감봉 판정 |
 | **관제탑** (`static/terminal.html`) | `/` — 프롭 패널·봇 상태·포지션·캔들·백테스트·트레이드 저널 | — |
+| **텔레그램 알림** (`app/trading/notify.py`) | 단방향 매매 알람: 진입(매수/매도)·청산 이벤트를 텔레그램으로 푸시. 저널 sink 배선, 계정 연동·수신 명령 없음. 기본 OFF (`TELEGRAM_*` 설정 시 ON) | 이벤트 발생 시 |
 
 ## API
 
@@ -49,6 +50,8 @@
 | `POST /api/trading/stop` | 봇 정지 (열린 페이퍼 포지션 청산) |
 | `POST /api/trading/manual` | 수동 개입 `{action: long\|short\|close, symbol}` |
 | `POST /api/trading/kill/reset` | 킬스위치 해제 |
+| `GET /api/trading/notify` | 텔레그램 알림 설정 상태 (설정 여부·대상 이벤트, 값 비노출) |
+| `POST /api/trading/notify/test` | 텔레그램 테스트 메시지 1건 발송 (배선 확인) |
 | `GET /api/trading/candles` | 캔들 조회 (`?symbol=BTC&tf=entry\|htf&limit=120`) |
 | `GET /api/trading/trades` | 트레이드 저널 + 승률/PnL 집계 (`?symbol=BTC`) |
 | `GET /api/trading/trades.csv` | 저널 엑셀(CSV) 다운로드 (`?symbol=BTC`) |
@@ -73,6 +76,9 @@
    | `DATA_DIR` | `./data` | 프롭 계좌·봇 상태·저널·히스토리 캐시 저장 경로 (볼륨 마운트 시 지정) |
    | `TRADING_*` | — | 엔진 설정 오버라이드 (`docs/engine_phase2_runbook.md` 표 참조) |
    | `PROP_*` | — | 프롭 설정: `PROP_MIN_PAYOUT`·`PROP_FEE_MULT`·`PROP_SCALE_MAX`·`PROP_CONDUCT_ENFORCE` |
+   | `TELEGRAM_BOT_TOKEN` | — | 텔레그램 봇 토큰 (BotFather 발급). 미설정 시 알림 OFF |
+   | `TELEGRAM_CHAT_ID` | — | 알림 수신 챗 ID. 토큰과 함께 있어야 발송 활성화 |
+   | `TELEGRAM_ALERT_EVENTS` | `OPEN,CLOSE` | 알림 대상 이벤트 (예: `OPEN,CLOSE,PARTIAL,ADD`) |
 
 4. 상태를 재배포 간에 유지하려면 Railway Volume을 붙이고 `DATA_DIR`를 마운트 경로로 지정하세요 (필수).
 
