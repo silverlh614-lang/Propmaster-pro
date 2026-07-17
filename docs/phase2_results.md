@@ -115,6 +115,32 @@ CANDIDATE_SPECS(스캔 전용 풀) 18종을 12mo 게이트로 스캔. **7종 통
   미달). **패턴 재확인: 엣지는 신형 내러티브(AI·L2·신 L1)에 집중, 성숙 알트는 무엣지.**
 - FET 는 두 전략 모두 통과한 유일 종목 — 종목 자체 추세성의 강한 신호.
 
+## 후보 풀 스캔 라운드2 (2026-07-17) — Breakout 정합 21종 × 두 전략, 12mo
+
+Breakout Prop 실거래 목록 정합으로 CANDIDATE_SPECS 에 추가한 21종을 12mo 게이트로
+스캔(`scripts/gate_scan.py` / `GET /api/trading/backtest/scan`). **7종 통과 → 승격.**
+
+| 승격 | 전략 | 거래 | 승률 | expR | PF | 수익% | MDD($) |
+|---|---|---|---|---|---|---|---|
+| **AVAX** ⚠️ | prop_breakout | 27 | 37% | 0.793 | 2.26 | +17.6 | -8.6 |
+| **DOT** | vbo | 67 | 43% | 0.261 | 1.39 | +18.0 | -26.8 |
+| **ZEC** | prop_breakout | 118 | 39% | 0.241 | 1.38 | +30.7 | -16.9 |
+| **RENDER** | prop_breakout | 112 | 43% | 0.211 | 1.34 | +25.0 | -11.6 |
+| **TRUMP** | prop_breakout | 96 | 38% | 0.192 | 1.27 | +18.5 | -20.2 |
+| **JTO** | prop_breakout | 114 | 39% | 0.134 | 1.21 | +14.9 | -29.1 |
+| **ALGO** | prop_breakout | 113 | 41% | 0.133 | 1.21 | +14.8 | -20.4 |
+
+- ⚠️ **AVAX**: PF 2.26·expR 0.79로 수치는 최상이나 **27거래 소표본**(게이트 최소 20 턱걸이).
+  BTC(표본<20 제외)와 같은 맥락의 잠정 승격 — 다음 라운드 재현성·z-score 확인 대상.
+- **관찰(watch) — GRASS**: prop_breakout PF 1.17(+12.7%)·vbo PF 1.18(+7.4%), 둘 다 +기대값
+  이나 PF 1.2 문턱 미달. 후보풀 잔류 — 엑싯 A/B(2.5R/0.5/2.5×ATR)로 재도전 가치.
+- **탈락 13종**: ADA·LINK·UNI(PF~1.0 본전) · LTC·APT·DOGE·BNB(음) · KAITO·ONDO·ATOM·INJ
+  (본전~음) · VIRTUAL·WIF(+기대값이나 PF 1.1x).
+- **전략 편향**: 통과 7종 중 **6종이 prop_breakout**(DOT만 vbo) — 이 후보군에선 Donchian
+  돌파가 변동성 돌파(vbo)보다 우세. 승격 매핑도 그대로 반영(`DEFAULT_SYMBOL_STRATEGY`).
+- **엣지는 전략·창(window) 의존**: 예전 "무엣지"로 제거했던 DOT·AVAX 가 12mo 재평가에서
+  통과 — DOT 는 vbo 로, AVAX 는 prop_breakout 로. 반면 ADA·LINK·LTC·BNB 는 이번에도 재탈락.
+
 ## 최종 로스터 v2 (2026-07-17)
 
 **게이트 통과 12종:** ETH·SOL·XRP·ARB·SUI (1차) + FET·TAO·WLD·ENA·STX·LDO·ICP (2차 승격).
@@ -123,14 +149,18 @@ CANDIDATE_SPECS(스캔 전용 풀) 18종을 12mo 게이트로 스캔. **7종 통
 > **로스터 정정 (Breakout 실거래 정합):** Breakout Prop 앱 종목 목록(스크린샷)
 > 대조 결과 **FET·ENA·ICP 는 실거래 미지원**이라 기본 로스터에서 제외했다 —
 > 게이트는 통과했으나 실제로 매매할 수 없는 종목은 시뮬레이션에서도 거래하지
-> 않는다(실거래 목록 하위집합 원칙). 현재 `DEFAULT_SYMBOLS` = 9종
-> (ETH·SOL·XRP·ARB·SUI·TAO·WLD·STX·LDO). 유니버스 12종(+BTC·OP·NEAR 관리용).
+> 않는다(실거래 목록 하위집합 원칙).
+>
+> **라운드2 반영(위 표):** ZEC·RENDER·JTO·TRUMP·ALGO·AVAX·DOT 7종 추가 승격 →
+> 현재 `DEFAULT_SYMBOLS` = **16종**(ETH·SOL·XRP·ARB·SUI·TAO·WLD·STX·LDO +
+> ZEC·RENDER·JTO·TRUMP·ALGO·AVAX·DOT). 유니버스 19종(+BTC·OP·NEAR 관리용).
 동시 포지션 5·총 오픈리스크 2% 전역 캡은 그대로 — 종목 증가 = 기회 밀도 증가, 리스크 불변.
 
 ## 유니버스 축소 = 매매로직 강제 (탈락 종목 원천 차단)
 
 탈락 알트 11종(BNB·DOGE·ADA·AVAX·LINK·LTC·DOT·ATOM·APT·UNI·INJ)을 `SYMBOL_SPECS`
-에서 **완전히 제거**. `enabled_symbols()`·토글·auto-discovery 가 모두 이 dict 로
+에서 **완전히 제거**. (단 **AVAX·DOT 는 2026-07-17 라운드2 게이트를 통과해 재승격** —
+엣지는 전략·창 의존이라 재평가에서 뒤집힐 수 있음을 보여준 사례.) `enabled_symbols()`·토글·auto-discovery 가 모두 이 dict 로
 필터하므로:
 - 기존 `TRADING_SYMBOLS` env 에 탈락 종목이 남아 있어도 **재배포 시 자동 제외**
   (env 18종 → 검증 7종만 가동, 검증됨).
