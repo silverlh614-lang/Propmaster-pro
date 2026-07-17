@@ -62,7 +62,8 @@ class Journal:
                 w.writerow(row)
         if self._sink is not None:
             try:
-                self._sink(row)
+                # 정규화된 CSV 필드(row) + CSV 밖 표시용 여분 키(rec: target/stop 등)
+                self._sink({**rec, **row})
             except Exception:
                 pass            # notification is a side channel — never block the journal
         return row

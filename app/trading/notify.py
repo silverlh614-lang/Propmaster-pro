@@ -27,11 +27,27 @@ _QUEUE_MAX = 100
 # 진입 방향 라벨: LONG = 매수, SHORT = 매도 (사용자가 요구한 "매수/매도" 알림)
 _SIDE_LABEL = {"LONG": "🟢 매수 / LONG", "SHORT": "🔴 매도 / SHORT"}
 _RESULT_LABEL = {"WIN": "✅ 익절", "LOSS": "🛑 손절", "CLOSED": "⚪ 청산"}
+_SEP = "━━━━━━━━━━"
 
 
 def _money(v) -> str:
     try:
         return f"{float(v):+.2f} USDT"
+    except (TypeError, ValueError):
+        return str(v)
+
+
+def _amt(v) -> str:
+    try:
+        return f"{float(v):.2f} USDT"
+    except (TypeError, ValueError):
+        return f"{v} USDT"
+
+
+def _px(v) -> str:
+    try:
+        s = f"{float(v):.6f}".rstrip("0").rstrip(".")
+        return s or "0"
     except (TypeError, ValueError):
         return str(v)
 
@@ -54,7 +70,7 @@ class TelegramNotifier:
         self.chat_id = (chat_id if chat_id is not None
                         else os.getenv("TELEGRAM_CHAT_ID", "")).strip()
         raw = (events if events is not None
-               else os.getenv("TELEGRAM_ALERT_EVENTS", "OPEN,CLOSE"))
+               else os.getenv("TELEGRAM_ALERT_EVENTS", "OPEN,CLOSE,PARTIAL"))
         self.events = {e.strip().upper() for e in raw.split(",") if e.strip()}
         self._q: "queue.Queue[str]" = queue.Queue(maxsize=_QUEUE_MAX)
         self._worker: threading.Thread | None = None
@@ -91,41 +107,43 @@ class TelegramNotifier:
         HTML) so free-form notes never need escaping."""
         event = str(row.get("event", "")).upper()
         sym = row.get("symbol", "?")
-        mode = row.get("mode", "paper")
+        paper = f"[{row.get('mode', 'paper')}]"
         if event == "OPEN":
             head = _SIDE_LABEL.get(str(row.get("side", "")).upper(),
                                    row.get("side", ""))
-            lines = [f"{head}  {sym}  진입",
-                     f"진입가 {row.get('entry_price', '')}"]
+            lines = [f"{head}  {sym}  진입", _SEP,
+                     f"진입가   {_px(row.get('entry_price'))}"]
+            if row.get("target_price", "") not in ("", None):
+                lines.append(f"목표가   {_px(row.get('target_price'))}")
+            if row.get("stop_price", "") not in ("", None):
+                lines.append(f"손절가   {_px(row.get('stop_price'))}")
             qty, lev = row.get("qty", ""), row.get("leverage", "")
             if qty not in ("", None):
-                lines.append(f"수량 {qty}" + (f" · {lev}x" if lev not in ("", None) else ""))
+                lines.append(f"수량     {qty}"
+                             + (f" ({lev}x)" if lev not in ("", None) else ""))
             if row.get("risk_usd", "") not in ("", None):
-                lines.append(f"리스크 {row.get('risk_usd')} USDT")
-            strat, det = row.get("strategy", ""), row.get("signal_detail", "")
-            if strat or det:
-                lines.append(f"전략 {strat}" + (f" · {det}" if det else ""))
-            lines.append(f"[{mode}]")
+                lines.append(f"리스크   {_amt(row.get('risk_usd'))}")
+            lines.append(paper)
             return "\n".join(lines)
         if event in ("CLOSE", "PARTIAL"):
             res = str(row.get("result", "")).upper()
-            label = ("🟡 부분익절" if event == "PARTIAL"
-                     else _RESULT_LABEL.get(res, "⚪ 청산"))
-            lines = [f"{label}  {sym}"]
+            head = (f"🎯 목표가 도달 · 부분익절  {sym}" if event == "PARTIAL"
+                    else f"{_RESULT_LABEL.get(res, '⚪ 청산')}  {sym}")
+            lines = [head, _SEP]
             if row.get("exit_price", "") not in ("", None):
-                lines.append(f"청산가 {row.get('exit_price')}")
+                lines.append(f"청산가   {_px(row.get('exit_price'))}")
             rr = row.get("r_multiple", "")
             tail = f" ({_r(rr)})" if rr not in ("", None) else ""
-            lines.append(f"손익 {_money(row.get('pnl_usd', ''))}{tail}")
-            if row.get("reason", ""):
-                lines.append(f"사유 {row.get('reason')}")
-            lines.append(f"[{mode}]")
+            lines.append(f"손익     {_money(row.get('pnl_usd', ''))}{tail}")
+            if event == "CLOSE" and row.get("reason", ""):
+                lines.append(f"사유     {row.get('reason')}")
+            lines.append(paper)
             return "\n".join(lines)
         if event == "ADD":
             head = _SIDE_LABEL.get(str(row.get("side", "")).upper(),
                                    row.get("side", ""))
-            return (f"➕ 애드업 {head}  {sym}\n"
-                    f"진입가 {row.get('entry_price', '')}\n[{mode}]")
+            return (f"➕ 애드업  {head}  {sym}\n"
+                    f"진입가   {_px(row.get('entry_price'))}\n{paper}")
         return f"{sym} {event} {row.get('side', '')}".strip()
 
     # ------------------------------------------------------------- dispatch

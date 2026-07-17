@@ -18,7 +18,8 @@ from app.trading.store import Journal
 def _open_row(side="LONG"):
     return {"event": "OPEN", "symbol": "ETH", "mode": "paper", "side": side,
             "strategy": "prop_breakout", "signal_detail": "donchian 55 break",
-            "entry_price": 3421.5, "qty": 0.03, "leverage": 3.0, "risk_usd": 2.0}
+            "entry_price": 3421.5, "target_price": 3550.0, "stop_price": 3357.0,
+            "qty": 0.03, "leverage": 3.0, "risk_usd": 2.0}
 
 
 def _close_row(result="WIN"):
@@ -42,10 +43,14 @@ def test_enabled_gate():
 def test_format_open():
     long_msg = TelegramNotifier.format(_open_row("LONG"))
     assert "매수" in long_msg and "ETH" in long_msg and "3421.5" in long_msg
-    assert "prop_breakout" in long_msg and "[paper]" in long_msg
+    # 목표가·손절가 표시, [paper] 유지, 전략 줄 제거
+    assert "목표가" in long_msg and "3550" in long_msg
+    assert "손절가" in long_msg and "3357" in long_msg
+    assert "[paper]" in long_msg
+    assert "전략" not in long_msg and "prop_breakout" not in long_msg
     short_msg = TelegramNotifier.format(_open_row("SHORT"))
     assert "매도" in short_msg
-    print("ok  format OPEN (buy/sell direction, entry, strategy)")
+    print("ok  format OPEN (buy/sell, entry+target+stop, no strategy)")
 
 
 def test_format_close():
