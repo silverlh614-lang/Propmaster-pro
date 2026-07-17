@@ -79,7 +79,24 @@
   TRADING_SYMBOL_STRATEGY = ETH:prop_breakout,ARB:prop_breakout,SUI:prop_breakout,NEAR:prop_breakout,SOL:vbo,XRP:vbo,OP:vbo
   TRADING_MAX_TOTAL_OPEN_RISK_PCT = 3
   ```
-- **BTC·나머지 12종목 제외.** ARB·OP·SUI 는 상장 역사가 짧아 12mo 재확인 시 재평가.
+- **BTC·나머지 12종목 제외.**
+
+## 12개월 재확인 (2026-07-17) — 보강 4종목 티어 판정
+
+6mo 강세였던 4종목을 12mo 로 재검증 (레짐 2개 포함). 기준: PF ≥ 1.2.
+
+| 심볼 · 전략 | 12mo 거래 | 승률 | expR | PF | z | MDD($) | 판정 |
+|---|---|---|---|---|---|---|---|
+| **SUI · prop_breakout** | 109 | 45% | 0.31 | **1.52** | **1.99** | -23.0 | ✅ **승격** — 전 포트폴리오 최고 z |
+| **ARB · prop_breakout** | 109 | 39% | 0.133 | **1.20** | 0.88 | -21.0 | ✅ 턱걸이 유지 (경계선) |
+| OP · vbo | 67 | 39% | 0.128 | 1.19 | 0.63 | -32.2 | ❌ 강등 — 기준 0.01 미달 + **15연패** |
+| NEAR · prop_breakout | 123 | 37% | 0.116 | 1.16 | 0.75 | -25.8 | ❌ 강등 — 6mo(1.26)→12mo(1.16) 붕괴 |
+
+- 해석: OP·NEAR 의 6mo 성적은 최근 레짐 편향이었다 — 12mo 창에서 임계 밑으로.
+  OP 의 최대 15연패는 일일 3패 정지 규칙과 결합하면 evaluation 진행을 심하게 저해.
+- **최종 로스터(기본): ETH·SOL·XRP·ARB·SUI (5종목).** `DEFAULT_SYMBOLS` 반영.
+  OP·NEAR 는 유니버스에 남김(열린 포지션 관리·수동 토글용) — 기본 거래 제외.
+- evaluation P(pass) (12mo 프로필): SUI 99.9%·ARB 87.3% (브리치 0%).
 
 ## 유니버스 축소 = 매매로직 강제 (탈락 종목 원천 차단)
 

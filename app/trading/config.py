@@ -203,13 +203,16 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
                       tick_size=0.0001, leverage_cap=2.0),
 }
 
-# Phase 2 게이트 확정 로스터 (docs/phase2_results.md): 게이트 통과 7종목.
-# 코어 3(ETH·SOL·XRP)은 12mo 검증, 보강 4(ARB·SUI·OP·NEAR)는 6mo 강세.
+# Phase 2 게이트 확정 로스터 (docs/phase2_results.md): 12mo out-of-sample 통과
+# 5종목. 12mo 재확인에서 SUI 승격(PF 1.52·z 1.99), ARB 턱걸이 유지(PF 1.20),
+# OP(1.19)·NEAR(1.16)는 기준(PF≥1.2) 미달로 기본 로스터에서 강등 — 유니버스에는
+# 남아 있어 열린 포지션 관리·수동 토글은 가능하나 기본으로는 거래하지 않는다.
 # 되돌리려면 TRADING_SYMBOLS 로 오버라이드(단 유니버스에 있는 심볼만 유효).
-DEFAULT_SYMBOLS = "ETH,SOL,XRP,ARB,SUI,OP,NEAR"
+DEFAULT_SYMBOLS = "ETH,SOL,XRP,ARB,SUI"
 
 # 심볼별 검증된 최적 전략 (게이트 A/B). env(TRADING_SYMBOL_STRATEGY) 미설정 시
-# 폴백 — SOL/XRP/OP 를 Donchian 으로 잘못 돌리면 손실이라 이 매핑을 baking 한다.
+# 폴백 — SOL/XRP 를 Donchian 으로 잘못 돌리면 손실이라 이 매핑을 baking 한다.
+# OP/NEAR 매핑은 수동으로 켤 때를 위해 유지.
 DEFAULT_SYMBOL_STRATEGY = {"ETH": "prop_breakout", "SOL": "vbo", "XRP": "vbo",
                           "ARB": "prop_breakout", "SUI": "prop_breakout",
                           "OP": "vbo", "NEAR": "prop_breakout"}
