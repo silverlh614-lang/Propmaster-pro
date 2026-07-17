@@ -141,6 +141,19 @@ Breakout Prop 실거래 목록 정합으로 CANDIDATE_SPECS 에 추가한 21종�
 - **엣지는 전략·창(window) 의존**: 예전 "무엣지"로 제거했던 DOT·AVAX 가 12mo 재평가에서
   통과 — DOT 는 vbo 로, AVAX 는 prop_breakout 로. 반면 ADA·LINK·LTC·BNB 는 이번에도 재탈락.
 
+## 미수록 11종 분석 (2026-07-17, 웹조사)
+
+앱 지원 목록에는 있으나 후보풀 미편입이던 11종(HYPE·PUMP·PENGU·MOODENG·POPCAT·
+PNUT·S·AIXBT·FARTCOIN·XPL·ASTER)을 상장·네이밍·이력 기준으로 조사(Binance/OKX
+공지·집계 사이트).
+
+- **1000x 네이밍 위험은 전무** — 11종 모두 Binance USDⓈ-M **직명** 퍼프. 단
+  **S(Sonic)=`SUSDT`** (≠ `SONICUSDT`=Sonic SVM, 별개 프로젝트) — 매핑 주의.
+- **편입 8종**(직명 + OKX 스왑 + 12mo+): HYPE·PENGU·MOODENG·POPCAT·PNUT·S·
+  AIXBT·FARTCOIN → CANDIDATE_SPECS 추가, 라운드3 게이트 스캔 대상.
+- **보류 3종**(12mo 미만): PUMP(TGE 2025-07, ~경계) · XPL(2025-09, ~11mo) ·
+  ASTER(2025-09, ~10mo). 이력이 차는 2026-09~10 재검토.
+
 ## 최종 로스터 v2 (2026-07-17)
 
 **게이트 통과 12종:** ETH·SOL·XRP·ARB·SUI (1차) + FET·TAO·WLD·ENA·STX·LDO·ICP (2차 승격).
