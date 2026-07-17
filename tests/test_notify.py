@@ -43,10 +43,10 @@ def test_enabled_gate():
 def test_format_open():
     long_msg = TelegramNotifier.format(_open_row("LONG"))
     assert "매수" in long_msg and "ETH" in long_msg and "3421.5" in long_msg
-    # 목표가·손절가 표시, [paper] 유지, 전략 줄 제거
+    # 목표가·손절가 표시, 전략 줄 제거, [paper] 제거
     assert "목표가" in long_msg and "3550" in long_msg
     assert "손절가" in long_msg and "3357" in long_msg
-    assert "[paper]" in long_msg
+    assert "paper" not in long_msg and "[" not in long_msg
     assert "전략" not in long_msg and "prop_breakout" not in long_msg
     short_msg = TelegramNotifier.format(_open_row("SHORT"))
     assert "매도" in short_msg
