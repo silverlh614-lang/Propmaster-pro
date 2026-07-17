@@ -201,14 +201,14 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
                      tick_size=0.0001, leverage_cap=2.0),
     "SUI": SymbolSpec("SUI", "SUIUSDT", qty_step=0.1, min_qty=0.1,
                       tick_size=0.0001, leverage_cap=2.0),
-    # 2026-07-17 후보 스캔(12mo)에서 승격된 6종 (docs/phase2_results.md)
-    "FET": SymbolSpec("FET", "FETUSDT", 1.0, 1.0, 0.0001, 2.0),
+    # 2026-07-17 후보 스캔(12mo) 승격분 중 Breakout Prop 실거래 지원 4종.
+    # FET·ENA·ICP 는 게이트는 통과했으나 Breakout 앱 종목 목록에 없어(스크린샷
+    # 대조) 유니버스에서 제외 — 실제로 매매할 수 없는 종목은 시뮬레이션에서도
+    # 거래하지 않는다 (실거래 목록 하위집합 원칙).
     "TAO": SymbolSpec("TAO", "TAOUSDT", 0.01, 0.01, 0.01, 2.0),
     "WLD": SymbolSpec("WLD", "WLDUSDT", 1.0, 1.0, 0.0001, 2.0),
-    "ENA": SymbolSpec("ENA", "ENAUSDT", 1.0, 1.0, 0.0001, 2.0),
     "STX": SymbolSpec("STX", "STXUSDT", 1.0, 1.0, 0.0001, 2.0),
     "LDO": SymbolSpec("LDO", "LDOUSDT", 1.0, 1.0, 0.0001, 2.0),
-    "ICP": SymbolSpec("ICP", "ICPUSDT", 0.1, 0.1, 0.001, 2.0),
 }
 
 # ── 스캔 후보 풀 (백테스트 전용 — 거래 불가) ─────────────────────────────
@@ -217,7 +217,17 @@ SYMBOL_SPECS: dict[str, SymbolSpec] = {
 # 게이트(12mo, PF≥1.2·expR>0·trades≥20) 통과 시 SYMBOL_SPECS 로 승격한다.
 # 선정 기준: Binance USDⓈ-M + OKX 스왑 양쪽 상장 · 12mo+ 이력 · 밈코인 제외
 # (1000PEPE 등 배수 네이밍은 OKX 폴백과 인스트루먼트 불일치라 배제).
+#
+# 후보 풀 = Breakout Prop 앱에서 실제 거래 가능한 종목(스크린샷 목록) 중 거래
+# 유니버스에 아직 없는 것들. Breakout 미지원 종목은 넣지 않는다(실거래 목록
+# 하위집합 원칙). SEI 는 목록에 없어 제외했다. 스펙(qty_step·tick_size)은
+# 리포 관례(가격 크기 기반)를 따르며, 게이트 통과로 SYMBOL_SPECS 로 승격할 때
+# 라이브 exchangeInfo 기준으로 재확정한다.
+# 미수록(대기): HYPE·PUMP·PENGU·MOODENG·POPCAT·PNUT·S(Sonic)·AIXBT·FARTCOIN·
+# XPL·ASTER — Binance USDⓈ-M 1000X 네이밍/OKX 폴백 불일치 위험 또는 12mo 미만
+# 신규라, 라이브 인스트루먼트 확인 후 편입한다(이 세션은 거래소 접근 차단).
 CANDIDATE_SPECS: dict[str, SymbolSpec] = {
+    # 기존 후보 (모두 Breakout 목록 확인됨)
     "TRX": SymbolSpec("TRX", "TRXUSDT", 1.0, 1.0, 0.00001, 2.0),
     "BCH": SymbolSpec("BCH", "BCHUSDT", 0.01, 0.01, 0.01, 2.0),
     "ETC": SymbolSpec("ETC", "ETCUSDT", 0.1, 0.1, 0.001, 2.0),
@@ -227,8 +237,29 @@ CANDIDATE_SPECS: dict[str, SymbolSpec] = {
     "POL": SymbolSpec("POL", "POLUSDT", 1.0, 1.0, 0.0001, 2.0),
     "HBAR": SymbolSpec("HBAR", "HBARUSDT", 1.0, 1.0, 0.00001, 2.0),
     "TIA": SymbolSpec("TIA", "TIAUSDT", 0.1, 0.1, 0.001, 2.0),
-    "SEI": SymbolSpec("SEI", "SEIUSDT", 1.0, 1.0, 0.0001, 2.0),
     "JUP": SymbolSpec("JUP", "JUPUSDT", 1.0, 1.0, 0.0001, 2.0),
+    # Breakout 실거래 목록 정합 — 확립된 알트/L1/L2 (Binance USDⓈ-M + OKX 직명)
+    "ADA": SymbolSpec("ADA", "ADAUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "DOGE": SymbolSpec("DOGE", "DOGEUSDT", 1.0, 1.0, 0.00001, 2.0),
+    "LINK": SymbolSpec("LINK", "LINKUSDT", 0.01, 0.01, 0.001, 2.0),
+    "LTC": SymbolSpec("LTC", "LTCUSDT", 0.001, 0.001, 0.01, 2.0),
+    "DOT": SymbolSpec("DOT", "DOTUSDT", 0.1, 0.1, 0.001, 2.0),
+    "UNI": SymbolSpec("UNI", "UNIUSDT", 1.0, 1.0, 0.001, 2.0),
+    "AVAX": SymbolSpec("AVAX", "AVAXUSDT", 1.0, 1.0, 0.001, 2.0),
+    "BNB": SymbolSpec("BNB", "BNBUSDT", 0.01, 0.01, 0.01, 2.0),
+    "ATOM": SymbolSpec("ATOM", "ATOMUSDT", 0.1, 0.1, 0.001, 2.0),
+    "ALGO": SymbolSpec("ALGO", "ALGOUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "APT": SymbolSpec("APT", "APTUSDT", 0.1, 0.1, 0.001, 2.0),
+    "INJ": SymbolSpec("INJ", "INJUSDT", 0.1, 0.1, 0.001, 2.0),
+    "ZEC": SymbolSpec("ZEC", "ZECUSDT", 0.001, 0.001, 0.01, 2.0),
+    "ONDO": SymbolSpec("ONDO", "ONDOUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "RENDER": SymbolSpec("RENDER", "RENDERUSDT", 0.1, 0.1, 0.001, 2.0),
+    "JTO": SymbolSpec("JTO", "JTOUSDT", 0.1, 0.1, 0.0001, 2.0),
+    "VIRTUAL": SymbolSpec("VIRTUAL", "VIRTUALUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "WIF": SymbolSpec("WIF", "WIFUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "TRUMP": SymbolSpec("TRUMP", "TRUMPUSDT", 0.1, 0.1, 0.001, 2.0),
+    "KAITO": SymbolSpec("KAITO", "KAITOUSDT", 1.0, 1.0, 0.0001, 2.0),
+    "GRASS": SymbolSpec("GRASS", "GRASSUSDT", 1.0, 1.0, 0.0001, 2.0),
 }
 
 
@@ -238,11 +269,12 @@ def spec_for(key: str) -> SymbolSpec | None:
     k = key.upper()
     return SYMBOL_SPECS.get(k) or CANDIDATE_SPECS.get(k)
 
-# Phase 2 게이트 확정 로스터 (docs/phase2_results.md): 12mo out-of-sample 통과
-# 12종. 1차(ETH·SOL·XRP·ARB·SUI) + 2026-07-17 후보 스캔 승격 7종(FET·TAO·WLD·
-# ENA·STX·LDO·ICP). OP·NEAR 는 기준 미달로 기본 제외(유니버스 잔류 — 포지션 관리용).
+# Phase 2 게이트 확정 로스터 (docs/phase2_results.md): 12mo out-of-sample 통과분
+# 중 Breakout Prop 실거래 지원 종목만. 1차(ETH·SOL·XRP·ARB·SUI) + 후보 스캔 승격
+# 4종(TAO·WLD·STX·LDO). 게이트는 통과했으나 Breakout 미지원인 FET·ENA·ICP 는 제외
+# (실거래 목록 하위집합 원칙). OP·NEAR 는 기준 미달로 기본 제외(유니버스 잔류).
 # 되돌리려면 TRADING_SYMBOLS 로 오버라이드(단 유니버스에 있는 심볼만 유효).
-DEFAULT_SYMBOLS = "ETH,SOL,XRP,ARB,SUI,FET,TAO,WLD,ENA,STX,LDO,ICP"
+DEFAULT_SYMBOLS = "ETH,SOL,XRP,ARB,SUI,TAO,WLD,STX,LDO"
 
 # 심볼별 검증된 최적 전략 (게이트 A/B). env(TRADING_SYMBOL_STRATEGY) 미설정 시
 # 폴백 — SOL/XRP 를 Donchian 으로 잘못 돌리면 손실이라 이 매핑을 baking 한다.
@@ -250,10 +282,9 @@ DEFAULT_SYMBOLS = "ETH,SOL,XRP,ARB,SUI,FET,TAO,WLD,ENA,STX,LDO,ICP"
 DEFAULT_SYMBOL_STRATEGY = {"ETH": "prop_breakout", "SOL": "vbo", "XRP": "vbo",
                           "ARB": "prop_breakout", "SUI": "prop_breakout",
                           "OP": "vbo", "NEAR": "prop_breakout",
-                          # 2026-07-17 후보 스캔 승격분 (12mo 게이트)
-                          "FET": "prop_breakout", "TAO": "prop_breakout",
-                          "WLD": "vbo", "ENA": "prop_breakout",
-                          "STX": "prop_breakout", "LDO": "vbo", "ICP": "vbo"}
+                          # 후보 스캔 승격분 (12mo 게이트, Breakout 지원분만)
+                          "TAO": "prop_breakout", "WLD": "vbo",
+                          "STX": "prop_breakout", "LDO": "vbo"}
 
 
 def enabled_symbols() -> list[SymbolSpec]:
