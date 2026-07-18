@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from .bot import MANAGER
 from .config import CONFIG, SYMBOL_SPECS, CANDIDATE_SPECS, spec_for
-from .store import FIELDS
+from .store import FIELDS, SIGNAL_FIELDS
 from .strategies import STRATEGIES
 
 router = APIRouter(prefix="/api/trading", tags=["trading"])
@@ -150,6 +150,31 @@ def trades_csv(symbol: str | None = None, limit: int = 100_000):
     w.writerows(rows)
     day = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d")
     fname = f"trades_{(symbol or 'all').lower()}_{day}.csv"
+    return Response(content="\ufeff" + buf.getvalue(),
+                    media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+@router.get("/signals")
+def signals(limit: int = 100, symbol: str | None = None):
+    """\uc804\ub7b5 \uc2dc\uadf8\ub110 \uae30\ub85d \uc870\ud68c \u2014 \uccb4\uacb0\uacfc \ubb34\uad00\ud558\uac8c \uc804\ub7b5\uc774 \ub0b8 \ubaa8\ub4e0 \uc9c4\uc785 \uc2e0\ud638(\uae30\uc900\uac00\u00b7
+    \ubaa9\ud45c\uac00\u00b7\uc190\uc808\uac00\u00b7\ucc28\ub2e8\uc0ac\uc720\u00b7\uc9c4\uc785\uc5ec\ubd80). \ucd5c\uc2e0\uc21c. stats \ub294 \ucd1d\uacc4/\uc9c4\uc785/\ucc28\ub2e8 \uc694\uc57d."""
+    sym = None if (not symbol or symbol.lower() in ("all", "")) else symbol.upper()
+    return {"stats": MANAGER.signals.stats(),
+            "rows": MANAGER.signals.tail(limit, symbol=sym)}
+
+
+@router.get("/signals.csv")
+def signals_csv(symbol: str | None = None, limit: int = 100_000):
+    """\uc2dc\uadf8\ub110 \uae30\ub85d CSV \ub2e4\uc6b4\ub85c\ub4dc (Excel \ud638\ud658, BOM \ud3ec\ud568)."""
+    sym = None if (not symbol or symbol.lower() in ("all", "")) else symbol.upper()
+    rows = MANAGER.signals.tail(limit, symbol=sym)[::-1]
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=SIGNAL_FIELDS)
+    w.writeheader()
+    w.writerows(rows)
+    day = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d")
+    fname = f"signals_{(symbol or 'all').lower()}_{day}.csv"
     return Response(content="\ufeff" + buf.getvalue(),
                     media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{fname}"'})

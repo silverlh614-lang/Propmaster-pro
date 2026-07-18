@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))
 TRADES_CSV = DATA_DIR / "trades.csv"
+SIGNALS_CSV = DATA_DIR / "signals.csv"
 STATE_JSON = DATA_DIR / "engine_state.json"
 POSITIONS_JSON = DATA_DIR / "positions.json"
 ACCOUNT_JSON = DATA_DIR / "account.json"
@@ -31,6 +32,13 @@ FIELDS = [
 # event vocabulary
 OPEN_EVENTS = ("OPEN",)                        # a new position started
 SETTLED_RESULTS = ("WIN", "LOSS", "CLOSED")    # a position (or leg) realized PnL
+
+# 시그널 저널 — 전략이 낸 모든 진입 신호(체결과 무관). 라이브 시그널이 조회 가능한
+# 기록으로 남는다: 실제 진입됐는지(entered)·막혔으면 사유(blocked)까지.
+SIGNAL_FIELDS = [
+    "ts", "symbol", "strategy", "side", "signal_type",
+    "entry", "target", "stop", "detail", "blocked", "entered",
+]
 
 _lock = threading.Lock()
 
@@ -115,6 +123,55 @@ class Journal:
 
     def by_symbol(self, symbols: list[str]) -> dict:
         return {s: self.aggregate(symbol=s) for s in symbols}
+
+
+class SignalJournal:
+    """CSV-backed record of every strategy signal (decoupled from execution).
+    One row per emitted entry signal — the live signal history the telegram
+    push also fires. mtime-cached like the trade journal so polling is cheap."""
+
+    def __init__(self):
+        self._cache_key: tuple | None = None
+        self._cache_rows: list[dict] = []
+
+    def append(self, rec: dict) -> dict:
+        row = {k: rec.get(k, "") for k in SIGNAL_FIELDS}
+        row["ts"] = row["ts"] or _utcnow()
+        with _lock:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            new = not SIGNALS_CSV.exists()
+            with SIGNALS_CSV.open("a", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=SIGNAL_FIELDS)
+                if new:
+                    w.writeheader()
+                w.writerow(row)
+        return row
+
+    def _rows(self) -> list[dict]:
+        if not SIGNALS_CSV.exists():
+            return []
+        with _lock:
+            st = SIGNALS_CSV.stat()
+            key = (st.st_mtime_ns, st.st_size)
+            if key != self._cache_key:
+                with SIGNALS_CSV.open(newline="", encoding="utf-8") as f:
+                    self._cache_rows = list(csv.DictReader(f))
+                self._cache_key = key
+            return self._cache_rows
+
+    def tail(self, n: int = 50, symbol: str | None = None) -> list[dict]:
+        rows = self._rows()
+        if symbol:
+            rows = [r for r in rows if r["symbol"] == symbol.upper()]
+        return rows[-n:][::-1]
+
+    def stats(self) -> dict:
+        """Signal history summary: totals + how many actually entered vs were
+        blocked by the risk gate (the signal→execution gap, at a glance)."""
+        rows = self._rows()
+        entered = sum(1 for r in rows if str(r.get("entered")).lower() == "true")
+        blocked = sum(1 for r in rows if r.get("blocked"))
+        return {"records": len(rows), "entered": entered, "blocked": blocked}
 
 
 class BotState:

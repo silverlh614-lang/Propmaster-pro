@@ -30,7 +30,7 @@ class SymbolBot:
     def __init__(self, spec: SymbolSpec, cfg: TradingConfig,
                  journal: Journal, risk: RiskManager,
                  pos_store: PositionStore, ledger: AccountLedger,
-                 prop_tick=None, notifier=None):
+                 prop_tick=None, notifier=None, signal_journal=None):
         self.spec = spec
         self.cfg = cfg
         self.journal = journal
@@ -39,6 +39,7 @@ class SymbolBot:
         self.ledger = ledger
         self._prop_tick = prop_tick   # manager callback: one rule-engine mark
         self.notifier = notifier      # 실시간 근접 알림용 (proximity_scan)
+        self.signal_journal = signal_journal   # 전략 시그널 영속 기록 (체결 무관)
         self.collector = KlineCollector(spec.symbol, cfg.entry_interval,
                                         cfg.htf_interval, cfg.warmup_bars)
         self.mode = "paper"
@@ -208,7 +209,7 @@ class SymbolBot:
         if side == self._last_signal_side:
             return
         self._last_signal_side = side
-        if side is None or self.notifier is None:
+        if side is None:                 # 시그널 소멸 — 디둡만 리셋, 기록/발송 없음
             return
         entry, stop = sig.entry_hint, sig.stop_price
         target = None
@@ -220,11 +221,24 @@ class SymbolBot:
         if note and "blocked" in note:              # "entry blocked: <reason>"
             blocked = note.split("blocked:", 1)[-1].strip() if "blocked:" in note \
                 else note
-        try:
-            self.notifier.notify_signal(self.spec.key, self.strategy_name, sig,
-                                        target=target, blocked=blocked)
-        except Exception:                # noqa: BLE001 — 알림은 매매를 막지 않는다
-            pass
+        # 1) 영속 기록 — 체결 여부와 무관하게 모든 시그널을 남긴다 (기록이 본체)
+        if self.signal_journal is not None:
+            try:
+                self.signal_journal.append({
+                    "symbol": self.spec.key, "strategy": self.strategy_name,
+                    "side": side, "signal_type": sig.signal_type,
+                    "entry": sig.entry_hint, "target": target,
+                    "stop": sig.stop_price, "detail": sig.detail,
+                    "blocked": blocked, "entered": not blocked})
+            except Exception:            # noqa: BLE001 — 기록 실패가 매매를 막지 않는다
+                pass
+        # 2) 텔레그램 푸시
+        if self.notifier is not None:
+            try:
+                self.notifier.notify_signal(self.spec.key, self.strategy_name,
+                                            sig, target=target, blocked=blocked)
+            except Exception:            # noqa: BLE001 — 알림은 매매를 막지 않는다
+                pass
 
     def _reset_guard_hits(self, bar_ts_ms: int) -> bool:
         """True when this just-closed bar sits inside the flatten window that

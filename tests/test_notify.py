@@ -203,6 +203,7 @@ def test_signal_alert_dedup_in_symbolbot():
         spec = type("S", (), {"key": "ETH"})()
         strategy_name = "prop_breakout"
         cfg = type("C", (), {"rr_target": 2.0})()
+        signal_journal = None
         def __init__(self, n): self.notifier = n; self._last_signal_side = None
     _Bot._signal_alert = SymbolBot._signal_alert
 

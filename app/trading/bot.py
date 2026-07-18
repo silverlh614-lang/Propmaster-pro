@@ -23,7 +23,7 @@ from .account import AccountLedger
 from .config import (CONFIG, SYMBOL_SPECS, TradingConfig, SymbolSpec,
                      enabled_symbols)
 from .risk import RiskManager
-from .store import AccountStore, BotState, Journal, PositionStore
+from .store import AccountStore, BotState, Journal, PositionStore, SignalJournal
 from .discovery import AutoDiscovery
 from .execution.broker import make_broker
 from .notify import TelegramNotifier
@@ -36,6 +36,7 @@ class TradingManager:
         self.cfg = cfg
         self.notifier = TelegramNotifier()   # 텔레그램 단방향 알람 (기본 OFF)
         self.journal = Journal(sink=self.notifier.notify_trade)
+        self.signals = SignalJournal()   # 전략 시그널 영속 기록 (체결과 무관)
         self.state_store = BotState()
         self.pos_store = PositionStore()
         # 한 계좌 원칙: 계좌 레코드가 없으면 운영 심볼(BTC) 레거시 equity 1회 승계.
@@ -112,7 +113,8 @@ class TradingManager:
         wire the same shared journal/risk/ledger/prop-tick objects."""
         return SymbolBot(spec, self.cfg, self.journal, self.risk,
                          self.pos_store, self.ledger,
-                         prop_tick=self.prop_tick, notifier=self.notifier)
+                         prop_tick=self.prop_tick, notifier=self.notifier,
+                         signal_journal=self.signals)
 
     @property
     def running(self) -> bool:
