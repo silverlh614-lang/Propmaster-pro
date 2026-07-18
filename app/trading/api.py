@@ -364,7 +364,8 @@ _SCAN_LOCK = None
 SCAN_STRATEGIES = ["prop_breakout", "vbo"]
 
 
-def _scan_worker(key: str, symbols: list, months: int, overrides: dict) -> None:
+def _scan_worker(key: str, symbols: list, months: int, overrides: dict,
+                 strategies: list) -> None:
     import copy
 
     from .backtest.engine import scan_universe
@@ -378,7 +379,7 @@ def _scan_worker(key: str, symbols: list, months: int, overrides: dict) -> None:
         cfg = copy.copy(CONFIG)
         for k, v in overrides.items():
             setattr(cfg, k, v)
-        rows = scan_universe(symbols, SCAN_STRATEGIES, cfg,
+        rows = scan_universe(symbols, strategies, cfg,
                              months=months, on_progress=tick)
         _SCAN.update(state="done", results=rows)
     except Exception as e:                        # noqa: BLE001 — surfaced via poll
@@ -387,13 +388,14 @@ def _scan_worker(key: str, symbols: list, months: int, overrides: dict) -> None:
 
 @router.get("/backtest/scan")
 def backtest_scan(request: Request, months: int = 12, symbols: str = "",
-                  refresh: int = 0):
-    """전 유니버스(또는 symbols=BNB,ADA,…)를 prop_breakout·vbo 두 전략으로
+                  refresh: int = 0, strat: str = ""):
+    """전 유니버스(또는 symbols=BNB,ADA,…)를 prop_breakout·vbo(기본) 전략으로
     백테스트해 게이트 통과·expectancy_r 순으로 랭킹한다. 프리셋 스윕처럼 이 URL
     하나를 새로고침하며 진행률을 보고, state=done 이면 표가 나온다. 심볼당 캔들을
     한 번만 받으므로 느리지만(첫 실행), 아카이브는 디스크 캐시된다. 여분 쿼리
     파라미터는 config 오버라이드 — ?trail_atr_mult=3&partial_tp_frac=0.33 처럼
-    청산 관리를 A/B 하려면 이 URL 하나로 전 로스터를 재백테스트한다."""
+    청산 관리를 A/B 한다. ?strat=mean_revert 로 전략을 바꿔 브레이크아웃 탈락
+    레인지 종목을 평균회귀로 재검증할 수 있다."""
     import copy
     import threading
     global _SCAN_LOCK
@@ -408,10 +410,18 @@ def backtest_scan(request: Request, months: int = 12, symbols: str = "",
             raise HTTPException(422, f"unknown symbols: {', '.join(bad)}")
     else:
         syms = list(SYMBOL_SPECS)
-    overrides = _apply_query_overrides(copy.copy(CONFIG), request.query_params,
-                                       ("months", "symbols", "refresh"))
+    if strat.strip():
+        strategies = [s.strip() for s in strat.split(",") if s.strip()]
+        bad_s = [s for s in strategies if s not in STRATEGIES]
+        if bad_s:
+            raise HTTPException(422, f"unknown strategy: {', '.join(bad_s)}")
+    else:
+        strategies = SCAN_STRATEGIES
+    overrides = _apply_query_overrides(
+        copy.copy(CONFIG), request.query_params,
+        ("months", "symbols", "refresh", "strat"))
     ov_key = ",".join(f"{k}={overrides[k]}" for k in sorted(overrides))
-    key = f"scan:{months}:{','.join(syms)}:{ov_key}"
+    key = f"scan:{months}:{','.join(syms)}:{','.join(strategies)}:{ov_key}"
     with _SCAN_LOCK:
         if _SCAN["state"] == "running":
             return {"state": "running", "key": _SCAN["key"],
@@ -420,7 +430,7 @@ def backtest_scan(request: Request, months: int = 12, symbols: str = "",
                     "hint": "이 URL을 새로고침하면 진행률·부분결과가 갱신됩니다"}
         if _SCAN["state"] == "done" and _SCAN["key"] == key and not refresh:
             return {"state": "done", "months": months, "overrides": overrides,
-                    "strategies": SCAN_STRATEGIES, "symbols": syms,
+                    "strategies": strategies, "symbols": syms,
                     "rows": len(_SCAN["results"]), "results": _SCAN["results"]}
         if _SCAN["state"] == "error" and _SCAN["key"] == key and not refresh:
             return {"state": "error", "error": _SCAN["error"],
@@ -428,10 +438,10 @@ def backtest_scan(request: Request, months: int = 12, symbols: str = "",
         _SCAN.update(state="running", key=key, done=0, total=len(syms),
                      results=None, error="")
         threading.Thread(target=_scan_worker,
-                         args=(key, syms, months, overrides),
+                         args=(key, syms, months, overrides, strategies),
                          daemon=True, name="scan-universe").start()
     return {"state": "started", "key": key, "symbols": syms,
-            "strategies": SCAN_STRATEGIES, "overrides": overrides,
+            "strategies": strategies, "overrides": overrides,
             "hint": "계산 시작 — 이 URL을 30초~1분 간격으로 새로고침하세요. "
                     "심볼당 캔들 다운로드라 첫 실행은 수 분 걸립니다"}
 

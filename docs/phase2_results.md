@@ -228,3 +228,25 @@ PNUT·S·AIXBT·FARTCOIN·XPL·ASTER)을 상장·네이밍·이력 기준으로 
   중간값(예: 2.5R/0.5/2.5×ATR)만 게이트가 판정할 후속 가설로 남긴다.
 - 도구: `/backtest/scan` 이 여분 쿼리 파라미터를 config 오버라이드로 받도록 확장
   (`_apply_query_overrides`, quick·scan 공유). 매매 경로·리스크 관문 불변.
+
+## 탈락 종목 재검증 — mean_revert 전략 추가 (2026-07-18, 검증 대기)
+
+진단: 탈락 종목(성숙·레인지 알트)은 **우리 두 전략이 모두 브레이크아웃 계열**이라
+걸러졌다 — "돌파하면 추세 지속?" 한 질문만 검증한 셈. 레인지 종목엔 가짜 돌파가
+많아 브레이크아웃이 −1R 반복(SOL prop −0.089 가 전형). "브레이크아웃 무엣지" ≠
+"매매 불가" → 반대 논리(평균회귀)로 재검증 필요.
+
+- 추가: `mean_revert` 전략 (`strategies/mean_revert.py`, 레지스트리 등록). SMA±Nσ
+  밴드 페이드 — 종가가 평균에서 mr_entry_sd σ 이상 벗어나면 회귀에 베팅. 강한 HTF
+  추세와 반대로는 페이드 안 함(mr_trend_guard, 기본 off). ATR 스탑은 브레이크아웃과
+  동일(FSM 1R 앵커) — 진입 기하만 다르다. 불변식 준수: 시그널만 방출, 레지스트리
+  추가만, 엔진 본체 불변. 기본 미채택 — 게이트 통과로만 라이브 자격.
+- 스캔 대상: 브레이크아웃 게이트 탈락 성숙·레인지 알트 — BNB·LINK·LTC·ADA·ATOM·
+  UNI·APT·INJ·DOGE 등(이미 CANDIDATE_SPECS 에 존재, 스캔 전용·거래 차단). 기존 후보
+  (TRX·BCH·ETC·FIL·AAVE·CRV·POL·HBAR 등)와 함께 레인지 성향 풀. (DOT·AVAX 등은
+  브레이크아웃 게이트를 통과해 이미 SYMBOL_SPECS 승격 — 재검증 대상 아님.)
+- 도구: `/backtest/scan?strat=mean_revert` 로 전략 오버라이드 — 한 URL로 탈락 풀 전체를
+  평균회귀로 재백테스트. 캐시 키에 전략 포함.
+- 파라미터(mr_mean_bars=20, mr_entry_sd=2.0)는 구조적 초기값 — hand-tune 아님. 게이트가
+  expR>0·PF≥1.2·거래≥20 로 판정한다. 현행 FSM 청산(2R 부분익절+트레일)은 추세추종용
+  이라 회귀 진입과 궁합이 완벽치 않을 수 있음 — 결과가 음성이면 그 자체가 데이터.

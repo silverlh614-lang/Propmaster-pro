@@ -98,11 +98,40 @@ def test_vbo_volatility_breakout():
     print("ok  vbo volatility breakout (K-rule + HTF filter)")
 
 
+def test_mean_revert_band_fade():
+    """mean_revert: fade a stretch from the SMA — long below -Nσ, short above
+    +Nσ, and stay flat inside the band. Counter-thesis to the breakout pair."""
+    from app.trading.models import Side
+    cfg = TradingConfig(); cfg.mr_mean_bars = 20; cfg.mr_entry_sd = 2.0
+    # flat HTF so the trend guard (off by default) never blocks the fade
+    htf = [_c(i * 3600000, 100, 101, 99, 100) for i in range(30)]
+    # a flat mean (>= mr_mean_bars + atr_period padding) then a stretched close
+    base = [_c(i * 900000, 100, 101, 99, 100) for i in range(25)]
+    down = base + [_c(25 * 900000, 100, 100, 90, 91)]     # deep below band
+    strat = make_strategy("mean_revert", cfg)
+    sig = strat.evaluate(_ctx(htf, down))
+    assert sig is not None and sig.side is Side.LONG
+    assert sig.signal_type == "MEAN_REVERT" and sig.stop_price < 91
+    # symmetric: a spike far ABOVE the mean -> short fade
+    up = base + [_c(25 * 900000, 100, 110, 100, 109)]
+    sig2 = strat.evaluate(_ctx(htf, up))
+    assert sig2 is not None and sig2.side is Side.SHORT and sig2.stop_price > 109
+    # inside the band: no signal
+    calm = base + [_c(25 * 900000, 100, 101, 99, 100)]
+    assert strat.evaluate(_ctx(htf, calm)) is None
+    # trend guard on + strong HTF stretch -> stand aside (don't fade a trend)
+    cfg.mr_trend_guard = 0.02
+    htf_up = [_c(i * 3600000, 100 + i, 101 + i, 99 + i, 100 + i)
+              for i in range(30)]                          # close 129 >> EMA
+    assert make_strategy("mean_revert", cfg).evaluate(_ctx(htf_up, down)) is None
+    print("ok  mean_revert band fade (long/short/inside + trend guard)")
+
+
 def test_registry_and_replay_smoke():
     """The registry is prop-only, rejects unknown names, and every listed
     strategy replays a synthetic series without crashing."""
     from app.trading.backtest.engine import replay
-    assert list(STRATEGIES) == ["prop_breakout", "vbo"]
+    assert list(STRATEGIES) == ["prop_breakout", "vbo", "mean_revert"]
     try:
         make_strategy("trend_breakout", TradingConfig())
         assert False, "legacy strategy should be gone"
@@ -175,5 +204,6 @@ if __name__ == "__main__":
     test_prop_breakout_donchian()
     test_prop_breakout_optional_filters()
     test_vbo_volatility_breakout()
+    test_mean_revert_band_fade()
     test_registry_and_replay_smoke()
     print("\nall strategy tests passed ✅")

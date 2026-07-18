@@ -85,6 +85,13 @@ class TradingConfig:
     # --- vbo: 래리 윌리엄스 변동성 돌파 (전기 범위×K, 대체 전략) -------------
     vbo_k: float = 0.5                    # 돌파 임계 = 시가 + K×전기 범위
     vbo_range_bars: int = 24              # "전 세션" 범위 산정 봉 수 (1h면 하루)
+    # --- mean_revert: 밴드 페이드 (레인지 알트용 평균회귀, 브레이크아웃의 반대) ---
+    # 종가가 SMA 에서 N 표준편차 이상 벗어나면 평균으로의 회귀에 베팅한다.
+    # 강한 HTF 추세와 반대로는 페이드하지 않는다(추세 레짐이면 관망). 게이트가 판정.
+    mr_mean_bars: int = 20                # 평균·표준편차 산정 봉 수 (SMA·σ)
+    mr_entry_sd: float = 2.0              # 진입 임계 = 평균 ± Nσ (볼린저 스타일)
+    mr_trend_guard: float = 0.0           # |종가-HTF EMA|/EMA > 이 값이면 추세 레짐→관망 (0=off)
+
     # 선택 필터 (기본 OFF — 백테스트 게이트 A/B로만 켠다, hand-tune 금지)
     pump_filter_pct: float = 0.0          # 채널 저점 대비 급등 % 초과 돌파 스킵 (NFI 펌프 필터)
     squeeze_gate: bool = False            # 직전 봉 BB(20,2) ⊂ Keltner(20,1.5ATR) 요구
@@ -261,6 +268,7 @@ CANDIDATE_SPECS: dict[str, SymbolSpec] = {
     # Breakout 정합 알트 — 2026-07-17 라운드2 게이트 스캔 후 잔류분(전부 탈락).
     # 통과 7종(ZEC·RENDER·JTO·TRUMP·ALGO·AVAX·DOT)은 SYMBOL_SPECS 로 승격됨.
     # GRASS 는 PF 1.17~1.18로 문턱 근접(관찰) — 엑싯 A/B로 재도전 가치 있음.
+    # 성숙·레인지 성향 메이저 알트는 mean_revert 재검증 대상(스캔 전용, 거래 차단 유지).
     "ADA": SymbolSpec("ADA", "ADAUSDT", 1.0, 1.0, 0.0001, 2.0),
     "DOGE": SymbolSpec("DOGE", "DOGEUSDT", 1.0, 1.0, 0.00001, 2.0),
     "LINK": SymbolSpec("LINK", "LINKUSDT", 0.01, 0.01, 0.001, 2.0),
