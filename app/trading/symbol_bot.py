@@ -169,6 +169,7 @@ class SymbolBot:
             return
         self._last_bar_ts = bar.ts_ms
         atr_val = atr(entry, self.cfg.atr_period)
+        self._resolve_signals(bar)      # 기록된 시그널의 전진(목표/손절) 판정
 
         self.pm.flatten_if_closed()
         self.pm.manage(bar, atr_val)
@@ -199,6 +200,21 @@ class SymbolBot:
         self.note = self.pm.note
         # 조건 충족 즉시 푸시 (체결과 무관) — 진입 시도 뒤라 차단 사유를 함께 싣는다
         self._signal_alert(sig, self.note)
+
+    def _resolve_signals(self, bar) -> None:
+        """이 종목의 미결 시그널을 방금 닫힌 봉의 고가/저가로 판정한다 — 목표/손절
+        중 뭘 먼저 쳤는지(전진 검증). 체결과 무관. 실패는 매매에 영향 없음."""
+        if self.signal_journal is None:
+            return
+        iv = self.cfg.entry_interval
+        bar_seconds = int(iv) * 60 if iv.isdigit() else 3600
+        now_ts = bar.ts_ms / 1000 + bar_seconds        # 이 봉의 종료 시각
+        try:
+            self.signal_journal.resolve_open(
+                self.spec.key, bar.high, bar.low, now_ts, bar_seconds,
+                self.cfg.signal_timeout_bars)
+        except Exception:                # noqa: BLE001 — 기록 판정은 매매를 막지 않는다
+            pass
 
     def _signal_alert(self, sig, note: str = "") -> None:
         """전략 조건이 충족되는 순간 텔레그램으로 시그널을 즉시 푸시한다 — 실제 체결

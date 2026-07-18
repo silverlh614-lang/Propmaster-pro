@@ -52,6 +52,62 @@ def test_stats_entered_vs_blocked():
     print("ok  signal journal stats (entered vs blocked = signal→exec gap)")
 
 
+def test_forward_resolution_win_loss_expire():
+    """전진 추적: 미결 시그널이 목표/손절 중 뭘 먼저 쳤는지 봉으로 판정하고, 미결이
+    오래가면 EXPIRED. 확정분으로 라이브 win-rate·expectancy_r 를 낸다(체결 무관)."""
+    import datetime as _dt
+    j = _fresh()
+    t0 = "2026-07-01T00:00:00+00:00"
+    e0 = _dt.datetime.fromisoformat(t0).timestamp()
+    bs = 3600
+
+    def sig(sym, side, entry, target, stop):
+        j.append({"symbol": sym, "strategy": "s", "side": side, "signal_type": "X",
+                  "entry": entry, "target": target, "stop": stop, "detail": "",
+                  "blocked": "", "entered": True, "ts": t0})
+
+    sig("ETH", "LONG", 100, 120, 90)    # risk 10 → target = +2R
+    sig("XRP", "SHORT", 100, 80, 110)   # stop 110 → −1R
+    sig("ARB", "LONG", 100, 200, 50)    # neither yet → OPEN then EXPIRED
+    now = e0 + 5 * bs
+    j.resolve_open("ETH", high=125, low=101, now_ts=now, bar_seconds=bs, timeout_bars=168)
+    j.resolve_open("XRP", high=111, low=99, now_ts=now, bar_seconds=bs, timeout_bars=168)
+    j.resolve_open("ARB", high=130, low=95, now_ts=now, bar_seconds=bs, timeout_bars=168)
+    by = {r["symbol"]: r for r in j.tail(10)}
+    assert by["ETH"]["outcome"] == "WIN" and float(by["ETH"]["r_result"]) == 2.0
+    assert by["XRP"]["outcome"] == "LOSS" and float(by["XRP"]["r_result"]) == -1.0
+    assert by["ARB"]["outcome"] == "OPEN" and by["ETH"]["bars_held"] == "5"
+
+    # ARB expires past the timeout window
+    j.resolve_open("ARB", high=130, low=95, now_ts=e0 + 200 * bs,
+                   bar_seconds=bs, timeout_bars=168)
+    assert {r["symbol"]: r for r in j.tail(10)}["ARB"]["outcome"] == "EXPIRED"
+
+    # forward stats: 2 resolved (1W/1L) → win_rate .5, expectancy (2 + -1)/2 = .5
+    s = j.stats()
+    assert s["resolved"] == 2 and s["wins"] == 1 and s["losses"] == 1
+    assert s["win_rate"] == 0.5 and s["expectancy_r"] == 0.5 and s["expired"] == 1
+    print("ok  forward resolution (win/loss/expire + live expectancy_r)")
+
+
+def test_stop_first_when_bar_spans_both():
+    """한 봉이 목표·손절을 동시에 스치면 손절 우선 (FSM 과 같은 보수적 규칙)."""
+    j = _fresh()
+    j.append({"symbol": "ETH", "strategy": "s", "side": "LONG", "signal_type": "X",
+              "entry": 100, "target": 120, "stop": 90, "detail": "", "blocked": "",
+              "entered": True, "ts": "2026-07-01T00:00:00+00:00"})
+    # bar sweeps 88..125 — touches BOTH stop(90) and target(120) → LOSS
+    j.resolve_open("ETH", high=125, low=88, now_ts=_epoch_plus(2), bar_seconds=3600,
+                   timeout_bars=168)
+    assert j.tail(1)[0]["outcome"] == "LOSS"
+    print("ok  bar spanning stop+target resolves LOSS (conservative)")
+
+
+def _epoch_plus(bars):
+    import datetime as _dt
+    return _dt.datetime.fromisoformat("2026-07-01T00:00:00+00:00").timestamp() + bars * 3600
+
+
 def test_persists_across_instances():
     """CSV persists — a fresh journal (same DATA_DIR) reads prior signals, so a
     redeploy never loses the record."""
@@ -64,5 +120,7 @@ def test_persists_across_instances():
 if __name__ == "__main__":
     test_append_and_tail()
     test_stats_entered_vs_blocked()
+    test_forward_resolution_win_loss_expire()
+    test_stop_first_when_bar_spans_both()
     test_persists_across_instances()
     print("\nALL signal journal tests passed")

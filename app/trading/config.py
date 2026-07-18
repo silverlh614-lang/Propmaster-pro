@@ -59,6 +59,9 @@ class TradingConfig:
     trail_atr_mult: float = 2.0          # trail remainder by k * ATR
     time_stop_bars: int = 0              # 0 = off; else force-exit after N bars
 
+    # --- 시그널 전진(forward) 추적 — 기록된 시그널이 목표/손절 중 뭘 먼저 쳤는지 --
+    signal_timeout_bars: int = 168       # 이 봉 수 내 미결이면 EXPIRED (1h 기준 7일)
+
     # --- prop 예산 사이징 -----------------------------------------------------
     # 리스크는 프롭 계좌의 "잔여 예산"에서 나온다: 잔여 일일예산의 25% AND
     # 잔여 최대DD 예산의 10% 중 작은 쪽 (risk_per_trade_pct 는 상한 캡으로만).

@@ -38,13 +38,29 @@ SETTLED_RESULTS = ("WIN", "LOSS", "CLOSED")    # a position (or leg) realized Pn
 SIGNAL_FIELDS = [
     "ts", "symbol", "strategy", "side", "signal_type",
     "entry", "target", "stop", "detail", "blocked", "entered",
+    # 전진(forward) 추적 — 시그널이 목표/손절 중 뭘 먼저 쳤는지 (체결 무관)
+    "outcome", "r_result", "bars_held", "resolved_ts",
 ]
+SIGNAL_OPEN = ("", "OPEN")                      # 미결(추적 중)
+SIGNAL_RESULTS = ("WIN", "LOSS")               # 결과가 확정된 시그널
 
 _lock = threading.Lock()
 
 
 def _utcnow() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+
+def _epoch(iso: str) -> float | None:
+    try:
+        return dt.datetime.fromisoformat(iso).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def _iso(epoch: float) -> str:
+    return dt.datetime.fromtimestamp(epoch, dt.timezone.utc).isoformat(
+        timespec="seconds")
 
 
 class Journal:
@@ -137,6 +153,9 @@ class SignalJournal:
     def append(self, rec: dict) -> dict:
         row = {k: rec.get(k, "") for k in SIGNAL_FIELDS}
         row["ts"] = row["ts"] or _utcnow()
+        # 목표·손절이 있으면 전진 추적 대상 (OPEN) — 체결 여부와 무관
+        if row["target"] not in ("", None) and row["stop"] not in ("", None):
+            row["outcome"] = "OPEN"
         with _lock:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
             new = not SIGNALS_CSV.exists()
@@ -146,6 +165,65 @@ class SignalJournal:
                     w.writeheader()
                 w.writerow(row)
         return row
+
+    def _write_all(self, rows: list[dict]) -> None:
+        with _lock:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            with SIGNALS_CSV.open("w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=SIGNAL_FIELDS)
+                w.writeheader()
+                w.writerows({k: r.get(k, "") for k in SIGNAL_FIELDS} for r in rows)
+
+    @staticmethod
+    def _eval(r: dict, high: float, low: float, now_ts: float,
+              bar_seconds: float, timeout_bars: int) -> dict | None:
+        """이 봉의 high/low 로 미결 시그널을 판정. 목표=+rr R, 손절=−1R (한 봉이
+        둘 다 스치면 손절 우선 — FSM 과 동일한 보수적 규칙). 타임아웃 시 EXPIRED."""
+        try:
+            entry, target, stop = float(r["entry"]), float(r["target"]), float(r["stop"])
+        except (TypeError, ValueError, KeyError):
+            return None
+        risk = abs(entry - stop)
+        if risk <= 0:
+            return None
+        long = str(r.get("side")).upper() == "LONG"
+        loss = (low <= stop) if long else (high >= stop)
+        win = (high >= target) if long else (low <= target)
+        outcome, rr = None, None
+        if loss:                                    # 보수적: 동시 터치면 손절 먼저
+            outcome, rr = "LOSS", -1.0
+        elif win:
+            outcome = "WIN"
+            rr = round((target - entry) / risk if long
+                       else (entry - target) / risk, 3)
+        else:
+            emitted = _epoch(r.get("ts"))
+            if emitted and (now_ts - emitted) > timeout_bars * bar_seconds:
+                outcome, rr = "EXPIRED", 0.0
+        if outcome is None:
+            return None
+        emitted = _epoch(r.get("ts"))
+        bars = round((now_ts - emitted) / bar_seconds) if emitted else ""
+        return {"outcome": outcome, "r_result": rr, "bars_held": bars,
+                "resolved_ts": _iso(now_ts)}
+
+    def resolve_open(self, symbol: str, high: float, low: float, now_ts: float,
+                     bar_seconds: float, timeout_bars: int) -> int:
+        """한 종목의 미결 시그널을 이 봉에 대해 판정하고, 결과가 확정된 것만
+        CSV 를 다시 써 반영한다. 결과 없으면 디스크 미변경. 결정된 개수를 반환."""
+        rows = [dict(r) for r in self._rows()]
+        sym = symbol.upper()
+        resolved = 0
+        for r in rows:
+            if r.get("symbol") == sym and r.get("outcome") in SIGNAL_OPEN \
+                    and r.get("target") not in ("", None):
+                res = self._eval(r, high, low, now_ts, bar_seconds, timeout_bars)
+                if res:
+                    r.update(res)
+                    resolved += 1
+        if resolved:
+            self._write_all(rows)
+        return resolved
 
     def _rows(self) -> list[dict]:
         if not SIGNALS_CSV.exists():
@@ -165,13 +243,28 @@ class SignalJournal:
             rows = [r for r in rows if r["symbol"] == symbol.upper()]
         return rows[-n:][::-1]
 
-    def stats(self) -> dict:
-        """Signal history summary: totals + how many actually entered vs were
-        blocked by the risk gate (the signal→execution gap, at a glance)."""
+    def stats(self, symbol: str | None = None) -> dict:
+        """Signal history summary. Two lenses: (1) signal→execution gap (entered
+        vs blocked by the risk gate) and (2) FORWARD performance — of the signals
+        that resolved (hit target/stop), the live win-rate and R expectancy, a
+        real-time validation of the backtested edge, independent of execution."""
         rows = self._rows()
+        if symbol:
+            rows = [r for r in rows if r.get("symbol") == symbol.upper()]
         entered = sum(1 for r in rows if str(r.get("entered")).lower() == "true")
         blocked = sum(1 for r in rows if r.get("blocked"))
-        return {"records": len(rows), "entered": entered, "blocked": blocked}
+        settled = [r for r in rows if r.get("outcome") in SIGNAL_RESULTS]
+        wins = sum(1 for r in settled if r["outcome"] == "WIN")
+        rs = [float(r["r_result"]) for r in settled
+              if r.get("r_result") not in ("", None)]
+        return {
+            "records": len(rows), "entered": entered, "blocked": blocked,
+            "open": sum(1 for r in rows if r.get("outcome") in SIGNAL_OPEN),
+            "expired": sum(1 for r in rows if r.get("outcome") == "EXPIRED"),
+            "resolved": len(settled), "wins": wins, "losses": len(settled) - wins,
+            "win_rate": round(wins / len(settled), 4) if settled else None,
+            "expectancy_r": round(sum(rs) / len(rs), 3) if rs else None,
+        }
 
 
 class BotState:
