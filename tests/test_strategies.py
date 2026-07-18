@@ -127,11 +127,38 @@ def test_mean_revert_band_fade():
     print("ok  mean_revert band fade (long/short/inside + trend guard)")
 
 
+def test_htf_support_bounce():
+    """htf_support: 상승추세에서 지지 존 터치 후 반등 마감 → LONG. 지지 아래로
+    마감하면(이탈) 관망. 추세를 거스르지 않는 되돌림 매수."""
+    from app.trading.models import Side
+    cfg = TradingConfig(); cfg.support_lookback = 20; cfg.support_zone_atr = 1.0
+    strat = make_strategy("htf_support", cfg)
+    # HTF: flat structure, support (min low) = 100, uptrend (close >= EMA) -> LONG
+    htf = [_c(i * 3600000, 103, 106, 100, 103) for i in range(30)]
+    base = [_c(i * 900000, 103.5, 104, 103, 103.5) for i in range(25)]  # ATR ~1
+    # entry bar dips INTO the support zone (low 100.2) and closes above it -> bounce
+    bounce = base + [_c(25 * 900000, 103.5, 104, 100.2, 103)]
+    sig = strat.evaluate(_ctx(htf, bounce))
+    assert sig is not None and sig.side is Side.LONG
+    assert sig.signal_type == "HTF_SUPPORT" and sig.stop_price < 100.2
+    # dips in but CLOSES below support (breaks it) -> no bounce
+    broke = base + [_c(25 * 900000, 103.5, 104, 98, 98.5)]
+    assert strat.evaluate(_ctx(htf, broke)) is None
+    # never reaches the support zone -> no signal
+    away = base + [_c(25 * 900000, 103.5, 104, 103, 103.5)]
+    assert strat.evaluate(_ctx(htf, away)) is None
+    # downtrend flips allowed to SHORT: a support bounce is NOT a long
+    htf_dn = [_c(i * 3600000, 130 - i, 131 - i, 129 - i, 130.5 - i) for i in range(30)]
+    s2 = strat.evaluate(_ctx(htf_dn, bounce))
+    assert s2 is None or s2.side is Side.SHORT
+    print("ok  htf_support (trend-aligned bounce, break rejects, zone required)")
+
+
 def test_registry_and_replay_smoke():
     """The registry is prop-only, rejects unknown names, and every listed
     strategy replays a synthetic series without crashing."""
     from app.trading.backtest.engine import replay
-    assert list(STRATEGIES) == ["prop_breakout", "vbo", "mean_revert"]
+    assert list(STRATEGIES) == ["prop_breakout", "vbo", "mean_revert", "htf_support"]
     try:
         make_strategy("trend_breakout", TradingConfig())
         assert False, "legacy strategy should be gone"
@@ -205,5 +232,6 @@ if __name__ == "__main__":
     test_prop_breakout_optional_filters()
     test_vbo_volatility_breakout()
     test_mean_revert_band_fade()
+    test_htf_support_bounce()
     test_registry_and_replay_smoke()
     print("\nall strategy tests passed ✅")

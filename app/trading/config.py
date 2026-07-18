@@ -95,6 +95,12 @@ class TradingConfig:
     mr_entry_sd: float = 2.0              # 진입 임계 = 평균 ± Nσ (볼린저 스타일)
     mr_trend_guard: float = 0.0           # |종가-HTF EMA|/EMA > 이 값이면 추세 레짐→관망 (0=off)
 
+    # --- htf_support: HTF 지지/저항 되돌림 (추세 방향으로만 반등 매수) -------------
+    # HTF Donchian 하단=지지·상단=저항. 상승추세면 지지 반등 LONG, 하락추세면 저항
+    # 반등 SHORT. 추세를 거스르지 않고 되돌림에서 싸게 진입한다(브레이크아웃의 거울).
+    support_lookback: int = 55            # 지지·저항 레벨 산정 HTF 봉 수
+    support_zone_atr: float = 1.0         # 레벨 근접 존 = N×ATR (이 안까지 꼬리내리면 터치)
+
     # 선택 필터 (기본 OFF — 백테스트 게이트 A/B로만 켠다, hand-tune 금지)
     pump_filter_pct: float = 0.0          # 채널 저점 대비 급등 % 초과 돌파 스킵 (NFI 펌프 필터)
     squeeze_gate: bool = False            # 직전 봉 BB(20,2) ⊂ Keltner(20,1.5ATR) 요구
