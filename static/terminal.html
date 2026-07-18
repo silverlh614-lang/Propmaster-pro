@@ -238,8 +238,19 @@
   .frow .fb{flex:none;width:52px;text-align:center;border-radius:2px;font-weight:800;font-size:9.5px;letter-spacing:.08em;padding:1px 0}
   .fb.WIN{background:var(--up);color:#04150a} .fb.LOSS{background:var(--dn);color:#fff}
   .fb.CLOSED{background:var(--brand);color:#171204} .fb.other{background:#20262e;color:var(--dim)}
+  .fb.OPEN{background:#20262e;color:var(--faint)} .fb.EXPIRED{background:#2a2621;color:#b98a5a}
   .frow .fd{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
   .frow .fd b{color:var(--ink)} .frow .fp{flex:none;font-weight:700}
+  .frow .blk{color:#e0894a} .frow .rr.up{color:var(--up)} .frow .rr.dn{color:var(--dn)}
+  /* 시그널 전진검증 요약 타일 */
+  .sigstat{display:flex;gap:16px;flex-wrap:wrap;padding:1px 2px 9px;margin-bottom:8px;
+    border-bottom:1px solid var(--border)}
+  .sigstat .sv{display:flex;flex-direction:column;gap:1px}
+  .sigstat .k{font-size:9px;color:var(--faint);letter-spacing:.09em;text-transform:uppercase}
+  .sigstat .n{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+  /* 시그널 피드는 목표·손절·R·차단사유를 다 보여줘야 하므로 줄바꿈 허용 */
+  #sigFeed .frow{align-items:flex-start}
+  #sigFeed .fd{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.55}
 
   table{width:100%;border-collapse:collapse;font-size:11px}
   th,td{text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -649,6 +660,16 @@
     <section data-panel="fills" class="panel col-4">
       <div class="phead"><span class="mk">◆</span> 체결 피드</div>
       <div class="pbody"><div class="feed" id="feed"><div class="note">거래 없음</div></div></div>
+    </section>
+
+    <!-- 시그널 피드 · 전진검증 -->
+    <section data-panel="signals" class="panel full">
+      <div class="phead"><span class="mk">◆</span> 시그널 피드 · 전진검증 <span class="sp"></span>
+        <span class="r"><a class="dl" href="/api/trading/signals.csv" download>⬇ CSV</a></span></div>
+      <div class="pbody">
+        <div class="sigstat" id="sigStat"><div class="note">로딩 중…</div></div>
+        <div class="feed" id="sigFeed"><div class="note">로딩 중…</div></div>
+      </div>
     </section>
 
     <!-- 저널 -->
@@ -1228,6 +1249,32 @@ async function loadJournal(){let d;try{d=await api("/api/trading/trades?limit=12
   }).join(""):'<tr><td class="l muted" colspan="12">거래 없음</td></tr>';
 }
 
+// ---- 시그널 피드 · 전진검증 (기록 A + 성과추적 B) ----
+async function loadSignals(){
+  let d;try{d=await api("/api/trading/signals?limit=80");}catch(e){return;}
+  const s=d.stats||{},rows=d.rows||[];
+  const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const wr=s.win_rate==null?"–":(s.win_rate*100).toFixed(0)+"%";
+  const ex=s.expectancy_r==null?"–":(s.expectancy_r>=0?"+":"")+fmt(s.expectancy_r,2)+"R";
+  const excls=s.expectancy_r>0?"up":s.expectancy_r<0?"dn":"muted";
+  $("sigStat").innerHTML=
+    `<div class="sv"><span class="k">전진 승률</span><span class="n">${wr}</span></div>`+
+    `<div class="sv"><span class="k">기대값(라이브)</span><span class="n ${excls}">${ex}</span></div>`+
+    `<div class="sv"><span class="k">확정</span><span class="n">${s.wins||0}W / ${s.losses||0}L</span></div>`+
+    `<div class="sv"><span class="k">미결</span><span class="n">${s.open||0}</span></div>`+
+    `<div class="sv"><span class="k">진입 / 차단</span><span class="n">${s.entered||0} / ${s.blocked||0}</span></div>`;
+  $("sigFeed").innerHTML=rows.length?rows.map(r=>{
+    const side=(r.side||"").toUpperCase();
+    const oc=(r.outcome||"OPEN").toUpperCase();
+    const ocls=["WIN","LOSS","EXPIRED"].includes(oc)?oc:"OPEN";
+    const rr=(r.r_result!==""&&r.r_result!=null)?`<span class="rr ${Number(r.r_result)>=0?'up':'dn'}">${(Number(r.r_result)>=0?"+":"")+fmt(r.r_result,1)}R</span>`:"";
+    const blk=r.blocked?` <span class="blk" title="${esc(r.blocked)}">⛔ ${esc(String(r.blocked).slice(0,40))}</span>`:"";
+    return `<div class="frow"><span class="ts">${(r.ts||"").slice(5,16).replace("T"," ")}</span>`+
+      `<span class="fb ${ocls}">${oc}</span>`+
+      `<span class="fd"><b>${esc(r.symbol||"")} ${side}</b> ${fmt(r.entry,4)} → 목 ${fmt(r.target,4)} · 손 ${fmt(r.stop,4)} ${rr}${blk}</span></div>`;
+  }).join(""):'<div class="note">시그널 없음 — 돌파 조건 충족 시 여기에 기록됩니다.</div>';
+}
+
 function flashResult(r){const f=$("flash");const win=r.result==="WIN"||Number(r.pnl_usd)>0;
   f.style.color=win?"var(--up)":"var(--dn)";
   f.textContent=(win?"▲ WIN ":"▼ LOSS ")+(r.r_multiple?fmt(r.r_multiple,2)+"R":money(Number(r.pnl_usd)));
@@ -1456,6 +1503,7 @@ renderBell();loadConfig();loadPropPlans();refresh();loadCandles();loadJournal();
 setInterval(refresh,2500);
 setInterval(loadCandles,7000);
 setInterval(loadJournal,6000);
+setInterval(loadSignals,6000);loadSignals();
 </script>
 </body>
 </html>
