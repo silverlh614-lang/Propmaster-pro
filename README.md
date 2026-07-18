@@ -101,7 +101,10 @@
    ```bash
    TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... python scripts/telegram_chat_id.py --test
    ```
-   배포 후에는 `POST /api/trading/notify/test` 로도 확인할 수 있고, `GET /api/trading/notify` 로 설정 상태를 조회합니다.
+   배포 후에는 `/api/trading/notify/test` 를 폰 브라우저 주소창에 열면(GET/POST 모두 허용)
+   테스트 메시지가 발송되고, `GET /api/trading/notify` 로 설정 상태를 조회합니다.
+   chat_id 를 폰만으로 찾으려면 봇에게 메시지를 보낸 뒤
+   `https://api.telegram.org/bot<토큰>/getUpdates` 를 브라우저에 열어 `chat.id` 를 읽으면 됩니다.
 
 > 미설정 시 알림은 조용히 OFF이며, 발송 실패는 트레이딩 루프에 영향을 주지 않습니다.
 

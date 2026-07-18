@@ -80,15 +80,17 @@ def notify_status():
             "events": sorted(n.events)}
 
 
-@router.post("/notify/test")
+@router.api_route("/notify/test", methods=["GET", "POST"])
 def notify_test():
-    """테스트 메시지 1건 발송 — 봇 토큰·챗ID 배선을 트레이드 없이 확인한다."""
+    """테스트 메시지 1건 발송 — 봇 토큰·챗ID 배선을 트레이드 없이 확인한다.
+    GET 도 허용 — 폰 브라우저 주소창에 이 URL 을 열면 바로 발송된다."""
     n = MANAGER.notifier
     if not n.enabled:
         raise HTTPException(
             409, "텔레그램 미설정 — TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 를 설정하세요")
     n.send_text("🔔 Propmaster Pro 알림 테스트 — 연결 정상")
-    return {"ok": True, "sent": True}
+    return {"ok": True, "sent": True,
+            "hint": "텔레그램에 메시지가 오면 배선 정상. 안 오면 토큰·챗ID 재확인"}
 
 
 @router.post("/symbols")
