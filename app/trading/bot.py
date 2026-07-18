@@ -208,7 +208,18 @@ class TradingManager:
 
     def _on_prop_breach(self, reason: str) -> None:
         """Rule breach = account terminated: trip the kill switch (blocks all
-        future entries) and flatten every open paper position now."""
+        future entries) and flatten every open paper position now. Also push a
+        distinct high-priority alert — a breach while FLAT produces no CLOSE
+        rows, so the per-trade sink alone can miss the single most important
+        event (the challenge is over). Notify BEFORE the flatten so the alert
+        wins even if a close send is dropped."""
+        try:
+            self.notifier.send_text(
+                "🚨 계좌 브리치 — 챌린지 종료 (터미널)\n"
+                f"사유   {reason}\n"
+                "킬스위치 트립 · 전 포지션 청산 · 신규 진입 차단")
+        except Exception:                    # noqa: BLE001 — 알림 실패가 브리치 처리를 막지 않는다
+            pass
         self.risk.trip(f"prop breach: {reason}")
         self._flatten_all(f"prop breach: {reason}")
 

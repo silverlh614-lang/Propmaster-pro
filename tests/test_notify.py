@@ -139,6 +139,30 @@ def test_journal_sink_receives_rows():
     print("ok  Journal sink fires per row and isolates sink failures")
 
 
+# ------------------------------------------------------------- breach alert
+
+def test_breach_alert_fires_even_when_flat():
+    """A prop breach must push a distinct high-priority alert regardless of open
+    positions (a breach while flat emits no CLOSE rows), and a notifier failure
+    must never block the kill-switch trip (breach handling is sacred)."""
+    from app.trading.bot import TradingManager
+    from app.trading.config import TradingConfig
+
+    mgr = TradingManager(TradingConfig())
+    sent: list[str] = []
+    mgr.notifier.send_text = lambda text: sent.append(text)   # stub push
+    mgr._on_prop_breach("daily loss -5% breached")
+    assert sent and "브리치" in sent[0] and "daily loss" in sent[0]
+    assert mgr.risk.kill_switch is True          # trip happened after the alert
+
+    # a raising notifier must NOT stop the trip/flatten
+    mgr2 = TradingManager(TradingConfig())
+    mgr2.notifier.send_text = lambda text: (_ for _ in ()).throw(RuntimeError("x"))
+    mgr2._on_prop_breach("max drawdown floor")   # must not raise
+    assert mgr2.risk.kill_switch is True
+    print("ok  breach alert fires when flat + never blocks the kill switch")
+
+
 def main():
     test_enabled_gate()
     test_format_open()
@@ -148,6 +172,7 @@ def main():
     test_deliver_swallows_errors()
     test_worker_delivers_payload()
     test_journal_sink_receives_rows()
+    test_breach_alert_fires_even_when_flat()
     print("\nALL notify tests passed")
 
 
