@@ -102,15 +102,17 @@ class TelegramNotifier:
         if self.enabled:
             self._enqueue(text)
 
-    def notify_signal(self, symbol: str, strategy: str, sig) -> None:
-        """전략 조건 충족 즉시 푸시 — 페이퍼 계정 체결과 무관(리스크 관문에 막혀도
-        발송). 'SIGNAL' 이벤트가 켜져 있고 활성일 때만. 저널 sink 를 안 거친다."""
+    def notify_signal(self, symbol: str, strategy: str, sig,
+                      target=None, blocked: str = "") -> None:
+        """전략 조건 충족 즉시 푸시 — 실제 체결과 무관(리스크 관문에 막혀도 발송).
+        'SIGNAL' 이벤트가 켜져 있고 활성일 때만. 저널 sink 를 안 거친다. 진입이
+        막혔으면 blocked 사유를, 목표가는 target 을 함께 싣는다."""
         try:
             if not self.enabled or "SIGNAL" not in self.events:
                 return
             self._enqueue(self.format_signal(
                 symbol, strategy, sig.side.value, sig.detail,
-                sig.entry_hint, sig.stop_price))
+                sig.entry_hint, sig.stop_price, target=target, blocked=blocked))
         except Exception:
             pass
 
@@ -118,18 +120,20 @@ class TelegramNotifier:
 
     @staticmethod
     def format_signal(sym: str, strategy: str, side: str, detail: str,
-                      entry, stop) -> str:
-        """전략 시그널(조건 충족)을 짧은 알림으로 렌더. 체결이 아니라 '신호'임을
-        명시 — 실제 진입은 리스크 관문 통과 시에만."""
+                      entry, stop, target=None, blocked: str = "") -> str:
+        """전략 시그널(조건 충족)을 짧은 알림으로 렌더. 기준가·목표가·손절가를 싣고,
+        진입이 리스크 관문에 막혔으면 그 사유를 표시한다."""
         head = _SIDE_LABEL.get(str(side).upper(), side)
         lines = [f"🔔 시그널  {head}  {sym}", _SEP, f"전략   {strategy}"]
         if detail:
             lines.append(f"트리거 {detail}")
         if entry not in ("", None):
             lines.append(f"기준가 {_px(entry)}")
+        if target not in ("", None):
+            lines.append(f"목표가 {_px(target)}")
         if stop not in ("", None):
             lines.append(f"손절가 {_px(stop)}")
-        lines.append("※ 조건 충족 신호 — 실제 진입은 리스크 관문 통과 시")
+        lines.append(f"⛔ 차단   {blocked}" if blocked else "※ 조건 충족 신호")
         return "\n".join(lines)
 
     @staticmethod

@@ -185,8 +185,8 @@ class SymbolBot:
 
         ctx = self._build_ctx(entry)
         sig = strategy.evaluate(ctx)
-        self._signal_alert(sig)         # 조건 충족 즉시 푸시 (체결과 무관)
         if sig is None:
+            self._signal_alert(None, "")    # reset dedup, no push
             self.note = self.pm.note if self.pm.pos else "watching — no signal"
             return
         price = bar.close
@@ -196,20 +196,33 @@ class SymbolBot:
         elif not (p and p.state.value == "OPEN"):
             self.pm.try_open(sig, price, atr_val or 0.0, ctx.now)
         self.note = self.pm.note
+        # 조건 충족 즉시 푸시 (체결과 무관) — 진입 시도 뒤라 차단 사유를 함께 싣는다
+        self._signal_alert(sig, self.note)
 
-    def _signal_alert(self, sig) -> None:
-        """전략 조건이 충족되는 순간 텔레그램으로 시그널을 즉시 푸시한다 — 페이퍼
-        계정의 실제 체결(리스크 관문·동시포지션·예산 캡에 막힐 수 있음)과 무관하게.
-        에피소드 디둡: 같은 방향 시그널이 여러 봉 이어져도 1회만, 방향이 바뀌거나
-        시그널이 사라졌다 다시 뜨면 재발송. 알림 실패는 트레이딩에 영향 없음."""
+    def _signal_alert(self, sig, note: str = "") -> None:
+        """전략 조건이 충족되는 순간 텔레그램으로 시그널을 즉시 푸시한다 — 실제 체결
+        (리스크 관문·동시포지션·예산 캡에 막힐 수 있음)과 무관하게. 목표가는 rr_target
+        기하로 계산하고, 진입이 막혔으면 그 사유를 함께 싣는다. 에피소드 디둡: 같은
+        방향이 여러 봉 이어져도 1회, 방향 전환·재출현 시 재발송. 알림 실패는 매매 무영향."""
         side = sig.side.value if sig else None
         if side == self._last_signal_side:
             return
         self._last_signal_side = side
         if side is None or self.notifier is None:
             return
+        entry, stop = sig.entry_hint, sig.stop_price
+        target = None
+        rr = getattr(self.cfg, "rr_target", 0.0)
+        if rr and entry is not None and stop is not None:
+            risk = abs(entry - stop)
+            target = entry + risk * rr if side == "LONG" else entry - risk * rr
+        blocked = ""
+        if note and "blocked" in note:              # "entry blocked: <reason>"
+            blocked = note.split("blocked:", 1)[-1].strip() if "blocked:" in note \
+                else note
         try:
-            self.notifier.notify_signal(self.spec.key, self.strategy_name, sig)
+            self.notifier.notify_signal(self.spec.key, self.strategy_name, sig,
+                                        target=target, blocked=blocked)
         except Exception:                # noqa: BLE001 — 알림은 매매를 막지 않는다
             pass
 

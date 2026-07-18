@@ -153,10 +153,20 @@ def test_signal_alert_decoupled_from_account():
     """시그널 알림은 저널(체결)을 안 거치고 조건 충족 즉시 발송된다. 'SIGNAL'
     이벤트로 게이팅되고, 포맷에 '시그널'·트리거·기준가·손절가가 들어간다."""
     sig = _Sig("SHORT", "Donchian55 low 1842.1 broken @ 1823.21", 1823.21, 1861.36)
-    msg = TelegramNotifier.format_signal("ETH", "prop_breakout", "SHORT",
-                                         sig.detail, sig.entry_hint, sig.stop_price)
+    # target + block reason surface; no "paper" ever leaks into the message
+    msg = TelegramNotifier.format_signal(
+        "ETH", "prop_breakout", "SHORT", sig.detail, sig.entry_hint,
+        sig.stop_price, target=1746.91,
+        blocked="prop budget guard: open risk $221 > 50% daily room")
     assert "시그널" in msg and "매도" in msg and "ETH" in msg
     assert "1823.21" in msg and "1861.36" in msg and "Donchian55" in msg
+    assert "목표가" in msg and "1746.91" in msg          # target line
+    assert "차단" in msg and "budget guard" in msg        # block reason
+    assert "paper" not in msg.lower()                     # paper never exposed
+    # not blocked → clean "조건 충족 신호" line, still no paper
+    clean = TelegramNotifier.format_signal("ETH", "prop_breakout", "LONG",
+                                           "d", 1.0, 0.9, target=1.2)
+    assert "차단" not in clean and "조건 충족" in clean and "paper" not in clean.lower()
 
     # SIGNAL 이 이벤트에 있고 활성일 때만 enqueue
     sent: list[str] = []
@@ -186,11 +196,13 @@ def test_signal_alert_dedup_in_symbolbot():
 
     class _N:
         def __init__(self): self.sigs = []
-        def notify_signal(self, sym, strat, sig): self.sigs.append(sig.side.value)
+        def notify_signal(self, sym, strat, sig, **kw):
+            self.sigs.append(sig.side.value)
 
     class _Bot:
         spec = type("S", (), {"key": "ETH"})()
         strategy_name = "prop_breakout"
+        cfg = type("C", (), {"rr_target": 2.0})()
         def __init__(self, n): self.notifier = n; self._last_signal_side = None
     _Bot._signal_alert = SymbolBot._signal_alert
 
