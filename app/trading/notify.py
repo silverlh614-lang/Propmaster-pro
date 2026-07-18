@@ -9,8 +9,11 @@ risk gate, and never blocks or raises into the trading loop — sends run on a
 background daemon thread and every failure is swallowed.
 
 Enable by setting TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (env). Absent
-either, the notifier is a no-op. TELEGRAM_ALERT_EVENTS (default "OPEN,CLOSE")
-picks which lifecycle events fire a push.
+either, the notifier is a no-op. TELEGRAM_ALERT_EVENTS (default
+"OPEN,CLOSE,PARTIAL,SIGNAL") picks which pushes fire. SIGNAL is special: it is
+NOT a journal row — it fires the moment a strategy's entry condition is met,
+decoupled from the paper account, so a signal blocked by the risk gate (budget /
+concurrent caps) still alerts. OPEN/CLOSE remain the actual paper fills.
 """
 from __future__ import annotations
 
@@ -70,7 +73,7 @@ class TelegramNotifier:
         self.chat_id = (chat_id if chat_id is not None
                         else os.getenv("TELEGRAM_CHAT_ID", "")).strip()
         raw = (events if events is not None
-               else os.getenv("TELEGRAM_ALERT_EVENTS", "OPEN,CLOSE,PARTIAL"))
+               else os.getenv("TELEGRAM_ALERT_EVENTS", "OPEN,CLOSE,PARTIAL,SIGNAL"))
         self.events = {e.strip().upper() for e in raw.split(",") if e.strip()}
         self._q: "queue.Queue[str]" = queue.Queue(maxsize=_QUEUE_MAX)
         self._worker: threading.Thread | None = None
@@ -99,7 +102,35 @@ class TelegramNotifier:
         if self.enabled:
             self._enqueue(text)
 
+    def notify_signal(self, symbol: str, strategy: str, sig) -> None:
+        """전략 조건 충족 즉시 푸시 — 페이퍼 계정 체결과 무관(리스크 관문에 막혀도
+        발송). 'SIGNAL' 이벤트가 켜져 있고 활성일 때만. 저널 sink 를 안 거친다."""
+        try:
+            if not self.enabled or "SIGNAL" not in self.events:
+                return
+            self._enqueue(self.format_signal(
+                symbol, strategy, sig.side.value, sig.detail,
+                sig.entry_hint, sig.stop_price))
+        except Exception:
+            pass
+
     # ------------------------------------------------------------- format
+
+    @staticmethod
+    def format_signal(sym: str, strategy: str, side: str, detail: str,
+                      entry, stop) -> str:
+        """전략 시그널(조건 충족)을 짧은 알림으로 렌더. 체결이 아니라 '신호'임을
+        명시 — 실제 진입은 리스크 관문 통과 시에만."""
+        head = _SIDE_LABEL.get(str(side).upper(), side)
+        lines = [f"🔔 시그널  {head}  {sym}", _SEP, f"전략   {strategy}"]
+        if detail:
+            lines.append(f"트리거 {detail}")
+        if entry not in ("", None):
+            lines.append(f"기준가 {_px(entry)}")
+        if stop not in ("", None):
+            lines.append(f"손절가 {_px(stop)}")
+        lines.append("※ 조건 충족 신호 — 실제 진입은 리스크 관문 통과 시")
+        return "\n".join(lines)
 
     @staticmethod
     def format(row: dict) -> str:

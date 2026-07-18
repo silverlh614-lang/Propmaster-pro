@@ -139,6 +139,72 @@ def test_journal_sink_receives_rows():
     print("ok  Journal sink fires per row and isolates sink failures")
 
 
+# ------------------------------------------------------------- signal alert
+
+class _Sig:                              # 최소 TradeSignal 스텁
+    class _S:
+        def __init__(self, v): self.value = v
+    def __init__(self, side, detail, entry, stop):
+        self.side = self._S(side)
+        self.detail, self.entry_hint, self.stop_price = detail, entry, stop
+
+
+def test_signal_alert_decoupled_from_account():
+    """시그널 알림은 저널(체결)을 안 거치고 조건 충족 즉시 발송된다. 'SIGNAL'
+    이벤트로 게이팅되고, 포맷에 '시그널'·트리거·기준가·손절가가 들어간다."""
+    sig = _Sig("SHORT", "Donchian55 low 1842.1 broken @ 1823.21", 1823.21, 1861.36)
+    msg = TelegramNotifier.format_signal("ETH", "prop_breakout", "SHORT",
+                                         sig.detail, sig.entry_hint, sig.stop_price)
+    assert "시그널" in msg and "매도" in msg and "ETH" in msg
+    assert "1823.21" in msg and "1861.36" in msg and "Donchian55" in msg
+
+    # SIGNAL 이 이벤트에 있고 활성일 때만 enqueue
+    sent: list[str] = []
+    n = TelegramNotifier(token="t", chat_id="c", events="OPEN,CLOSE,SIGNAL")
+    n._enqueue = lambda text: sent.append(text)
+    n.notify_signal("ETH", "prop_breakout", sig)
+    assert sent and "시그널" in sent[0]
+
+    # SIGNAL 이 빠지면 무발송
+    sent.clear()
+    n2 = TelegramNotifier(token="t", chat_id="c", events="OPEN,CLOSE")
+    n2._enqueue = lambda text: sent.append(text)
+    n2.notify_signal("ETH", "prop_breakout", sig)
+    assert sent == []
+    # 비활성(토큰 없음)도 무발송
+    n3 = TelegramNotifier(token="", chat_id="", events="SIGNAL")
+    n3._enqueue = lambda text: sent.append(text)
+    n3.notify_signal("ETH", "prop_breakout", sig)
+    assert sent == []
+    print("ok  signal alert (condition-met, SIGNAL-gated, account-independent)")
+
+
+def test_signal_alert_dedup_in_symbolbot():
+    """SymbolBot._signal_alert 는 에피소드 단위로 디둡 — 같은 방향 연속은 1회,
+    시그널이 사라졌다 다시 뜨거나 방향이 바뀌면 재발송(전체 조립 없이 언바운드 호출)."""
+    from app.trading.symbol_bot import SymbolBot
+
+    class _N:
+        def __init__(self): self.sigs = []
+        def notify_signal(self, sym, strat, sig): self.sigs.append(sig.side.value)
+
+    class _Bot:
+        spec = type("S", (), {"key": "ETH"})()
+        strategy_name = "prop_breakout"
+        def __init__(self, n): self.notifier = n; self._last_signal_side = None
+    _Bot._signal_alert = SymbolBot._signal_alert
+
+    n = _N(); b = _Bot(n)
+    lg, sh = _Sig("LONG", "d", 1, 0.9), _Sig("SHORT", "d", 1, 1.1)
+    b._signal_alert(lg)      # None→LONG  발송
+    b._signal_alert(lg)      # LONG→LONG  디둡
+    b._signal_alert(None)    # LONG→None  리셋(무발송)
+    b._signal_alert(lg)      # None→LONG  재발송
+    b._signal_alert(sh)      # LONG→SHORT 발송
+    assert n.sigs == ["LONG", "LONG", "SHORT"]
+    print("ok  signal alert dedup (episode-based, re-fires on flip/clear)")
+
+
 # ------------------------------------------------------------- breach alert
 
 def test_breach_alert_fires_even_when_flat():
@@ -172,6 +238,8 @@ def main():
     test_deliver_swallows_errors()
     test_worker_delivers_payload()
     test_journal_sink_receives_rows()
+    test_signal_alert_decoupled_from_account()
+    test_signal_alert_dedup_in_symbolbot()
     test_breach_alert_fires_even_when_flat()
     print("\nALL notify tests passed")
 
