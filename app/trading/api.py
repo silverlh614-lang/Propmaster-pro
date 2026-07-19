@@ -136,8 +136,8 @@ def trades(limit: int = 50, symbol: str | None = None):
     return {"trades": MANAGER.journal.tail(limit, symbol=sym),
             "aggregate": MANAGER.journal.aggregate(symbol=sym),
             "by_symbol": MANAGER.journal.by_symbol(list(MANAGER.bots)),
-            "today": MANAGER.risk.today(),
-            "symbol": sym or "ALL"}
+            "by_reason": MANAGER.journal.by_reason(symbol=sym),
+            "today": MANAGER.risk.today(), "symbol": sym or "ALL"}
 
 
 @router.get("/trades.csv")

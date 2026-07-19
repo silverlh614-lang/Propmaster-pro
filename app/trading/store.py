@@ -63,6 +63,29 @@ def _iso(epoch: float) -> str:
         timespec="seconds")
 
 
+# 청산 사유 정규화 — CLOSE 의 reason 필드는 전체 note("CLOSE @ x pnl y (2.0R)
+# stop hit")라, R-멀티플 뒤 꼬리만 뽑아 소수 범주로 버킷팅한다. 승패 원인 귀속용
+# (by_reason). 하드스탑·트레일청산 모두 "stop hit"이라 같은 버킷에 들되, 그 안의
+# 승/패 분해가 "트레일이 익절 중인가 vs 하드스탑에 당하나"를 드러낸다.
+_REASON_BUCKETS = (
+    ("time stop", "time_stop"),
+    ("pre-reset flatten", "reset_flatten"),
+    ("prop breach", "prop_breach"),
+    ("prop guard", "prop_guard"),
+    ("manual", "manual"),
+    ("stop hit", "stop"),
+)
+
+
+def close_reason(note: str) -> str:
+    """CLOSE note 꼬리에서 청산 사유 범주를 뽑는다 (매칭 없으면 꼬리 원문/'other')."""
+    tail = str(note or "").rsplit(") ", 1)[-1].strip().lower()
+    for needle, bucket in _REASON_BUCKETS:
+        if needle in tail:
+            return bucket
+    return tail or "other"
+
+
 class Journal:
     """CSV-backed journal, mtime-cached so status polling doesn't reparse."""
 
@@ -139,6 +162,40 @@ class Journal:
 
     def by_symbol(self, symbols: list[str]) -> dict:
         return {s: self.aggregate(symbol=s) for s in symbols}
+
+    def by_reason(self, symbol: str | None = None) -> dict:
+        """청산 사유별 승패 분해 — settled CLOSE 를 정규화 사유(close_reason)로
+        그룹핑해 건수·승/패·승률·손익·평균R 을 낸다. '왜 이겼나/졌나'의 인과
+        절단면: 손실이 하드스탑에서 오는지·시간정지·리셋청산·프롭브리치에서
+        오는지를 가른다 (임계값 조정이 아니라 다음 백테스트 스윕의 가설 재료)."""
+        rows = self._rows()
+        if symbol:
+            rows = [r for r in rows if r["symbol"] == symbol.upper()]
+        buckets: dict[str, dict] = {}
+        for r in rows:
+            if r["result"] not in SETTLED_RESULTS:
+                continue
+            b = buckets.setdefault(
+                close_reason(r.get("reason", "")),
+                {"trades": 0, "wins": 0, "pnl": 0.0, "rs": []})
+            b["trades"] += 1
+            b["wins"] += 1 if r["result"] == "WIN" else 0
+            b["pnl"] += float(r["pnl_usd"] or 0)
+            if r["r_multiple"] not in ("", None):
+                b["rs"].append(float(r["r_multiple"]))
+        out = {}
+        for name, b in sorted(buckets.items(),
+                              key=lambda kv: -kv[1]["trades"]):
+            rs = b["rs"]
+            out[name] = {
+                "trades": b["trades"],
+                "wins": b["wins"],
+                "losses": b["trades"] - b["wins"],
+                "win_rate": round(b["wins"] / b["trades"], 4) if b["trades"] else None,
+                "pnl_usd": round(b["pnl"], 4),
+                "avg_r": round(sum(rs) / len(rs), 3) if rs else None,
+            }
+        return out
 
 
 class SignalJournal:
