@@ -404,6 +404,11 @@ class SignalJournal:
         blk = _grp(lambda r: bool(r.get("blocked")))
         return {"entered": ent, "blocked": blk, "verdict": _cf_verdict(blk)}
 
+    def breakdown(self, dim: str = "symbol") -> dict:
+        """종목별/전략별 포워드 엣지 분해 + 드리프트 플래그 (signal_analysis 위임)."""
+        from .signal_analysis import forward_breakdown
+        return forward_breakdown(self._rows(), dim)
+
     def excursion(self, symbol: str | None = None) -> dict:
         """MFE/MAE 분석 — 확정 시그널의 최대 유리(MFE)·불리(MAE) 이동을 R 로 집계.
         진 거래의 평균 MFE 가 크면 타겟이 멀거나 이익을 되돌려준다는 뜻(부분익절·
