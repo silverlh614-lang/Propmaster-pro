@@ -1,0 +1,33 @@
+name: CI
+
+# 정적 가드(복잡도·책임 태그) + 오프라인 테스트를 PR 과 기본 브랜치 푸시에서 강제한다.
+# 지금까지 로컬 pre-commit 으로만 돌던 커밋 전 최소 요건(CLAUDE.md §4)을 CI 로 승격 —
+# PR→머지 흐름에서 깨진 변경이 기본 브랜치로 들어가는 것을 원천 차단.
+on:
+  pull_request:
+  push:
+    branches:
+      - claude/breakout-prop-system-c67qyk
+
+jobs:
+  guards-and-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"        # Dockerfile 과 동일
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest             # dev 전용 — 런타임 의존성 아님
+
+      - name: Static guards (complexity · responsibility)
+        run: python scripts/validate_all.py
+
+      - name: Offline tests
+        run: python -m pytest -q
