@@ -255,6 +255,11 @@
   .tag.good{background:var(--up-dim);color:var(--up)} .tag.bad{background:var(--dn-dim);color:var(--dn)}
   .tag.neu{background:var(--panel-2);color:var(--faint);border:1px solid var(--border)}
   .ahint{font-size:10px;color:var(--faint);letter-spacing:.04em;margin-top:7px;line-height:1.5}
+  /* 종합 포지션 행 클릭 → 해당 종목 상세로 이동 */
+  #allposTbl tbody tr.prow{cursor:pointer;transition:background .15s ease,border-color .15s ease}
+  #allposTbl tbody tr.prow:hover{background:var(--panel-2);border-color:var(--border-hi)}
+  #allposTbl .goh{color:var(--faint);font-weight:400;font-size:11px;opacity:.55}
+  #allposTbl tbody tr.prow:hover .goh{color:var(--brand);opacity:1}
   /* 시그널 피드는 목표·손절·R·차단사유를 다 보여줘야 하므로 줄바꿈 허용 */
   #sigFeed .frow{align-items:flex-start}
   #sigFeed .fd{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.55}
@@ -748,6 +753,16 @@ function setSym(k){
   window._candles=null;drawChart();      // 이전 심볼 캔들 잔상 제거
   refresh();loadCandles();
 }
+// 종합 포지션 행 클릭 → 그 종목으로 전환하고 상세 패널(차트/게이트/포지션)로 스크롤.
+// 이미 그 종목이어도(setSym 은 무동작) 상세로 이동시켜 준다.
+function goToSymbol(k){
+  if(!SYMS.includes(k)){notify("warn","가동 중 아님",k+" 봇이 꺼져 있어 상세를 열 수 없습니다",true);return;}
+  setSym(k);
+  const target=["chart","gates","position"]
+    .map(p=>document.querySelector(`[data-panel="${p}"]`))
+    .find(el=>el&&el.style.display!=="none");
+  if(target)target.scrollIntoView({behavior:"smooth",block:"start"});
+}
 // 종목 토글 선택기: 유니버스 전체를 칩으로 — 코어는 항상 ON(잠금), 나머지는
 // 클릭으로 위성 봇을 켜고 끈다. 열린 포지션이 있으면 서버가 거부(토스트로 안내).
 function toggleSymPicker(){
@@ -936,8 +951,8 @@ function renderAllPositions(s){
     if(ur!=null){totUnreal+=ur;anyUnreal=true;}
     const rcls=(ur!=null?(ur>=0?"up":"dn"):"muted");
     const sideCls=p.side==="LONG"?"long":"short";
-    rows.push(`<tr>
-      <td class="l" data-l="심볼"><b>${k}</b></td>
+    rows.push(`<tr class="prow" onclick="goToSymbol('${k}')" title="${k} 상세 보기">
+      <td class="l" data-l="심볼"><b>${k}</b> <span class="goh">→</span></td>
       <td class="l" data-l="방향"><span class="tag ${sideCls}">${p.side}${p.adds?`+${p.adds}`:""}</span></td>
       <td data-l="진입가">${fmt(p.avg_entry,4)}</td>
       <td data-l="현재가">${px!=null?fmt(px,4):"–"}</td>
