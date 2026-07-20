@@ -40,6 +40,9 @@ SIGNAL_FIELDS = [
     "entry", "target", "stop", "detail", "blocked", "entered",
     # 전진(forward) 추적 — 시그널이 목표/손절 중 뭘 먼저 쳤는지 (체결 무관)
     "outcome", "r_result", "bars_held", "resolved_ts",
+    # MFE/MAE — 미결 동안 봉마다 누적한 최대 유리/불리 이동 (R). 스탑·타겟 배수의
+    # 적정성 검증용: 진 거래의 큰 MFE = 타겟이 멀다, 이긴 거래의 큰 MAE = 스탑이 아슬.
+    "mfe_r", "mae_r",
 ]
 SIGNAL_OPEN = ("", "OPEN")                      # 미결(추적 중)
 SIGNAL_RESULTS = ("WIN", "LOSS")               # 결과가 확정된 시그널
@@ -225,7 +228,19 @@ class SignalJournal:
         self._cache_key: tuple | None = None
         self._cache_rows: list[dict] = []
 
+    def _ensure_schema(self) -> None:
+        """구 스키마 CSV(신규 컬럼 이전)를 신규 헤더로 1회 마이그레이션 — 헤더가
+        현행과 다르면 기존 행을 읽어(누락 필드는 공란) 다시 쓴다. 안 그러면 구 헤더
+        파일에 신규 컬럼 행을 append 하다 열이 어긋난다. 파일 없음·일치 시 무동작."""
+        if not SIGNALS_CSV.exists():
+            return
+        with SIGNALS_CSV.open(newline="", encoding="utf-8") as f:
+            header = next(csv.reader(f), None)
+        if header != SIGNAL_FIELDS:
+            self._write_all(self._rows())
+
     def append(self, rec: dict) -> dict:
+        self._ensure_schema()          # 구 스키마 CSV 안전 마이그레이션 (열 어긋남 방지)
         row = {k: rec.get(k, "") for k in SIGNAL_FIELDS}
         row["ts"] = row["ts"] or _utcnow()
         # 목표·손절이 있으면 전진 추적 대상 (OPEN) — 체결 여부와 무관
@@ -248,6 +263,22 @@ class SignalJournal:
                 w = csv.DictWriter(f, fieldnames=SIGNAL_FIELDS)
                 w.writeheader()
                 w.writerows({k: r.get(k, "") for k in SIGNAL_FIELDS} for r in rows)
+
+    @staticmethod
+    def _excursion(r: dict, high: float, low: float) -> tuple[float, float] | None:
+        """이 봉의 유리(favorable)·불리(adverse) 이동을 R 로 환산 (LONG/SHORT 대칭,
+        0 하한 클램프). 진입·손절 파싱 불가하면 None. MFE=유리, MAE=불리."""
+        try:
+            entry, stop = float(r["entry"]), float(r["stop"])
+        except (TypeError, ValueError, KeyError):
+            return None
+        risk = abs(entry - stop)
+        if risk <= 0:
+            return None
+        long = str(r.get("side")).upper() == "LONG"
+        fav = (high - entry) if long else (entry - low)
+        adv = (entry - low) if long else (high - entry)
+        return max(fav, 0.0) / risk, max(adv, 0.0) / risk
 
     @staticmethod
     def _eval(r: dict, high: float, low: float, now_ts: float,
@@ -289,14 +320,24 @@ class SignalJournal:
         rows = [dict(r) for r in self._rows()]
         sym = symbol.upper()
         resolved = 0
+        changed = False
         for r in rows:
-            if r.get("symbol") == sym and r.get("outcome") in SIGNAL_OPEN \
-                    and r.get("target") not in ("", None):
-                res = self._eval(r, high, low, now_ts, bar_seconds, timeout_bars)
-                if res:
-                    r.update(res)
-                    resolved += 1
-        if resolved:
+            if not (r.get("symbol") == sym and r.get("outcome") in SIGNAL_OPEN
+                    and r.get("target") not in ("", None)):
+                continue
+            exc = self._excursion(r, high, low)     # 매 봉 러닝 MFE/MAE 갱신
+            if exc:
+                cur_mfe, cur_mae = float(r.get("mfe_r") or 0.0), float(r.get("mae_r") or 0.0)
+                mfe, mae = max(cur_mfe, exc[0]), max(cur_mae, exc[1])
+                if mfe > cur_mfe or mae > cur_mae:
+                    r["mfe_r"], r["mae_r"] = round(mfe, 3), round(mae, 3)
+                    changed = True
+            res = self._eval(r, high, low, now_ts, bar_seconds, timeout_bars)
+            if res:
+                r.update(res)
+                resolved += 1
+                changed = True
+        if changed:
             self._write_all(rows)
         return resolved
 
@@ -362,6 +403,29 @@ class SignalJournal:
         ent = _grp(lambda r: str(r.get("entered")).lower() == "true")
         blk = _grp(lambda r: bool(r.get("blocked")))
         return {"entered": ent, "blocked": blk, "verdict": _cf_verdict(blk)}
+
+    def excursion(self, symbol: str | None = None) -> dict:
+        """MFE/MAE 분석 — 확정 시그널의 최대 유리(MFE)·불리(MAE) 이동을 R 로 집계.
+        진 거래의 평균 MFE 가 크면 타겟이 멀거나 이익을 되돌려준다는 뜻(부분익절·
+        타겟 스윕 가설), 이긴 거래의 평균 MAE 가 1R 에 근접하면 스탑이 아슬하다는 뜻
+        (스탑 폭 스윕 가설). 손튜닝이 아니라 백테스트 스윕 가설 재료로만 쓴다."""
+        rows = self._rows()
+        if symbol:
+            rows = [r for r in rows if r.get("symbol") == symbol.upper()]
+        settled = [r for r in rows if r.get("outcome") in SIGNAL_RESULTS]
+
+        def _avg(sel, key) -> float | None:
+            v = [float(r[key]) for r in settled
+                 if sel(r) and r.get(key) not in ("", None)]
+            return round(sum(v) / len(v), 3) if v else None
+
+        return {
+            "samples": len(settled),
+            "avg_mfe_r": _avg(lambda r: True, "mfe_r"),
+            "avg_mae_r": _avg(lambda r: True, "mae_r"),
+            "loss_avg_mfe_r": _avg(lambda r: r["outcome"] == "LOSS", "mfe_r"),
+            "win_avg_mae_r": _avg(lambda r: r["outcome"] == "WIN", "mae_r"),
+        }
 
 
 class BotState:

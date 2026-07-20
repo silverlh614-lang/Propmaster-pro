@@ -138,6 +138,70 @@ def test_counterfactual_entered_vs_blocked():
     print("ok  signal counterfactual (entered vs blocked forward, verdict)")
 
 
+def test_mfe_mae_excursion_tracking():
+    """MFE/MAE: 미결 시그널이 봉마다 최대 유리(MFE)·불리(MAE) 이동을 R 로 누적하고,
+    확정 후 결과별로 집계된다 — 진 거래가 손절 전 얼마나 유리했나, 이긴 거래가
+    얼마나 역주행을 견뎠나."""
+    import datetime as _dt
+    j = _fresh()
+    t0 = "2026-07-01T00:00:00+00:00"
+    e0 = _dt.datetime.fromisoformat(t0).timestamp()
+    bs = 3600
+
+    def sig(sym, side, entry, target, stop):
+        j.append({"symbol": sym, "strategy": "s", "side": side, "signal_type": "X",
+                  "entry": entry, "target": target, "stop": stop, "detail": "",
+                  "blocked": "", "entered": True, "ts": t0})
+
+    # 단위 함수: LONG/SHORT 대칭 + 0 클램프
+    fav, adv = SignalJournal._excursion({"side": "LONG", "entry": 100, "stop": 90}, 108, 98)
+    assert round(fav, 3) == 0.8 and round(adv, 3) == 0.2
+    fav, adv = SignalJournal._excursion({"side": "SHORT", "entry": 100, "stop": 110}, 103, 96)
+    assert round(fav, 3) == 0.4 and round(adv, 3) == 0.3
+
+    sig("ETH", "LONG", 100, 120, 90)   # risk 10 → 진 거래지만 +1.5R 까지 갔었다
+    j.resolve_open("ETH", high=108, low=98, now_ts=e0 + bs, bar_seconds=bs, timeout_bars=168)
+    j.resolve_open("ETH", high=115, low=96, now_ts=e0 + 2 * bs, bar_seconds=bs, timeout_bars=168)
+    eth = {r["symbol"]: r for r in j.tail(5)}["ETH"]
+    assert eth["outcome"] == "OPEN"          # 아직 미결이어도 MFE/MAE 는 누적
+    assert float(eth["mfe_r"]) == 1.5 and float(eth["mae_r"]) == 0.4, eth
+    # 손절 봉(low 89 ≤ 90) → LOSS, 최종 MAE 1.1 로 갱신
+    j.resolve_open("ETH", high=105, low=89, now_ts=e0 + 3 * bs, bar_seconds=bs, timeout_bars=168)
+    eth = {r["symbol"]: r for r in j.tail(5)}["ETH"]
+    assert eth["outcome"] == "LOSS" and float(eth["r_result"]) == -1.0
+    assert float(eth["mfe_r"]) == 1.5 and float(eth["mae_r"]) == 1.1, eth
+
+    sig("XRP", "LONG", 100, 120, 90)   # 한 봉에 목표 도달(WIN), 그 봉 excursion 도 기록
+    j.resolve_open("XRP", high=122, low=93, now_ts=e0 + bs, bar_seconds=bs, timeout_bars=168)
+    xrp = {r["symbol"]: r for r in j.tail(5)}["XRP"]
+    assert xrp["outcome"] == "WIN" and float(xrp["mfe_r"]) == 2.2 and float(xrp["mae_r"]) == 0.7
+
+    exc = j.excursion()
+    assert exc["samples"] == 2
+    assert exc["loss_avg_mfe_r"] == 1.5      # 진 거래가 손절 전 평균 +1.5R
+    assert exc["win_avg_mae_r"] == 0.7       # 이긴 거래가 평균 -0.7R 역주행 견딤
+    print("ok  MFE/MAE excursion tracking + outcome-split aggregate")
+
+
+def test_schema_migration_old_csv():
+    """구 스키마(MFE/MAE 컬럼 이전) CSV 에 append 해도 헤더가 마이그레이션되고 기존
+    행이 보존된다 — 열 어긋남 없이 라이브 signals.csv 를 안전하게 승계한다."""
+    import csv as _csv
+    SIGNALS_CSV.unlink(missing_ok=True)
+    old = [f for f in SIGNAL_FIELDS if f not in ("mfe_r", "mae_r")]
+    with SIGNALS_CSV.open("w", newline="", encoding="utf-8") as f:
+        w = _csv.DictWriter(f, fieldnames=old)
+        w.writeheader()
+        w.writerow({**{k: "" for k in old}, "symbol": "OLD", "side": "LONG"})
+    j = SignalJournal()
+    j.append({"symbol": "NEW", "strategy": "s", "side": "LONG", "signal_type": "X",
+              "entry": 100, "target": 120, "stop": 90, "blocked": "", "entered": True})
+    rows = {r["symbol"]: r for r in j.tail(10)}
+    assert set(rows) == {"OLD", "NEW"}                       # 기존 행 보존
+    assert "mfe_r" in rows["OLD"] and "mfe_r" in rows["NEW"]  # 헤더 마이그레이션
+    print("ok  signal CSV schema migration (old rows kept, header upgraded)")
+
+
 def test_persists_across_instances():
     """CSV persists — a fresh journal (same DATA_DIR) reads prior signals, so a
     redeploy never loses the record."""
@@ -153,5 +217,7 @@ if __name__ == "__main__":
     test_forward_resolution_win_loss_expire()
     test_stop_first_when_bar_spans_both()
     test_counterfactual_entered_vs_blocked()
+    test_mfe_mae_excursion_tracking()
+    test_schema_migration_old_csv()
     test_persists_across_instances()
     print("\nALL signal journal tests passed")

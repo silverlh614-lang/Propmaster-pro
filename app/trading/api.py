@@ -161,7 +161,7 @@ def signals(limit: int = 100, symbol: str | None = None):
     \ubaa9\ud45c\uac00\u00b7\uc190\uc808\uac00\u00b7\ucc28\ub2e8\uc0ac\uc720\u00b7\uc9c4\uc785\uc5ec\ubd80). \ucd5c\uc2e0\uc21c. stats \ub294 \ucd1d\uacc4/\uc9c4\uc785/\ucc28\ub2e8 \uc694\uc57d."""
     sym = None if (not symbol or symbol.lower() in ("all", "")) else symbol.upper()
     return {"stats": MANAGER.signals.stats(), "rows": MANAGER.signals.tail(limit, symbol=sym),
-            "counterfactual": MANAGER.signals.counterfactual(symbol=sym)}
+            "counterfactual": MANAGER.signals.counterfactual(symbol=sym), "excursion": MANAGER.signals.excursion(symbol=sym)}
 
 
 @router.get("/signals.csv")
