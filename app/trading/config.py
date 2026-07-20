@@ -150,6 +150,10 @@ class TradingConfig:
     # --- poll / data -------------------------------------------------------
     poll_sec: float = 2.0
 
+    # --- 헬스 워치독 (봇 정지·피드 무응답 텔레그램 알림, 매매 무영향) ----------
+    health_alerts: bool = True            # 0 으로 끄면 워치독 자체를 안 띄운다
+    health_check_interval_sec: int = 300  # 점검 주기 (초) — 이 구간 폴 정체면 피드 이상
+
     # --- mode (Paper-First) ------------------------------------------------
     live_enabled: bool = False           # Phase 3: TRADING_LIVE_ENABLED=1 + creds
     # Phase 3 라이브 자격증명 — env 전용(TRADING_API_KEY/SECRET), 리포 커밋 금지.
