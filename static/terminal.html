@@ -293,6 +293,11 @@
     border-left:2px solid var(--border-hi);background:var(--panel-2);border-radius:0 3px 3px 0;line-height:1.7}
   .sigdet .dk{color:var(--faint);text-transform:uppercase;font-size:9px;letter-spacing:.06em}
   .sigdet .dt{color:var(--faint);margin-top:2px;font-size:10px}
+  /* 폰 알림 위저드: 단계 안내 + code 칩 */
+  .ntsteps{margin:8px 0 0;padding-left:18px;font-size:11px;color:var(--dim);line-height:1.9}
+  .ntsteps li{margin-bottom:4px}
+  .ntsteps code,#ntBody code{background:var(--panel-2);border:1px solid var(--border);border-radius:2px;
+    padding:0 4px;font-size:10px;color:var(--ink)}
   #sigFeed .fd{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.55}
 
   table{width:100%;border-collapse:collapse;font-size:11px}
@@ -703,6 +708,16 @@
           <span class="muted" style="font-size:10px" title="0=라이브 1000봉 · N=Binance 아카이브 N개월">개월<input class="ov" id="ovMonths" placeholder="0" style="width:40px"></span>
         </div>
         <div id="btOut" class="note">아직 실행 안 함.</div>
+      </div>
+    </section>
+
+    <!-- 폰 알림(텔레그램) 설정 위저드 -->
+    <section data-panel="notify" class="panel col-4">
+      <div class="phead"><span class="mk">◆</span> 폰 알림 (텔레그램) <span class="sp"></span>
+        <span class="r" id="ntState">확인 중…</span></div>
+      <div class="pbody">
+        <div id="ntBody"><div class="note">확인 중…</div></div>
+        <button class="btbridge" id="ntTest" onclick="testNotify()" style="margin-top:9px">✈️ 테스트 발송</button>
       </div>
     </section>
 
@@ -1382,6 +1397,34 @@ function renderByReason(br){
 }
 
 // ---- 시그널 피드 · 전진검증 (기록 A + 성과추적 B) ----
+// 폰 알림(텔레그램) 설정 위저드: 배선 상태 표시 + 미설정 시 3단계 안내 + 테스트 발송.
+// 자격증명은 Railway env(TELEGRAM_*)가 소스이므로 대시보드는 상태·안내·테스트만 한다
+// (토큰을 받지 않는다 — 노출 위험 없음).
+async function loadNotify(){
+  let d;try{d=await api("/api/trading/notify");}catch(e){return;}
+  const on=!!d.enabled,st=$("ntState");
+  st.textContent=on?"🟢 연결됨":"🔴 미설정";st.className="r "+(on?"up":"dn");
+  const evs=(d.events||[]).join(", ")||"–";
+  if(on){
+    $("ntBody").innerHTML=`<div class="note" style="color:var(--up)">폰으로 시그널·체결·이상 알림이 전송됩니다.</div>`+
+      `<div class="ahint">활성 이벤트: ${evs}<br>‘테스트 발송’으로 배선을 확인하세요.</div>`;
+  }else{
+    const tk=d.token_configured?"✓":"✕",ch=d.chat_configured?"✓":"✕";
+    $("ntBody").innerHTML=`<div class="note">아직 폰 알림이 꺼져 있습니다 — 아래 3단계로 켜세요.</div>`+
+      `<ol class="ntsteps">`+
+      `<li>텔레그램 <b>@BotFather</b> → <code>/newbot</code> → 봇 토큰</li>`+
+      `<li>봇과 대화 시작 후 <b>chat_id</b> 확인 (예: @userinfobot)</li>`+
+      `<li>Railway 환경변수 설정 후 재배포<br><code>TELEGRAM_BOT_TOKEN</code> ${tk} · <code>TELEGRAM_CHAT_ID</code> ${ch}</li>`+
+      `</ol>`;
+  }
+}
+async function testNotify(){
+  try{await api("/api/trading/notify/test",{method:"POST"});
+    notify("brand","테스트 발송됨","텔레그램에 메시지가 오면 배선 정상입니다.",false);
+  }catch(e){notify("warn","발송 실패",(e&&e.message)||"텔레그램 미설정 — 토큰·챗ID 확인",true);}
+  loadNotify();
+}
+
 // 시그널 피드 드릴다운: 행 클릭 → MFE/MAE·보유봉·판정·진입/차단 상세 토글.
 // 펼침 상태(_sigOpen)는 6초 폴 재렌더에도 유지 — 읽는 중 접히지 않게.
 let _sigRows=[];const _sigOpen=new Set();
@@ -1737,6 +1780,7 @@ setInterval(refresh,2500);
 setInterval(loadCandles,7000);
 setInterval(loadJournal,6000);
 setInterval(loadSignals,6000);loadSignals();
+setInterval(loadNotify,30000);loadNotify();
 </script>
 </body>
 </html>
