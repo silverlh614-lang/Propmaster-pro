@@ -263,6 +263,10 @@
   .dbadge.holding{background:var(--up-dim);color:var(--up)}
   .dbadge.decaying{background:var(--dn-dim);color:var(--dn)}
   .dbadge.insufficient{background:var(--panel-2);color:var(--faint);border:1px solid var(--border)}
+  .btbridge{margin-top:9px;width:100%;background:var(--panel-2);color:var(--ink);
+    border:1px solid var(--border-hi);border-radius:3px;padding:7px;font-size:11px;
+    font-weight:700;cursor:pointer;letter-spacing:.03em}
+  .btbridge:hover{border-color:var(--brand);color:var(--brand)}
   /* 종합 포지션 행 클릭 → 해당 종목 상세로 이동 */
   #allposTbl tbody tr.prow{cursor:pointer;transition:background .15s ease,border-color .15s ease}
   #allposTbl tbody tr.prow:hover{background:var(--panel-2);border-color:var(--border-hi)}
@@ -715,6 +719,8 @@
           <tbody id="bdBody"><tr><td class="l muted" colspan="6">확정 시그널 없음</td></tr></tbody>
         </table></div>
         <div class="ahint" id="aHint"></div>
+        <button class="btbridge" id="btBridge" onclick="bridgeToBacktest()"
+          title="MFE/MAE 신호를 백테스트 오버라이드로 프리필">🔬 이 가설로 백테스트</button>
       </div>
     </section>
 
@@ -1391,7 +1397,9 @@ function renderCounterfactual(cf){
     `<div class="sv"><span class="k">차단 승률</span><span class="n">${_wr(b.win_rate)} <span class="muted" style="font-size:10px">(${b.resolved||0})</span></span></div>`;
   renderAnalysisHint(cf);
 }
+let _lastExc={};
 function renderExcursion(x){
+  _lastExc=x||{};
   const rn=v=>v==null?"–":fmt(v,2)+"R";
   $("excBox").innerHTML=
     `<div class="sv"><span class="k">진 거래 평균 MFE</span><span class="n">${rn(x.loss_avg_mfe_r)}</span></div>`+
@@ -1405,6 +1413,27 @@ function renderAnalysisHint(cf){
   else if(v==="gate_dodging_losers")h="✅ 막힌 시그널이 −기대값 — 관문이 패자를 회피 중(계좌 보호). 정상.";
   else if(v==="insufficient")h="차단 확정 표본이 10건 미만 — 반사실 판단 보류(노이즈 방지).";
   $("aHint").textContent=h;
+}
+// 가설 → 백테스트 브리지: MFE/MAE 신호를 백테스트 오버라이드(ATR·R:R)로 프리필하고
+// 백테스트 패널로 이동. 라이브 값을 바꾸는 게 아니라 게이트에 넣을 가설을 세팅할 뿐.
+function bridgeToBacktest(){
+  const x=_lastExc||{};const why=[];
+  // 진 거래가 타겟 근처(≥1.2R)까지 갔다 되돌아오면 → 타겟 R:R 을 그 근처로 좁혀 검증
+  if(x.loss_avg_mfe_r!=null && x.loss_avg_mfe_r>=1.2){
+    const rr=Math.max(1.0,Math.round(x.loss_avg_mfe_r*10)/10);
+    $("ovRR").value=rr;why.push(`진 거래 평균 MFE ${fmt(x.loss_avg_mfe_r,2)}R → R:R ${rr}`);
+  }
+  // 이긴 거래가 스탑에 아슬(≥0.8R)하면 → 스탑을 넓혀(현재×1.2) 검증
+  if(x.win_avg_mae_r!=null && x.win_avg_mae_r>=0.8){
+    const base=parseFloat($("ovAtr").placeholder)||2.5;const a=Math.round(base*1.2*10)/10;
+    $("ovAtr").value=a;why.push(`이긴 거래 평균 MAE ${fmt(x.win_avg_mae_r,2)}R → 스탑 ATR×${a}`);
+  }
+  const bt=document.querySelector('[data-panel="backtest"]');
+  if(bt&&bt.style.display!=="none")bt.scrollIntoView({behavior:"smooth",block:"start"});
+  if(why.length)
+    notify("brand","백테스트 가설 프리필",`${SYM} 기준 — ${why.join(" · ")}. ‘▶ 리플레이’로 검증하세요.`,false);
+  else
+    notify("warn","가설 없음","MFE/MAE 신호가 뚜렷하지 않습니다 — 확정 시그널이 더 쌓이면 가설이 생깁니다.",false);
 }
 
 function flashResult(r){const f=$("flash");const win=r.result==="WIN"||Number(r.pnl_usd)>0;
