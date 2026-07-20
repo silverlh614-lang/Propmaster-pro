@@ -323,9 +323,12 @@ DEFAULT_SYMBOLS = ("ETH,SOL,XRP,ARB,SUI,TAO,WLD,STX,LDO,"
 # 심볼별 검증된 최적 전략 (게이트 A/B). env(TRADING_SYMBOL_STRATEGY) 미설정 시
 # 폴백 — SOL/XRP 를 Donchian 으로 잘못 돌리면 손실이라 이 매핑을 baking 한다.
 # OP/NEAR 매핑은 수동으로 켤 때를 위해 유지.
+# 2026-07-20 신선 12mo 재스캔 정정 (docs/phase2_results.md): ARB 는 vbo(expR
+# 0.325·PF 1.50·65거래) 가 prop_breakout(0.133·1.20) 을 크게 상회 → vbo 로 전환.
+# OP 는 prop_breakout(0.159·1.23 통과) 만 게이트 통과, vbo(0.128·1.19) 탈락 → prop 로.
 DEFAULT_SYMBOL_STRATEGY = {"ETH": "prop_breakout", "SOL": "vbo", "XRP": "vbo",
-                          "ARB": "prop_breakout", "SUI": "prop_breakout",
-                          "OP": "vbo", "NEAR": "prop_breakout",
+                          "ARB": "vbo", "SUI": "prop_breakout",
+                          "OP": "prop_breakout", "NEAR": "prop_breakout",
                           # 후보 스캔 승격분 (12mo 게이트, Breakout 지원분만)
                           "TAO": "prop_breakout", "WLD": "vbo",
                           "STX": "prop_breakout", "LDO": "vbo",
