@@ -248,6 +248,13 @@
   .sigstat .sv{display:flex;flex-direction:column;gap:1px}
   .sigstat .k{font-size:9px;color:var(--faint);letter-spacing:.09em;text-transform:uppercase}
   .sigstat .n{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+  /* 승패 분석 패널 — 서브 구획 헤딩 + 판정 태그 색상 */
+  .asub{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);margin:11px 0 6px;display:flex;align-items:center;gap:7px}
+  .asub:first-child{margin-top:2px}
+  .tag.good{background:var(--up-dim);color:var(--up)} .tag.bad{background:var(--dn-dim);color:var(--dn)}
+  .tag.neu{background:var(--panel-2);color:var(--faint);border:1px solid var(--border)}
+  .ahint{font-size:10px;color:var(--faint);letter-spacing:.04em;margin-top:7px;line-height:1.5}
   /* 시그널 피드는 목표·손절·R·차단사유를 다 보여줘야 하므로 줄바꿈 허용 */
   #sigFeed .frow{align-items:flex-start}
   #sigFeed .fd{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.55}
@@ -669,6 +676,25 @@
       <div class="pbody">
         <div class="sigstat" id="sigStat"><div class="note">로딩 중…</div></div>
         <div class="feed" id="sigFeed"><div class="note">로딩 중…</div></div>
+      </div>
+    </section>
+
+    <!-- 승패 분석: 청산사유 · 차단 반사실 · MFE/MAE -->
+    <section data-panel="analysis" class="panel full">
+      <div class="phead"><span class="mk">◆</span> 승패 분석 <span class="sp"></span>
+        <span class="r muted" style="font-size:10px">백테스트 스윕 가설 재료 · 손튜닝 아님</span></div>
+      <div class="pbody">
+        <div class="asub">청산 사유별 승패 <span class="muted" style="font-weight:400;text-transform:none">— 손실이 어디서 오나</span></div>
+        <div class="scroll"><table>
+          <thead><tr><th class="l">사유</th><th>건수</th><th>승/패</th><th>승률</th><th>PnL$</th><th>평균R</th></tr></thead>
+          <tbody id="brBody"><tr><td class="l muted" colspan="6">확정 거래 없음</td></tr></tbody>
+        </table></div>
+        <div class="asub">차단 시그널 반사실 <span id="cfVerdict" class="tag neu">–</span>
+          <span class="muted" style="font-weight:400;text-transform:none">— 관문이 승자를 버리나 패자를 피하나</span></div>
+        <div class="sigstat" id="cfBox" style="border-bottom:none;margin-bottom:0"><div class="note">로딩 중…</div></div>
+        <div class="asub">MFE / MAE <span class="muted" style="font-weight:400;text-transform:none">— 스탑·타겟 배수 진단</span></div>
+        <div class="sigstat" id="excBox" style="border-bottom:none;margin-bottom:0"><div class="note">로딩 중…</div></div>
+        <div class="ahint" id="aHint"></div>
       </div>
     </section>
 
@@ -1247,6 +1273,22 @@ async function loadJournal(){let d;try{d=await api("/api/trading/trades?limit=12
       <td data-l="R">${r.r_multiple!==""&&r.r_multiple!=null?fmt(r.r_multiple,2):"–"}</td>
       <td class="l muted" data-l="사유" title="${esc(r.reason||"")}">${esc((r.signal_detail||r.reason||"").slice(0,60))}</td></tr>`;
   }).join(""):'<tr><td class="l muted" colspan="12">거래 없음</td></tr>';
+  renderByReason(d.by_reason||{});
+}
+
+// ---- 승패 분석: 청산 사유별 승패 분해 (by_reason) ----
+const REASON_LABEL={stop:"스탑",time_stop:"시간정지",reset_flatten:"리셋청산",
+  prop_breach:"프롭브리치",prop_guard:"프롭가드",manual:"수동",other:"기타"};
+function renderByReason(br){
+  const rows=Object.entries(br);
+  $("brBody").innerHTML=rows.length?rows.map(([name,b])=>{
+    const wr=b.win_rate==null?"–":(b.win_rate*100).toFixed(0)+"%";
+    const ar=b.avg_r==null?"–":(b.avg_r>=0?"+":"")+fmt(b.avg_r,2)+"R";
+    return `<tr><td class="l">${REASON_LABEL[name]||name}</td>
+      <td>${b.trades}</td><td>${b.wins}/${b.losses}</td><td>${wr}</td>
+      <td class="${b.pnl_usd>=0?'up':'dn'}">${money(b.pnl_usd)}</td>
+      <td class="${(b.avg_r||0)>=0?'up':'dn'}">${ar}</td></tr>`;
+  }).join(""):'<tr><td class="l muted" colspan="6">확정 거래 없음</td></tr>';
 }
 
 // ---- 시그널 피드 · 전진검증 (기록 A + 성과추적 B) ----
@@ -1273,6 +1315,42 @@ async function loadSignals(){
       `<span class="fb ${ocls}">${oc}</span>`+
       `<span class="fd"><b>${esc(r.symbol||"")} ${side}</b> ${fmt(r.entry,4)} → 목 ${fmt(r.target,4)} · 손 ${fmt(r.stop,4)} ${rr}${blk}</span></div>`;
   }).join(""):'<div class="note">시그널 없음 — 돌파 조건 충족 시 여기에 기록됩니다.</div>';
+  renderCounterfactual(d.counterfactual||{});
+  renderExcursion(d.excursion||{});
+}
+
+// ---- 승패 분석: 차단 반사실(counterfactual) + MFE/MAE(excursion) ----
+const VERDICT={gate_skipping_winners:["승자 유실 의심","bad"],
+  gate_dodging_losers:["패자 회피(정상)","good"],neutral:["중립","neu"],
+  insufficient:["표본 부족","neu"]};
+const _erN=v=>v==null?"–":(v>=0?"+":"")+fmt(v,2)+"R";
+const _erC=v=>v==null?"muted":v>0?"up":v<0?"dn":"muted";
+const _wr=v=>v==null?"–":(v*100).toFixed(0)+"%";
+function renderCounterfactual(cf){
+  const e=cf.entered||{},b=cf.blocked||{};
+  const v=VERDICT[cf.verdict]||["–","neu"],vt=$("cfVerdict");
+  vt.className="tag "+v[1];vt.textContent=v[0];
+  $("cfBox").innerHTML=
+    `<div class="sv"><span class="k">진입 기대값</span><span class="n ${_erC(e.expectancy_r)}">${_erN(e.expectancy_r)}</span></div>`+
+    `<div class="sv"><span class="k">차단 기대값</span><span class="n ${_erC(b.expectancy_r)}">${_erN(b.expectancy_r)}</span></div>`+
+    `<div class="sv"><span class="k">진입 승률</span><span class="n">${_wr(e.win_rate)} <span class="muted" style="font-size:10px">(${e.resolved||0})</span></span></div>`+
+    `<div class="sv"><span class="k">차단 승률</span><span class="n">${_wr(b.win_rate)} <span class="muted" style="font-size:10px">(${b.resolved||0})</span></span></div>`;
+  renderAnalysisHint(cf);
+}
+function renderExcursion(x){
+  const rn=v=>v==null?"–":fmt(v,2)+"R";
+  $("excBox").innerHTML=
+    `<div class="sv"><span class="k">진 거래 평균 MFE</span><span class="n">${rn(x.loss_avg_mfe_r)}</span></div>`+
+    `<div class="sv"><span class="k">이긴 거래 평균 MAE</span><span class="n">${rn(x.win_avg_mae_r)}</span></div>`+
+    `<div class="sv"><span class="k">전체 MFE / MAE</span><span class="n">${rn(x.avg_mfe_r)} / ${rn(x.avg_mae_r)}</span></div>`+
+    `<div class="sv"><span class="k">표본</span><span class="n">${x.samples||0}</span></div>`;
+}
+function renderAnalysisHint(cf){
+  const v=cf.verdict;let h="";
+  if(v==="gate_skipping_winners")h="⚠️ 막힌 시그널이 +기대값 — 리스크 관문이 승자를 버리는 중일 수 있음. 예산 사이징(risk_daily_budget_frac) 재검토를 다음 백테스트 스윕 가설로.";
+  else if(v==="gate_dodging_losers")h="✅ 막힌 시그널이 −기대값 — 관문이 패자를 회피 중(계좌 보호). 정상.";
+  else if(v==="insufficient")h="차단 확정 표본이 10건 미만 — 반사실 판단 보류(노이즈 방지).";
+  $("aHint").textContent=h;
 }
 
 function flashResult(r){const f=$("flash");const win=r.result==="WIN"||Number(r.pnl_usd)>0;

@@ -136,8 +136,8 @@ def trades(limit: int = 50, symbol: str | None = None):
     return {"trades": MANAGER.journal.tail(limit, symbol=sym),
             "aggregate": MANAGER.journal.aggregate(symbol=sym),
             "by_symbol": MANAGER.journal.by_symbol(list(MANAGER.bots)),
-            "today": MANAGER.risk.today(),
-            "symbol": sym or "ALL"}
+            "by_reason": MANAGER.journal.by_reason(symbol=sym),
+            "today": MANAGER.risk.today(), "symbol": sym or "ALL"}
 
 
 @router.get("/trades.csv")
@@ -160,8 +160,8 @@ def signals(limit: int = 100, symbol: str | None = None):
     """\uc804\ub7b5 \uc2dc\uadf8\ub110 \uae30\ub85d \uc870\ud68c \u2014 \uccb4\uacb0\uacfc \ubb34\uad00\ud558\uac8c \uc804\ub7b5\uc774 \ub0b8 \ubaa8\ub4e0 \uc9c4\uc785 \uc2e0\ud638(\uae30\uc900\uac00\u00b7
     \ubaa9\ud45c\uac00\u00b7\uc190\uc808\uac00\u00b7\ucc28\ub2e8\uc0ac\uc720\u00b7\uc9c4\uc785\uc5ec\ubd80). \ucd5c\uc2e0\uc21c. stats \ub294 \ucd1d\uacc4/\uc9c4\uc785/\ucc28\ub2e8 \uc694\uc57d."""
     sym = None if (not symbol or symbol.lower() in ("all", "")) else symbol.upper()
-    return {"stats": MANAGER.signals.stats(),
-            "rows": MANAGER.signals.tail(limit, symbol=sym)}
+    return {"stats": MANAGER.signals.stats(), "rows": MANAGER.signals.tail(limit, symbol=sym),
+            "counterfactual": MANAGER.signals.counterfactual(symbol=sym), "excursion": MANAGER.signals.excursion(symbol=sym)}
 
 
 @router.get("/signals.csv")
