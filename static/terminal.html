@@ -267,6 +267,19 @@
     border:1px solid var(--border-hi);border-radius:3px;padding:7px;font-size:11px;
     font-weight:700;cursor:pointer;letter-spacing:.03em}
   .btbridge:hover{border-color:var(--brand);color:var(--brand)}
+  /* 돌파 근접도 행 + 게이지 바 */
+  #proxBody{display:flex;flex-direction:column;gap:5px}
+  .prow2{display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 4px;border-radius:3px;
+    transition:background .15s ease}
+  .prow2:hover{background:var(--panel-2)}
+  .prow2 .pk{min-width:64px;font-weight:800;font-size:12px;font-variant-numeric:tabular-nums}
+  .prow2 .pdir{font-size:10px} .prow2 .pdir.long{color:var(--up)} .prow2 .pdir.short{color:var(--dn)}
+  .prow2 .pbar{flex:1;height:7px;background:var(--panel-2);border:1px solid var(--border);
+    border-radius:4px;overflow:hidden}
+  .prow2 .pfill{display:block;height:100%;background:var(--faint);transition:width .4s var(--ease)}
+  .prow2.near .pfill{background:#e0bb54} .prow2.go .pfill{background:var(--up)}
+  .prow2 .pd{min-width:66px;text-align:right;font-size:11px;font-variant-numeric:tabular-nums;color:var(--faint)}
+  .prow2.go .pd{color:var(--up);font-weight:800} .prow2.near .pd{color:#e0bb54}
   /* 종합 포지션 행 클릭 → 해당 종목 상세로 이동 */
   #allposTbl tbody tr.prow{cursor:pointer;transition:background .15s ease,border-color .15s ease}
   #allposTbl tbody tr.prow:hover{background:var(--panel-2);border-color:var(--border-hi)}
@@ -605,6 +618,13 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- 돌파 근접도: 전 종목이 채널 트리거에 얼마나 가까운가 (왜 조용한지) -->
+    <section data-panel="proximity" class="panel col-4">
+      <div class="phead"><span class="mk">◆</span> 돌파 근접도 <span class="sp"></span>
+        <span class="r muted" style="font-size:10px">채널 트리거까지</span></div>
+      <div class="pbody"><div id="proxBody"><div class="note">근접도 계산 대기…</div></div></div>
     </section>
 
     <!-- 포지션 / R-ladder -->
@@ -960,6 +980,32 @@ function renderStages(pos){
     return `<div class="stage ${cls}"><div class="n">${s[0]}</div><div class="t">${s[1]}</div></div>`;}).join("");
 }
 
+// 돌파 근접도: 전 종목이 채널 트리거(돌파 레벨)에 얼마나 가까운지 오름차순으로.
+// diagnose()의 box_hi/box_lo·방향 + 현재가로 계산 — 백엔드 무변경. 왜 지금 조용한지
+// (모두 트리거에서 멀다) vs 곧 터질지(근접)를 한눈에. 행 클릭 → 그 종목 상세.
+function renderProximity(symbols){
+  const box=$("proxBody");if(!box)return;
+  const rows=[];
+  for(const [k,bo] of Object.entries(symbols)){
+    const dg=bo.diagnostics,px=(bo.collector||{}).last_price;
+    if(!dg||px==null||dg.box_hi==null||dg.box_lo==null||!dg.allowed)continue;
+    const long=dg.allowed==="LONG",trig=long?dg.box_hi:dg.box_lo;
+    if(!trig)continue;
+    rows.push({k,long,dist:long?(trig-px)/px*100:(px-trig)/px*100,ready:!!dg.ready});
+  }
+  rows.sort((a,b)=>a.dist-b.dist);
+  if(!rows.length){box.innerHTML='<div class="note">근접도 계산 대기 — 워밍업 중이거나 시세 없음.</div>';return;}
+  const CAP=3;                          // 트리거까지 3% 이내를 게이지 만재로 본다
+  box.innerHTML=rows.map(r=>{
+    const broke=r.dist<=0||r.ready,fill=Math.max(0,Math.min(1,1-r.dist/CAP))*100;
+    const cls=broke?"go":(r.dist<0.5?"near":"");
+    return `<div class="prow2 ${cls}" onclick="goToSymbol('${r.k}')" title="${r.k} 상세">
+      <span class="pk">${r.k} <span class="pdir ${r.long?'long':'short'}">${r.long?'▲':'▼'}</span></span>
+      <span class="pbar"><span class="pfill" style="width:${broke?100:fill.toFixed(0)}%"></span></span>
+      <span class="pd">${broke?'돌파':fmt(r.dist,2)+'% 남음'}</span></div>`;
+  }).join("");
+}
+
 // 종합 포지션 보유창: 전 심볼의 열린 포지션을 한 표에 — 현재 탭과 무관.
 function renderAllPositions(s){
   const body=$("allposBody"),cap=$("allposCap");if(!body)return;
@@ -1196,6 +1242,8 @@ async function refresh(){
     $("capPct").textContent=used>0?(used.toFixed(0)+"% ("+money(dPnl)+" / -"+money(capUsd)+")"):("0% (캡 -"+money(capUsd)+")");
   }
 
+
+  renderProximity(s.symbols||{});
 
   // ---- 이벤트 알림: 직전 폴과 diff — 탭과 무관하게 전 심볼 감시 (첫 폴은 기준만) ----
   const nowEv={kill:!!(s.risk&&s.risk.kill_switch), dayPnl:today.pnl_usd||0, sym:{}};
