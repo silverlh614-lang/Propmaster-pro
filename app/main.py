@@ -27,6 +27,9 @@ async def lifespan(app: FastAPI):
     # Warm the kline feed on boot so the live chart shows candles immediately,
     # even before an operator starts the bot.
     TRADING_MANAGER.start_feeds()
+    # 헬스 워치독 기동: 피드가 도는 즉시 정지·무응답을 감시해 폰으로 알린다
+    # (매매 시작 전에도 피드는 돌기 때문에 여기서 켠다).
+    TRADING_MANAGER.health.start()
     # Auto-resume: if the trading bot was running before a restart/redeploy,
     # start it again with the same mode/strategy (state persists in the
     # DATA_DIR volume).
@@ -38,6 +41,7 @@ async def lifespan(app: FastAPI):
     # Graceful exit WITHOUT persisting running=False, so auto-resume fires
     # on the next boot. An operator pressing "stop" is the only thing that
     # persists an intentional off state.
+    await TRADING_MANAGER.health.stop()
     await TRADING_MANAGER.shutdown()
     await TRADING_MANAGER.stop_feeds()
 

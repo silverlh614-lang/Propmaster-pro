@@ -26,6 +26,7 @@ from .risk import RiskManager
 from .store import AccountStore, BotState, Journal, PositionStore, SignalJournal
 from .discovery import AutoDiscovery
 from .execution.broker import make_broker
+from .health import HealthMonitor
 from .notify import TelegramNotifier
 from .symbol_bot import SymbolBot
 from .strategies import STRATEGIES
@@ -61,6 +62,9 @@ class TradingManager:
         # 자동 종목 발굴 (기본 OFF): 코어·수동은 불변, 위성 슬롯만 로테이션.
         self.discovery = AutoDiscovery(self)
         self.broker = make_broker(cfg)   # Phase 3 배관 — 게이트 전엔 PaperBroker
+        # 헬스 워치독: 피드 정체·루프 오류를 주기 점검해 텔레그램 알림 (side-channel).
+        self.health = HealthMonitor(
+            self, self.notifier, cfg.health_check_interval_sec, cfg.health_alerts)
 
     @property
     def core(self) -> list[str]:
@@ -264,6 +268,7 @@ class TradingManager:
             "risk": self.risk.status(),
             "symbols": {k: b.status() for k, b in self.bots.items()},
             "discovery": self.discovery.status(),
+            "health": self.health.snapshot(),
             "execution": {"broker": self.broker.name, "live": self.broker.live},
             "by_symbol": self.journal.by_symbol(list(self.bots)),
             "server_time": time.time(),
