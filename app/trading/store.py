@@ -86,6 +86,24 @@ def close_reason(note: str) -> str:
     return tail or "other"
 
 
+# 반사실 판정 최소 표본 — 백테스트 게이트(trades≥20)의 표본규율을 라이브 시그널에
+# 준용한 통계 유효성 문턱일 뿐, 매매 임계값이 아니다 (부호로만 판정 — 크기 문턱 없음).
+_CF_MIN_RESOLVED = 10
+
+
+def _cf_verdict(blk: dict) -> str:
+    """차단 시그널 그룹의 포워드 기대값 부호로 관문의 성격을 진단한다. 표본이
+    부족하면 판단 보류 — 연패·연승 노이즈에 과잉반응하지 않기 위함."""
+    er = blk.get("expectancy_r")
+    if blk.get("resolved", 0) < _CF_MIN_RESOLVED or er is None:
+        return "insufficient"          # 표본 부족 — 판단 보류
+    if er > 0:
+        return "gate_skipping_winners"  # 막힌 시그널이 +기대값 → 예산 캡 재검토 가설
+    if er < 0:
+        return "gate_dodging_losers"    # 막힌 시그널이 -기대값 → 관문이 계좌 보호(정상)
+    return "neutral"
+
+
 class Journal:
     """CSV-backed journal, mtime-cached so status polling doesn't reparse."""
 
@@ -322,6 +340,28 @@ class SignalJournal:
             "win_rate": round(wins / len(settled), 4) if settled else None,
             "expectancy_r": round(sum(rs) / len(rs), 3) if rs else None,
         }
+
+    def counterfactual(self, symbol: str | None = None) -> dict:
+        """차단 시그널 반사실 분석 — 포워드 트래커는 체결 여부와 무관하게 모든 시그널을
+        목표/손절로 판정하므로, '진입한 시그널'과 '리스크 관문에 막힌 시그널'의 사후
+        성과를 나란히 비교한다. 막힌 쪽이 주로 이겼으면 관문이 승자를 버린 것(예산
+        사이징 재검토 가설), 주로 졌으면 관문이 패자를 회피한 것(계좌 보호·정상).
+        임계값 손튜닝이 아니라 다음 백테스트 스윕의 가설 재료로만 쓴다."""
+        rows = self._rows()
+        if symbol:
+            rows = [r for r in rows if r.get("symbol") == symbol.upper()]
+
+        def _grp(sel) -> dict:
+            s = [r for r in rows if r.get("outcome") in SIGNAL_RESULTS and sel(r)]
+            wins = sum(1 for r in s if r["outcome"] == "WIN")
+            rs = [float(r["r_result"]) for r in s if r.get("r_result") not in ("", None)]
+            return {"resolved": len(s), "wins": wins, "losses": len(s) - wins,
+                    "win_rate": round(wins / len(s), 4) if s else None,
+                    "expectancy_r": round(sum(rs) / len(rs), 3) if rs else None}
+
+        ent = _grp(lambda r: str(r.get("entered")).lower() == "true")
+        blk = _grp(lambda r: bool(r.get("blocked")))
+        return {"entered": ent, "blocked": blk, "verdict": _cf_verdict(blk)}
 
 
 class BotState:

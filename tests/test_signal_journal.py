@@ -108,6 +108,36 @@ def _epoch_plus(bars):
     return _dt.datetime.fromisoformat("2026-07-01T00:00:00+00:00").timestamp() + bars * 3600
 
 
+def test_counterfactual_entered_vs_blocked():
+    """반사실: 진입 시그널 vs 차단 시그널의 포워드 성과를 나눠 관문 성격을 진단한다.
+    차단 표본이 문턱(10) 이상이고 -기대값이면 'gate_dodging_losers'(계좌 보호·정상)."""
+    j = _fresh()
+
+    def rec(sym, entered, blocked, outcome, r):
+        # target/stop 을 비워 append 의 OPEN 덮어쓰기를 피하고 확정 결과를 직접 기록
+        j.append({"symbol": sym, "strategy": "s", "side": "LONG", "signal_type": "X",
+                  "blocked": blocked, "entered": entered,
+                  "outcome": outcome, "r_result": r})
+
+    rec("ETH", True, "", "WIN", 2.0)          # 진입: 2W(+2R)/1L(-1R) → expectancy +1.0
+    rec("ETH", True, "", "WIN", 2.0)
+    rec("ETH", True, "", "LOSS", -1.0)
+    for _ in range(2):                          # 차단: 10건 확정, 대부분 패자 → -기대값
+        rec("SOL", False, "prop budget guard", "WIN", 2.0)
+    for _ in range(8):
+        rec("SOL", False, "prop budget guard", "LOSS", -1.0)
+
+    cf = j.counterfactual()
+    assert cf["entered"] == {"resolved": 3, "wins": 2, "losses": 1,
+                             "win_rate": 0.6667, "expectancy_r": 1.0}, cf["entered"]
+    # 차단 기대값 = (2·2 + 8·-1)/10 = -0.4 → 관문이 패자를 회피
+    assert cf["blocked"]["resolved"] == 10 and cf["blocked"]["expectancy_r"] == -0.4
+    assert cf["verdict"] == "gate_dodging_losers", cf
+    # 차단 표본이 문턱 미만이면 판단 보류
+    assert j.counterfactual(symbol="ETH")["verdict"] == "insufficient"
+    print("ok  signal counterfactual (entered vs blocked forward, verdict)")
+
+
 def test_persists_across_instances():
     """CSV persists — a fresh journal (same DATA_DIR) reads prior signals, so a
     redeploy never loses the record."""
@@ -122,5 +152,6 @@ if __name__ == "__main__":
     test_stats_entered_vs_blocked()
     test_forward_resolution_win_loss_expire()
     test_stop_first_when_bar_spans_both()
+    test_counterfactual_entered_vs_blocked()
     test_persists_across_instances()
     print("\nALL signal journal tests passed")
