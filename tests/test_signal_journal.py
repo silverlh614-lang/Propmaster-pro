@@ -202,6 +202,36 @@ def test_schema_migration_old_csv():
     print("ok  signal CSV schema migration (old rows kept, header upgraded)")
 
 
+def test_forward_breakdown_and_drift():
+    """종목/전략별 포워드 분해 + 드리프트: 라이브 expR<0·표본충분이면 'decaying',
+    ≥0이면 'holding', 표본 미달이면 'insufficient'."""
+    from app.trading.signal_analysis import forward_breakdown
+    j = _fresh()
+
+    def rec(sym, strat, outcome, r):
+        j.append({"symbol": sym, "strategy": strat, "side": "LONG", "signal_type": "X",
+                  "blocked": "", "entered": True, "outcome": outcome, "r_result": r})
+    # ETH(prop_breakout): 12건, 대부분 승 → +기대값 → holding
+    for _ in range(9): rec("ETH", "prop_breakout", "WIN", 2.0)
+    for _ in range(3): rec("ETH", "prop_breakout", "LOSS", -1.0)
+    # SOL(vbo): 12건, 대부분 패 → -기대값 → decaying (재검증 대상)
+    for _ in range(3): rec("SOL", "vbo", "WIN", 2.0)
+    for _ in range(9): rec("SOL", "vbo", "LOSS", -1.0)
+    # ARB: 4건뿐 → insufficient
+    for _ in range(4): rec("ARB", "prop_breakout", "LOSS", -1.0)
+
+    bs = forward_breakdown(j._rows(), "symbol")
+    assert list(bs)[0] in ("ETH", "SOL")                # 최다 건수 앞
+    assert bs["ETH"]["verdict"] == "holding" and bs["ETH"]["expectancy_r"] > 0
+    assert bs["SOL"]["verdict"] == "decaying" and bs["SOL"]["expectancy_r"] < 0
+    assert bs["ARB"]["verdict"] == "insufficient"
+    # 전략 차원: prop_breakout = ETH(9W3L)+ARB(4L)=16건, vbo = SOL 12건
+    st = forward_breakdown(j._rows(), "strategy")
+    assert st["prop_breakout"]["resolved"] == 16 and st["vbo"]["resolved"] == 12
+    assert st["vbo"]["verdict"] == "decaying"
+    print("ok  forward breakdown by symbol/strategy + drift verdict")
+
+
 def test_persists_across_instances():
     """CSV persists — a fresh journal (same DATA_DIR) reads prior signals, so a
     redeploy never loses the record."""
@@ -219,5 +249,6 @@ if __name__ == "__main__":
     test_counterfactual_entered_vs_blocked()
     test_mfe_mae_excursion_tracking()
     test_schema_migration_old_csv()
+    test_forward_breakdown_and_drift()
     test_persists_across_instances()
     print("\nALL signal journal tests passed")

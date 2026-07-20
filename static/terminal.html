@@ -255,6 +255,14 @@
   .tag.good{background:var(--up-dim);color:var(--up)} .tag.bad{background:var(--dn-dim);color:var(--dn)}
   .tag.neu{background:var(--panel-2);color:var(--faint);border:1px solid var(--border)}
   .ahint{font-size:10px;color:var(--faint);letter-spacing:.04em;margin-top:7px;line-height:1.5}
+  /* 라이브 엣지 분해: 종목/전략 토글 + 드리프트 배지 */
+  .bdtog button{background:var(--panel-2);color:var(--faint);border:1px solid var(--border);
+    padding:2px 9px;font-size:10px;font-weight:700;cursor:pointer;border-radius:2px;margin-left:4px}
+  .bdtog button.on{color:var(--ink);border-color:var(--border-hi)}
+  .dbadge{display:inline-block;padding:1px 6px;border-radius:2px;font-size:9px;font-weight:800}
+  .dbadge.holding{background:var(--up-dim);color:var(--up)}
+  .dbadge.decaying{background:var(--dn-dim);color:var(--dn)}
+  .dbadge.insufficient{background:var(--panel-2);color:var(--faint);border:1px solid var(--border)}
   /* 종합 포지션 행 클릭 → 해당 종목 상세로 이동 */
   #allposTbl tbody tr.prow{cursor:pointer;transition:background .15s ease,border-color .15s ease}
   #allposTbl tbody tr.prow:hover{background:var(--panel-2);border-color:var(--border-hi)}
@@ -699,6 +707,13 @@
         <div class="sigstat" id="cfBox" style="border-bottom:none;margin-bottom:0"><div class="note">로딩 중…</div></div>
         <div class="asub">MFE / MAE <span class="muted" style="font-weight:400;text-transform:none">— 스탑·타겟 배수 진단</span></div>
         <div class="sigstat" id="excBox" style="border-bottom:none;margin-bottom:0"><div class="note">로딩 중…</div></div>
+        <div class="asub">라이브 엣지 분해 <span class="muted" style="font-weight:400;text-transform:none">— 백테스트 엣지가 라이브에서 무너지나</span>
+          <span class="sp" style="flex:1"></span>
+          <span class="bdtog"><button id="bdSym" class="on" onclick="setBreakdownDim('symbol')">종목</button><button id="bdStr" onclick="setBreakdownDim('strategy')">전략</button></span></div>
+        <div class="scroll"><table>
+          <thead><tr><th class="l" id="bdKeyHead">종목</th><th>확정</th><th>승/패</th><th>승률</th><th>expR</th><th>상태</th></tr></thead>
+          <tbody id="bdBody"><tr><td class="l muted" colspan="6">확정 시그널 없음</td></tr></tbody>
+        </table></div>
         <div class="ahint" id="aHint"></div>
       </div>
     </section>
@@ -1332,6 +1347,30 @@ async function loadSignals(){
   }).join(""):'<div class="note">시그널 없음 — 돌파 조건 충족 시 여기에 기록됩니다.</div>';
   renderCounterfactual(d.counterfactual||{});
   renderExcursion(d.excursion||{});
+  _bdData.symbol=d.by_symbol||{};_bdData.strategy=d.by_strategy||{};renderBreakdown();
+}
+
+// ---- 라이브 엣지 분해 (종목/전략별 포워드 성과 + 드리프트) ----
+const _bdData={symbol:{},strategy:{}};let _bdDim="symbol";
+const DBADGE={holding:["유지","holding"],decaying:["붕괴 의심","decaying"],insufficient:["표본부족","insufficient"]};
+function setBreakdownDim(dim){
+  _bdDim=dim;
+  $("bdSym").classList.toggle("on",dim==="symbol");
+  $("bdStr").classList.toggle("on",dim==="strategy");
+  $("bdKeyHead").textContent=dim==="strategy"?"전략":"종목";
+  renderBreakdown();
+}
+function renderBreakdown(){
+  const g=_bdData[_bdDim]||{},rows=Object.entries(g);
+  $("bdBody").innerHTML=rows.length?rows.map(([k,b])=>{
+    const wr=b.win_rate==null?"–":(b.win_rate*100).toFixed(0)+"%";
+    const er=b.expectancy_r==null?"–":(b.expectancy_r>=0?"+":"")+fmt(b.expectancy_r,2)+"R";
+    const v=DBADGE[b.verdict]||["–","insufficient"];
+    return `<tr><td class="l"><b>${k}</b></td><td>${b.resolved}</td>
+      <td>${b.wins}/${b.losses}</td><td>${wr}</td>
+      <td class="${(b.expectancy_r||0)>=0?'up':'dn'}">${er}</td>
+      <td><span class="dbadge ${v[1]}">${v[0]}</span></td></tr>`;
+  }).join(""):'<tr><td class="l muted" colspan="6">확정 시그널 없음</td></tr>';
 }
 
 // ---- 승패 분석: 차단 반사실(counterfactual) + MFE/MAE(excursion) ----
