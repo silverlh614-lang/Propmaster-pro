@@ -232,6 +232,32 @@ def test_forward_breakdown_and_drift():
     print("ok  forward breakdown by symbol/strategy + drift verdict")
 
 
+def test_baseline_anchored_drift():
+    """baseline 앵커: 라이브 expR 이 백테스트 baseline 절반 미만이면 'eroding'(음수 전
+    경보), 음수면 'decaying', baseline 근처 이상이면 'holding'. baseline 없으면 0 기준."""
+    from app.trading.signal_analysis import (_drift_verdict, forward_breakdown,
+                                             BACKTEST_BASELINE_R)
+    # 단위: baseline 0.80 (floor 0.40)
+    assert _drift_verdict(12, 1.0, 0.80) == "holding"       # baseline 이상
+    assert _drift_verdict(12, 0.30, 0.80) == "eroding"      # 0 ≤ er < 0.40
+    assert _drift_verdict(12, -0.1, 0.80) == "decaying"     # 음수 — 소멸
+    assert _drift_verdict(5, 0.30, 0.80) == "insufficient"  # 표본 부족
+    assert _drift_verdict(12, 0.30, None) == "holding"      # baseline 없음 → 0 기준
+    # forward_breakdown 이 baseline_r 을 싣고 eroding 판정 (ETH baseline 0.80)
+    j = _fresh()
+
+    def rec(o, r):
+        j.append({"symbol": "ETH", "strategy": "prop_breakout", "side": "LONG",
+                  "signal_type": "X", "blocked": "", "entered": True,
+                  "outcome": o, "r_result": r})
+    for _ in range(5): rec("WIN", 2.0)
+    for _ in range(7): rec("LOSS", -1.0)            # er = (10-7)/12 = 0.25 < 0.40
+    b = forward_breakdown(j._rows(), "symbol")["ETH"]
+    assert b["baseline_r"] == BACKTEST_BASELINE_R["ETH"] == 0.80
+    assert 0 < b["expectancy_r"] < 0.40 and b["verdict"] == "eroding", b
+    print("ok  baseline-anchored drift (eroding vs decaying vs holding)")
+
+
 def test_persists_across_instances():
     """CSV persists — a fresh journal (same DATA_DIR) reads prior signals, so a
     redeploy never loses the record."""
@@ -250,5 +276,6 @@ if __name__ == "__main__":
     test_mfe_mae_excursion_tracking()
     test_schema_migration_old_csv()
     test_forward_breakdown_and_drift()
+    test_baseline_anchored_drift()
     test_persists_across_instances()
     print("\nALL signal journal tests passed")
