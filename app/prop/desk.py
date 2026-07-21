@@ -260,6 +260,25 @@ class PropDesk:
 
     # ------------------------------------------------------------- views
 
+    def track_record(self) -> dict:
+        """누적 전적 — 전 시도(계좌) 집계. 1회차 브리치 후 새 구매로 2회차를
+        시작해도 실패 계좌는 레지스트리에 남아 여기 집계된다. 순손익 = 트레이더
+        누적 인출 − 누적 평가수수료 (첫 인출의 수수료 환불이 자기 수수료를 상쇄해
+        브리치한 시도의 수수료만 순비용으로 남는다)."""
+        accts = list(self.accounts.values())
+        fees = round(sum(a.fee_paid for a in accts), 2)
+        withdrawn = round(sum(float(p.get("trader_usd", 0) or 0)
+                              for p in self.payouts.load()), 2)
+        return {
+            "attempts": len(accts),
+            "funded": sum(1 for a in accts if a.status == FUNDED),
+            "breached": sum(1 for a in accts if a.status == FAILED),
+            "in_progress": sum(1 for a in accts if a.status == EVALUATION),
+            "fees_paid": fees,
+            "trader_withdrawn": withdrawn,
+            "net_usd": round(withdrawn - fees, 2),
+        }
+
     def status(self, equity_mark: float | None = None,
                balance: float | None = None) -> dict:
         acct = self.active()
@@ -268,6 +287,7 @@ class PropDesk:
             "guard": self.guard_level(),
             "accounts": [a.snapshot() for a in self.accounts.values()],
             "payouts": self.payouts.load()[-20:][::-1],
+            "track_record": self.track_record(),
         }
 
     @staticmethod

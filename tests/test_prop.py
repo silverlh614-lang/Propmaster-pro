@@ -158,10 +158,17 @@ def test_desk_breach_blocks_entries_and_allows_rebuy():
     risk.attach_prop(d)
     ok, why = risk.allow_entry(0, 0.0, 1.0, equity_usd=10_000)
     assert not ok and why.startswith("prop:")
-    # terminal: a new attempt is a NEW purchase
+    # 전적: 브리치한 1회차가 레지스트리에 보존돼 집계된다 (Turbo 10k fee $40)
+    tr = d.track_record()
+    assert tr["attempts"] == 1 and tr["breached"] == 1 and tr["funded"] == 0
+    assert tr["fees_paid"] == 40.0 and tr["net_usd"] == -40.0
+    # terminal: a new attempt is a NEW purchase (2회차, Classic 10k fee $85)
     assert d.buy_challenge("1step_classic", 10_000)["ok"]
     assert d.entries_allowed()[0]
-    print("ok  breach is terminal, blocks the risk gate, re-buy starts fresh")
+    tr = d.track_record()
+    assert tr["attempts"] == 2 and tr["breached"] == 1 and tr["in_progress"] == 1
+    assert tr["fees_paid"] == 125.0 and tr["net_usd"] == -125.0   # 40 + 85
+    print("ok  breach is terminal, blocks the risk gate, re-buy starts fresh + track record")
 
 
 def test_desk_payouts():
