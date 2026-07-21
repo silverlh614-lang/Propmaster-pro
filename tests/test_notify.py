@@ -157,16 +157,19 @@ def test_signal_alert_decoupled_from_account():
     msg = TelegramNotifier.format_signal(
         "ETH", "prop_breakout", "SHORT", sig.detail, sig.entry_hint,
         sig.stop_price, target=1746.91,
-        blocked="prop budget guard: open risk $221 > 50% daily room")
+        blocked="prop budget guard: open risk $221 > 50% daily room",
+        risk_pct=0.42, risk_usd=41.7)
     assert "시그널" in msg and "매도" in msg and "ETH" in msg
     assert "1823.21" in msg and "1861.36" in msg and "Donchian55" in msg
     assert "목표가" in msg and "1746.91" in msg          # target line
     assert "차단" in msg and "budget guard" in msg        # block reason
+    assert "예상리스크" in msg and "0.42%" in msg and "41.7" in msg  # risk line
     assert "paper" not in msg.lower()                     # paper never exposed
     # not blocked → clean "조건 충족 신호" line, still no paper
     clean = TelegramNotifier.format_signal("ETH", "prop_breakout", "LONG",
                                            "d", 1.0, 0.9, target=1.2)
     assert "차단" not in clean and "조건 충족" in clean and "paper" not in clean.lower()
+    assert "예상리스크" not in clean                       # risk omitted when absent
 
     # SIGNAL 이 이벤트에 있고 활성일 때만 enqueue
     sent: list[str] = []
@@ -205,6 +208,7 @@ def test_signal_alert_dedup_in_symbolbot():
         cfg = type("C", (), {"rr_target": 2.0})()
         signal_journal = None
         def __init__(self, n): self.notifier = n; self._last_signal_side = None
+        def _signal_risk(self): return None, None
     _Bot._signal_alert = SymbolBot._signal_alert
 
     n = _N(); b = _Bot(n)

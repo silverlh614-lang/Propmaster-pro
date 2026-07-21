@@ -216,6 +216,24 @@ class SymbolBot:
         except Exception:                # noqa: BLE001 — 기록 판정은 매매를 막지 않는다
             pass
 
+    def _signal_risk(self):
+        """시그널 시점 진입 리스크(%, $). 이 시그널로 방금 포지션이 열렸으면 실제
+        initial_risk, 아니면(차단·관망) 현재 프롭 예산으로 계산한 예상 리스크."""
+        pm = self.pm
+        if pm is None:
+            return None, None
+        eq = pm.equity or 0.0
+        p = pm.pos
+        if p is not None and p.state.value == "OPEN":
+            ru = round(p.initial_risk_usd, 2)
+        else:
+            try:
+                ru = round(eq * pm._risk_pct() / 100.0, 2) if eq > 0 else None
+            except Exception:            # noqa: BLE001 — 예상치 계산 실패는 알림을 막지 않는다
+                ru = None
+        rp = round(ru / eq * 100.0, 2) if (ru and eq > 0) else None
+        return rp, ru
+
     def _signal_alert(self, sig, note: str = "") -> None:
         """전략 조건이 충족되는 순간 텔레그램으로 시그널을 즉시 푸시한다 — 실제 체결
         (리스크 관문·동시포지션·예산 캡에 막힐 수 있음)과 무관하게. 목표가는 rr_target
@@ -237,6 +255,7 @@ class SymbolBot:
         if note and "blocked" in note:              # "entry blocked: <reason>"
             blocked = note.split("blocked:", 1)[-1].strip() if "blocked:" in note \
                 else note
+        risk_pct, risk_usd = self._signal_risk()    # 예상(또는 체결 시 실제) 진입 리스크
         # 1) 영속 기록 — 체결 여부와 무관하게 모든 시그널을 남긴다 (기록이 본체)
         if self.signal_journal is not None:
             try:
@@ -245,14 +264,16 @@ class SymbolBot:
                     "side": side, "signal_type": sig.signal_type,
                     "entry": sig.entry_hint, "target": target,
                     "stop": sig.stop_price, "detail": sig.detail,
-                    "blocked": blocked, "entered": not blocked})
+                    "blocked": blocked, "entered": not blocked,
+                    "risk_pct": risk_pct, "risk_usd": risk_usd})
             except Exception:            # noqa: BLE001 — 기록 실패가 매매를 막지 않는다
                 pass
         # 2) 텔레그램 푸시
         if self.notifier is not None:
             try:
                 self.notifier.notify_signal(self.spec.key, self.strategy_name,
-                                            sig, target=target, blocked=blocked)
+                                            sig, target=target, blocked=blocked,
+                                            risk_pct=risk_pct, risk_usd=risk_usd)
             except Exception:            # noqa: BLE001 — 알림은 매매를 막지 않는다
                 pass
 

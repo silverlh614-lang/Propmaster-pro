@@ -62,6 +62,20 @@ def _r(v) -> str:
         return str(v)
 
 
+def _risk_line(risk_pct, risk_usd) -> str:
+    """'예상 리스크 ≈X% ($Y)' 한 줄 — 값이 없으면 빈 문자열(줄 생략)."""
+    try:
+        p = float(risk_pct) if risk_pct not in ("", None) else None
+        u = float(risk_usd) if risk_usd not in ("", None) else None
+    except (TypeError, ValueError):
+        return ""
+    if p is None and u is None:
+        return ""
+    pct = f"≈{p:g}%" if p is not None else ""
+    usd = f" (${u:g})" if u is not None else ""
+    return f"예상리스크 {pct}{usd}".rstrip()
+
+
 class TelegramNotifier:
     """Fire-and-forget Telegram sender. Construction reads env by default;
     args override for tests. `notify_trade` is wired as the Journal sink."""
@@ -103,16 +117,19 @@ class TelegramNotifier:
             self._enqueue(text)
 
     def notify_signal(self, symbol: str, strategy: str, sig,
-                      target=None, blocked: str = "") -> None:
+                      target=None, blocked: str = "",
+                      risk_pct=None, risk_usd=None) -> None:
         """전략 조건 충족 즉시 푸시 — 실제 체결과 무관(리스크 관문에 막혀도 발송).
         'SIGNAL' 이벤트가 켜져 있고 활성일 때만. 저널 sink 를 안 거친다. 진입이
-        막혔으면 blocked 사유를, 목표가는 target 을 함께 싣는다."""
+        막혔으면 blocked 사유를, 목표가는 target, 예상 리스크는 risk_pct/risk_usd 를
+        함께 싣는다."""
         try:
             if not self.enabled or "SIGNAL" not in self.events:
                 return
             self._enqueue(self.format_signal(
                 symbol, strategy, sig.side.value, sig.detail,
-                sig.entry_hint, sig.stop_price, target=target, blocked=blocked))
+                sig.entry_hint, sig.stop_price, target=target, blocked=blocked,
+                risk_pct=risk_pct, risk_usd=risk_usd))
         except Exception:
             pass
 
@@ -120,9 +137,11 @@ class TelegramNotifier:
 
     @staticmethod
     def format_signal(sym: str, strategy: str, side: str, detail: str,
-                      entry, stop, target=None, blocked: str = "") -> str:
-        """전략 시그널(조건 충족)을 짧은 알림으로 렌더. 기준가·목표가·손절가를 싣고,
-        진입이 리스크 관문에 막혔으면 그 사유를 표시한다."""
+                      entry, stop, target=None, blocked: str = "",
+                      risk_pct=None, risk_usd=None) -> str:
+        """전략 시그널(조건 충족)을 짧은 알림으로 렌더. 기준가·목표가·손절가·예상
+        리스크를 싣고, 진입이 리스크 관문에 막혔으면 그 사유를 표시한다. 예상 리스크는
+        진입 전 프롭 예산 기반 추정(포지션이 열려 있으면 실제 initial_risk)이다."""
         head = _SIDE_LABEL.get(str(side).upper(), side)
         lines = [f"🔔 시그널  {head}  {sym}", _SEP, f"전략   {strategy}"]
         if detail:
@@ -133,6 +152,9 @@ class TelegramNotifier:
             lines.append(f"목표가 {_px(target)}")
         if stop not in ("", None):
             lines.append(f"손절가 {_px(stop)}")
+        rl = _risk_line(risk_pct, risk_usd)
+        if rl:
+            lines.append(rl)
         lines.append(f"⛔ 차단   {blocked}" if blocked else "※ 조건 충족 신호")
         return "\n".join(lines)
 

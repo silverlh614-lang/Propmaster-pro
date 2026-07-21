@@ -1443,8 +1443,10 @@ function renderSigFeed(){
     const blk=r.blocked?` <span class="blk" title="${_sesc(r.blocked)}">⛔ ${_sesc(String(r.blocked).slice(0,40))}</span>`:"";
     const k=_sigKey(r),open=_sigOpen.has(k);
     const mfe=r.mfe_r!==""&&r.mfe_r!=null?fmt(r.mfe_r,2)+"R":"–",mae=r.mae_r!==""&&r.mae_r!=null?fmt(r.mae_r,2)+"R":"–";
+    const rk=(r.risk_pct!==""&&r.risk_pct!=null)?`≈${fmt(r.risk_pct,2)}%`+((r.risk_usd!==""&&r.risk_usd!=null)?` ($${fmt(r.risk_usd,2)})`:""):(r.risk_usd!==""&&r.risk_usd!=null?`$${fmt(r.risk_usd,2)}`:"");
     const det=`<div class="sigdet" style="display:${open?'block':'none'}">`+
       `<span class="dk">MFE</span> <b class="up">${mfe}</b> · <span class="dk">MAE</span> <b class="dn">${mae}</b>`+
+      (rk?` · <span class="dk">예상리스크</span> ${rk}`:"")+
       ` · <span class="dk">보유</span> ${r.bars_held||"–"}봉 · <span class="dk">전략</span> ${_sesc(r.strategy||"–")}`+
       ` · <span class="dk">${String(r.entered).toLowerCase()==="true"?"진입":"차단"}</span>`+
       (r.resolved_ts?` · <span class="dk">판정</span> ${(r.resolved_ts||"").slice(5,16).replace("T"," ")}`:"")+
