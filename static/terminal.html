@@ -551,6 +551,7 @@
             </div>
           </div>
         </div>
+        <div id="propTrack" class="subline" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:8px;line-height:1.7"></div>
         <div id="propBuyBox" style="margin-top:10px">
           <div class="note" id="propBuyNote">활성 챌린지 없음 — 평가 계좌를 구매하면 원장이 계좌 크기로 리셋됩니다.</div>
           <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;align-items:center">
@@ -1584,7 +1585,20 @@ function renderPropFee(){
     +" · 첫 페이아웃 시 수수료 환불";
 }
 const clamp100=x=>Math.max(0,Math.min(100,x));
+// 누적 전적: 전 시도(계좌) 집계 — 1회차 브리치 후 새 티어로 2회차를 시작해도
+// 실패 계좌가 남아 여기 누적된다. 순손익 = 트레이더 누적 인출 − 누적 평가수수료.
+function renderTrack(tr){
+  const el=$("propTrack");if(!el)return;
+  if(!tr||!tr.attempts){el.style.display="none";return;}
+  el.style.display="block";
+  const net=tr.net_usd||0;
+  el.innerHTML=`<b>전적</b> ${tr.attempts}회 · 통과 ${tr.funded} · 브리치 ${tr.breached}`
+    +(tr.in_progress?` · 진행 ${tr.in_progress}`:"")
+    +`<br>수수료 ${money(tr.fees_paid)} · 인출 ${money(tr.trader_withdrawn)}`
+    +` · 순손익 <b class="${net>=0?'up':'dn'}">${money(net)}</b>`;
+}
 function renderProp(pr){
+  renderTrack(pr&&pr.track_record);
   const a=pr&&pr.active,st=$("propState");
   if(!a){st.textContent="없음";st.className="r muted";
     $("propActive").style.display="none";$("propBuyBox").style.display="block";return;}
