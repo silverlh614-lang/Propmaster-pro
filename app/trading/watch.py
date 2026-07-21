@@ -36,11 +36,18 @@ def _near(price: float, entry: float, level: float, frac: float) -> bool:
     return abs(level - price) <= dist * frac
 
 
-def _msg(sym: str, side: str, price: float, label: str, level: float) -> str:
-    return "\n".join([f"{label}  {sym}", _SEP,
-                      f"현재가   {_px(price)}",
-                      f"기준가   {_px(level)}",
-                      f"방향     {_SIDE_LABEL.get(side.upper(), side)}"])
+def _msg(sym: str, side: str, price: float, label: str, level: float,
+         level_name: str, entry: float | None = None) -> str:
+    """근접 알림 한 통. level_name 은 그 값이 실제로 무엇인지(손절가/목표가)를
+    라벨로 박는다 — 예전엔 손절/목표 값을 뭉뚱그려 '기준가'로 표기해 혼란을 줬다.
+    진입가도 함께 실어 현재가가 진입가↔레벨 사이 어디인지 한눈에 보이게 한다."""
+    lines = [f"{label}  {sym}", _SEP]
+    if entry not in (None, ""):
+        lines.append(f"진입가   {_px(entry)}")
+    lines += [f"현재가   {_px(price)}",
+              f"{level_name}   {_px(level)}",
+              f"방향     {_SIDE_LABEL.get(side.upper(), side)}"]
+    return "\n".join(lines)
 
 
 def proximity_scan(bot) -> None:
@@ -68,11 +75,11 @@ def proximity_scan(bot) -> None:
                 and _near(price, entry, target, NEAR_FRAC)):
             fired.add("target")
             notifier.send_text(_msg(bot.spec.key, side, price,
-                                    "🎯 목표가 근접", target))
+                                    "🎯 목표가 근접", target, "목표가", entry))
         if (stop is not None and "stop" not in fired
                 and _near(price, entry, stop, NEAR_FRAC)):
             fired.add("stop")
             notifier.send_text(_msg(bot.spec.key, side, price,
-                                    "⚠️ 손절가 근접", stop))
+                                    "⚠️ 손절가 근접", stop, "손절가", entry))
     except Exception:
         pass
