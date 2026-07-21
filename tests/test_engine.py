@@ -97,7 +97,7 @@ def test_symbol_leverage_caps():
 # ------------------------------------------------------------- risk gate
 
 def test_risk_gate():
-    cfg = TradingConfig()
+    cfg = TradingConfig(equity_usd=200)      # 캡 산술을 $200 기준으로 고정
     cfg.max_concurrent_positions = 1
     cfg.max_total_open_risk_pct = 2.0        # $4 on $200
     risk = RiskManager(cfg, Journal(), BotState())
@@ -192,7 +192,7 @@ def test_fsm_stop_loss():
 def test_fsm_partial_then_trail():
     from app.trading import store
     store.TRADES_CSV.unlink(missing_ok=True)   # isolate the aggregate assertion
-    cfg = TradingConfig()
+    cfg = TradingConfig(equity_usd=200)        # qty<1 가정을 $200 기준으로 고정
     cfg.rr_target = 2.0
     cfg.partial_tp_frac = 0.5
     pm = _pm(cfg)

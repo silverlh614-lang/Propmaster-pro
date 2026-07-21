@@ -31,7 +31,7 @@ def _env(name: str, default):
 @dataclass
 class TradingConfig:
     # --- account (paper simulation) ----------------------------------------
-    equity_usd: float = 200.0            # 소액: paper starting equity
+    equity_usd: float = 10_000.0         # 초기자본: 기본 챌린지 크기($10K)와 일치
     quote: str = "USDT"
 
     # --- timeframes (kline interval codes: minutes as string / D,W) --------

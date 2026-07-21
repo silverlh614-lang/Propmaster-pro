@@ -224,6 +224,14 @@
   .posrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px}
   .prow{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--border);font-size:11px}
   .prow .l{color:var(--faint)} .prow .v{font-variant-numeric:tabular-nums}
+  .initf{display:flex;flex-direction:column;gap:3px}
+  .initf>span{color:var(--dim);font-size:9px;letter-spacing:.14em;text-transform:uppercase}
+  .initvals{display:flex;gap:7px;flex-wrap:wrap}
+  .initvals .iv{display:flex;flex-direction:column;gap:1px;padding:5px 10px;border:1px solid var(--border);
+    border-radius:4px;background:var(--panel-2);min-width:62px}
+  .initvals .iv .k{color:var(--dim);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase}
+  .initvals .iv .n{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+  .initvals .iv.cap .n{color:var(--cyn)} .initvals .iv.risk .n{color:#e0bb54}
 
   .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border)}
   .row:last-child{border:0} .row .l{color:var(--faint)} .row .v{font-variant-numeric:tabular-nums}
@@ -553,13 +561,15 @@
         </div>
         <div id="propTrack" class="subline" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:8px;line-height:1.7"></div>
         <div id="propBuyBox" style="margin-top:10px">
-          <div class="note" id="propBuyNote">활성 챌린지 없음 — 평가 계좌를 구매하면 원장이 계좌 크기로 리셋됩니다.</div>
-          <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;align-items:center">
-            <select id="propPlanSel"></select><select id="propSizeSel"></select>
+          <div class="note" id="propBuyNote">활성 챌린지 없음 — 초기값을 설정하고 평가 계좌를 구매하면 원장이 초기자본으로 리셋됩니다.</div>
+          <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;align-items:flex-end">
+            <label class="initf"><span>룰 프리셋</span><select id="propPlanSel"></select></label>
+            <label class="initf"><span>초기자본</span><select id="propSizeSel"></select></label>
             <label class="subline" style="display:flex;gap:4px;align-items:center;cursor:pointer">
               <input type="checkbox" id="propUpgrade" onchange="renderPropFee()">90% 분할 (+20%)</label>
             <button class="go" onclick="buyChallenge()">챌린지 구매</button>
           </div>
+          <div id="propInit" class="initvals" style="margin-top:9px"></div>
           <div class="subline muted" id="propFee" style="margin-top:5px">–</div>
         </div>
       </div>
@@ -1563,27 +1573,37 @@ function flashResult(r){const f=$("flash");const win=r.result==="WIN"||Number(r.
 
 // ---- 프롭 챌린지 패널 ----
 let PROP_PLANS=null,_propPrev=null,_propVioN=null,_propScaleLv=null,_propGuardLv=null;
+// 초기값 UI 기본 선택: MDL 3%·MDD 3% (= 1-Step Turbo) · 초기자본 $10K.
+const INIT_DEFAULT_PLAN="1step_turbo",INIT_DEFAULT_SIZE=10000;
 async function loadPropPlans(){
   try{PROP_PLANS=await api("/api/prop/plans");}catch(e){return;}
   const ps=$("propPlanSel");ps.innerHTML="";
   PROP_PLANS.plans.forEach(p=>{const o=document.createElement("option");o.value=p.key;o.textContent=p.name;ps.appendChild(o);});
+  if(PROP_PLANS.plans.some(p=>p.key===INIT_DEFAULT_PLAN))ps.value=INIT_DEFAULT_PLAN;
   ps.onchange=renderSizeSel;renderSizeSel();
 }
 function renderSizeSel(){
   if(!PROP_PLANS)return;
   const p=PROP_PLANS.plans.find(x=>x.key===$("propPlanSel").value)||PROP_PLANS.plans[0];
   const ss=$("propSizeSel");ss.innerHTML="";
-  PROP_PLANS.sizes.filter(s=>s<=p.max_size).forEach(s=>{
+  const avail=PROP_PLANS.sizes.filter(s=>s<=p.max_size);
+  avail.forEach(s=>{
     const o=document.createElement("option");o.value=s;o.textContent="$"+(s/1000)+"K";ss.appendChild(o);});
+  if(avail.includes(INIT_DEFAULT_SIZE))ss.value=String(INIT_DEFAULT_SIZE);
   ss.onchange=renderPropFee;renderPropFee();
 }
 function renderPropFee(){
   const p=PROP_PLANS&&PROP_PLANS.plans.find(x=>x.key===$("propPlanSel").value);if(!p)return;
   const up=$("propUpgrade").checked,uc=PROP_PLANS.split_upgrade||{fee_mult:1.2,split_pct:90};
+  const size=Number($("propSizeSel").value)||0;
   let fee=p.fees[String($("propSizeSel").value)];if(up&&fee!=null)fee=Math.round(fee*uc.fee_mult*100)/100;
+  // 초기값 미리보기: 지금 선택으로 설정될 초기자본 / MDL / MDD / 목표
+  $("propInit").innerHTML=
+    `<div class="iv cap"><span class="k">초기자본</span><span class="n">$${(size/1000)}K</span></div>`
+    +`<div class="iv risk"><span class="k">MDL 일일손실</span><span class="n">${p.daily_loss_pct}%</span></div>`
+    +`<div class="iv risk"><span class="k">MDD 최대DD</span><span class="n">${p.max_dd_pct}%</span></div>`
+    +`<div class="iv"><span class="k">목표 ${p.dd_mode==="trailing"?"·추적":"·정적"}</span><span class="n">${p.phase_targets.join("→")}%</span></div>`;
   $("propFee").textContent="평가 수수료(시뮬) "+money(fee)+" · 분할 "+(up?uc.split_pct:p.profit_split_pct)+"%"
-    +" · 목표 "+p.phase_targets.join("%→")+"%"
-    +" · DD "+p.max_dd_pct+"% "+(p.dd_mode==="trailing"?"추적":"정적")+" · 일일 "+p.daily_loss_pct+"%"
     +" · 첫 페이아웃 시 수수료 환불";
 }
 const clamp100=x=>Math.max(0,Math.min(100,x));
