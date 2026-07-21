@@ -326,3 +326,29 @@ PF 1.05 → 0.71, 승률 36.8→42.1%. **더 악화.** 승률↑·expR↓ 조합
   되돌림형(SOL·HYPE·ETH·PNUT)엔 −. 방향은 일관 — 얇은 성숙 추세종목엔 필터가 도움.
   → 후속 가설: "종목 추세성(예: Kaufman ER)으로 필터 적용 여부를 **게이트가 종목별로
   판정**"(단일 심볼 cherry-pick 이 아니라 규칙 기반). 지금은 채택 안 함.
+
+## 리셋 전 청산(flatten_before_reset) A/B → 종결·OFF 유지 (2026-07-21)
+
+가설: 00:30 UTC 일일 재앵커에 걸친 미실현 손실이 "부풀려진 balance 기준 새 플로어"에
+즉시 브리치시킬 수 있다(리셋 함정). `flatten_before_reset_min`으로 리셋 N분 전 청산하면
+방지된다. `/backtest/scan?months=12&flatten_before_reset_min=30` vs baseline A/B.
+
+**결과: 두 스캔이 46행 전부 완전 동일 — 파라미터가 무시됨.** 원인: `flatten_before_reset`/
+`_reset_guard_hits`는 **`symbol_bot.py`(라이브 결정 루프)에만** 있고 백테스트 엔진
+(`app/trading/backtest/`)에는 구현이 없다. 백테스트는 PositionManager+RiskManager 를
+직접 리플레이하므로 **SymbolBot 루프 레벨 룰(flatten·proximity 등)은 백테스트가 반영
+못 한다** — 전략(strategy)·FSM 레벨만 A/B 가능 (chop/adx 가 먹힌 이유). Monte-Carlo
+(`simulate.py`)도 atomic 트레이드라 리셋 함정을 못 보고, 확장해도 "포지션이 리셋에
+걸치는 빈도"를 가정해야 해 결과가 0~14%로 요동(오버핏).
+
+**판정: flatten OFF 유지 (기본값 0).** 근거:
+1. **검증 불가** — 백테스트 미구현·Monte-Carlo 가정민감. 규율상 검증 안 된 룰은 안 켠다.
+2. **구조적으로 잉여** — `max_total_open_risk_pct`(2%) < 일일예산(3%) < 최대DD(6%). 리셋에
+   걸친 전 포지션 미실현 손실은 최대 2% < 일일 플로어까지 3% → **일일 리셋 함정은 이미
+   오픈리스크 캡이 방지.** 잔여는 DD 플로어 근처 tail 뿐이고 예산 사이징이 완화.
+3. **레버가 아님** — 챌린지 통과율(Monte-Carlo, `simulate.py`)은 예산 사이징+양엣지면
+   브리치≈0(실패=타임아웃)이고, 승률 40%→P(pass) 95% vs 승률 7%→DD브리치 60%+. 통과의
+   관건은 flatten 이 아니라 **엣지(승률) 유지**다.
+
+> 후속(선택): 백테스트 엔진에 flatten 을 구현하면 실가격 경로로 확정 판정 가능하나,
+> 구조 분석상 효과 미미가 예상돼 우선순위 낮음. 현재는 종결.
