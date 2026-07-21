@@ -52,6 +52,9 @@ def test_target_proximity_fires_once():
     proximity_scan(bot)
     assert len(n.sent) == 1 and "목표가 근접" in n.sent[0]
     assert "ETH" in n.sent[0] and "paper" not in n.sent[0]
+    # 레벨 값은 실제 이름(목표가)으로 라벨링 — 뭉뚱그린 '기준가' 금지
+    assert "목표가   110" in n.sent[0] and "기준가" not in n.sent[0]
+    assert "진입가   100" in n.sent[0]                # 진입가 맥락 포함
     proximity_scan(bot)                               # one-shot: no repeat
     assert len(n.sent) == 1
     print("ok  target proximity fires exactly once per position")
@@ -62,7 +65,9 @@ def test_stop_proximity_fires():
     bot = _bot(n, _pos("LONG", 100, 130, 95), 95.5)  # near stop, far from target
     proximity_scan(bot)
     assert len(n.sent) == 1 and "손절가 근접" in n.sent[0]
-    print("ok  stop proximity fires when price nears the stop")
+    # 스탑 값은 '손절가'로 라벨 — 예전 '기준가' 오표기가 혼란의 원인이었다
+    assert "손절가   95" in n.sent[0] and "기준가" not in n.sent[0]
+    print("ok  stop proximity fires when price nears the stop (labelled 손절가)")
 
 
 def test_short_side_label():
