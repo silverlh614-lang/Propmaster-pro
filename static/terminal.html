@@ -262,6 +262,7 @@
   .dbadge{display:inline-block;padding:1px 6px;border-radius:2px;font-size:9px;font-weight:800}
   .dbadge.holding{background:var(--up-dim);color:var(--up)}
   .dbadge.decaying{background:var(--dn-dim);color:var(--dn)}
+  .dbadge.eroding{background:rgba(224,187,84,.14);color:#e0bb54}
   .dbadge.insufficient{background:var(--panel-2);color:var(--faint);border:1px solid var(--border)}
   .btbridge{margin-top:9px;width:100%;background:var(--panel-2);color:var(--ink);
     border:1px solid var(--border-hi);border-radius:3px;padding:7px;font-size:11px;
@@ -756,7 +757,7 @@
           <span class="sp" style="flex:1"></span>
           <span class="bdtog"><button id="bdSym" class="on" onclick="setBreakdownDim('symbol')">종목</button><button id="bdStr" onclick="setBreakdownDim('strategy')">전략</button></span></div>
         <div class="scroll"><table>
-          <thead><tr><th class="l" id="bdKeyHead">종목</th><th>확정</th><th>승/패</th><th>승률</th><th>expR</th><th>상태</th></tr></thead>
+          <thead><tr><th class="l" id="bdKeyHead">종목</th><th>확정</th><th>승/패</th><th>승률</th><th>라이브R/기준</th><th>상태</th></tr></thead>
           <tbody id="bdBody"><tr><td class="l muted" colspan="6">확정 시그널 없음</td></tr></tbody>
         </table></div>
         <div class="ahint" id="aHint"></div>
@@ -1473,7 +1474,7 @@ async function loadSignals(){
 
 // ---- 라이브 엣지 분해 (종목/전략별 포워드 성과 + 드리프트) ----
 const _bdData={symbol:{},strategy:{}};let _bdDim="symbol";
-const DBADGE={holding:["유지","holding"],decaying:["붕괴 의심","decaying"],insufficient:["표본부족","insufficient"]};
+const DBADGE={holding:["유지","holding"],eroding:["감쇠 중","eroding"],decaying:["붕괴 의심","decaying"],insufficient:["표본부족","insufficient"]};
 function setBreakdownDim(dim){
   _bdDim=dim;
   $("bdSym").classList.toggle("on",dim==="symbol");
@@ -1486,10 +1487,11 @@ function renderBreakdown(){
   $("bdBody").innerHTML=rows.length?rows.map(([k,b])=>{
     const wr=b.win_rate==null?"–":(b.win_rate*100).toFixed(0)+"%";
     const er=b.expectancy_r==null?"–":(b.expectancy_r>=0?"+":"")+fmt(b.expectancy_r,2)+"R";
+    const bl=b.baseline_r!=null?` <span class="muted" style="font-size:9px">/${fmt(b.baseline_r,2)}</span>`:"";
     const v=DBADGE[b.verdict]||["–","insufficient"];
     return `<tr><td class="l"><b>${k}</b></td><td>${b.resolved}</td>
       <td>${b.wins}/${b.losses}</td><td>${wr}</td>
-      <td class="${(b.expectancy_r||0)>=0?'up':'dn'}">${er}</td>
+      <td class="${(b.expectancy_r||0)>=0?'up':'dn'}">${er}${bl}</td>
       <td><span class="dbadge ${v[1]}">${v[0]}</span></td></tr>`;
   }).join(""):'<tr><td class="l muted" colspan="6">확정 시그널 없음</td></tr>';
 }
