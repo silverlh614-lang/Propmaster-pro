@@ -47,7 +47,7 @@ Breakout Prop(breakoutprop.com, 2025-09 Kraken 인수)의 공개 구조를 본�
 
 | 플랜 | 목표 | 최대 DD | DD 방식 | 일일손실 | 최대 크기 |
 |---|---|---|---|---|---|
-| 1-Step Classic | 10% | 6% | Static | 4% | $100K |
+| 1-Step Classic | 10% | 6% | Static | 3% | $100K |
 | 1-Step Pro | 12% | 5% | Static | 3% | $200K |
 | 1-Step Turbo | 9% | 3% | Static | 3% | $200K |
 | 2-Step Classic | 5% → 10% | 8% | **Trailing** | 5% | $100K |
@@ -64,10 +64,16 @@ Breakout Prop(breakoutprop.com, 2025-09 Kraken 인수)의 공개 구조를 본�
 
 ### 리서치에서 확인된 상충 (보류 항목)
 
-1. 1-Step Classic 일일손실 3% vs **4%** — 공식 FAQ 예시(105,000−4%)를 채택.
+1. ~~1-Step Classic 일일손실 3% vs 4%~~ — **해결(2026-07-21)**: 공식
+   "Mastering Drawdown" 문서가 "모든 1-step 3%"를 명시적 예시(101,000−3%=97,970)로
+   규정 → **3% 채택**(구 FAQ 105,000−4% 예시 대체). Pro·Turbo 는 이미 3%.
 2. Pro 목표 12% 고정 vs 크기별 12→24% 스케일 — 12% 고정 채택 (소수 소스만 스케일 주장).
 3. 페이아웃 최소 "없음" vs "분할 후 $100" — env `PROP_MIN_PAYOUT`로 조정 가능하게 설계.
 4. 실수수료 일부 구간($10K/$50K Pro·Turbo) 미공표 — fee_rate 폴백 사용.
+5. **2-Step Classic(트레일링 DD 8%) 확인 대기** — 공식 "Mastering Drawdown"은 max DD
+   가 "static across all account types"라 하고 1-step(Classic/Pro/Turbo)만 문서화한다.
+   현재 Breakout 이 2-step 을 여전히 제공하는지·그 DD 방식이 확인 안 됨 → 코드는
+   기존 트레일링 유지(레거시 모델), 공식 확인 시 static 전환/제거 판단.
 
 ## 4. 배선 (엔진과의 결합점)
 
