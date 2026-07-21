@@ -48,21 +48,25 @@ class PropPlan:
 PLANS: dict[str, PropPlan] = {
     "1step_classic": PropPlan(
         key="1step_classic", name="1-Step Classic", steps=1,
+        # 일일손실 3% — 공식 "Mastering Drawdown"(101,000−3%=97,970 예시)이 모든
+        # 1-step 을 3%로 규정. 구 FAQ 예시(105,000−4%) 대체.
         phase_targets=(10.0,), max_dd_pct=6.0, dd_mode=DD_STATIC,
-        daily_loss_pct=4.0, profit_split_pct=80.0, max_size=100_000,
-        fee_table={5_000: 55, 10_000: 110, 25_000: 275,
-                   50_000: 495, 100_000: 800}, fee_rate=0.011),
+        daily_loss_pct=3.0, profit_split_pct=80.0, max_size=100_000,
+        # 라이브 홈페이지 수수료 (breakoutprop.com, 2026-07 캡처)
+        fee_table={10_000: 85, 25_000: 215, 50_000: 400,
+                   100_000: 800}, fee_rate=0.008),
     "1step_pro": PropPlan(
         key="1step_pro", name="1-Step Pro", steps=1,
         phase_targets=(12.0,), max_dd_pct=5.0, dd_mode=DD_STATIC,
         daily_loss_pct=3.0, profit_split_pct=80.0, max_size=200_000,
-        fee_table={200_000: 1_399}, fee_rate=0.011),
+        fee_table={10_000: 65, 25_000: 150, 50_000: 280,
+                   100_000: 545}, fee_rate=0.0055),
     "1step_turbo": PropPlan(
         key="1step_turbo", name="1-Step Turbo", steps=1,
         phase_targets=(9.0,), max_dd_pct=3.0, dd_mode=DD_STATIC,
         daily_loss_pct=3.0, profit_split_pct=80.0, max_size=200_000,
-        fee_table={5_000: 45, 25_000: 199, 100_000: 599,
-                   200_000: 1_199}, fee_rate=0.008),
+        fee_table={10_000: 40, 25_000: 95, 50_000: 180,
+                   100_000: 330}, fee_rate=0.0033),
     "2step_classic": PropPlan(
         key="2step_classic", name="2-Step Classic", steps=2,
         phase_targets=(5.0, 10.0), max_dd_pct=8.0, dd_mode=DD_TRAILING,

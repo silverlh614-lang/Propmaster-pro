@@ -49,11 +49,12 @@ def test_catalog():
     assert PLANS["2step_classic"].dd_mode == "trailing"
     assert all(PLANS[k].dd_mode == "static"
                for k in ("1step_classic", "1step_pro", "1step_turbo"))
-    # published fee table wins; Classic caps at $100K so no $200K tier
-    assert evaluation_fee(PLANS["1step_classic"], 10_000) == 110.0
-    assert evaluation_fee(PLANS["1step_turbo"], 200_000) == 1_199.0
+    # 공표 fee 테이블 (라이브 홈페이지, 10K~100K). Classic 은 $100K 상한.
+    assert evaluation_fee(PLANS["1step_classic"], 10_000) == 85.0
+    assert evaluation_fee(PLANS["1step_turbo"], 100_000) == 330.0
+    assert evaluation_fee(PLANS["1step_pro"], 50_000) == 280.0
     classic = next(p for p in c["plans"] if p["key"] == "1step_classic")
-    assert "200000" not in classic["fees"]
+    assert "200000" not in classic["fees"]          # Classic max 100K
     print("ok  plan catalog")
 
 
@@ -69,17 +70,17 @@ def test_static_max_dd_breach():
 
 
 def test_daily_loss_breach_and_rollover():
-    a = _acct()                                  # 1-Step Classic: daily 4%
+    a = _acct()                                  # 1-Step Classic: daily 3% (공식)
     assert a.evaluate(10_000.0, 10_000.0, True, DAY1) is None
-    assert a.daily_floor() == 9600.0
+    assert a.daily_floor() == 9700.0             # 10000 * (1 - 3%)
     # breach on EQUITY even though the anchor came from balance
-    assert a.evaluate(9600.0, 9900.0, False, DAY1) == BREACH_DAILY
-    # same equity next anchor day (00:30 UTC boundary): re-bases, no breach
+    assert a.evaluate(9700.0, 9900.0, False, DAY1) == BREACH_DAILY
+    # next anchor day (00:30 UTC boundary): re-bases on balance, no breach
     b = _acct()
     assert b.evaluate(10_000.0, 10_000.0, True, DAY1) is None
-    assert b.evaluate(9700.0, 9700.0, True, DAY1) is None     # -3.0% ok
-    assert b.evaluate(9700.0, 9700.0, True, DAY2) is None     # new day anchors 9700
-    assert b.daily_floor() == 9700.0 * 0.96
+    assert b.evaluate(9750.0, 9750.0, True, DAY1) is None     # -2.5% ok (floor 9700)
+    assert b.evaluate(9750.0, 9750.0, True, DAY2) is None     # new day anchors 9750
+    assert b.daily_floor() == 9750.0 * 0.97
     print("ok  daily loss anchors on balance at the 00:30 UTC rollover")
 
 
@@ -174,9 +175,9 @@ def test_desk_payouts():
     assert d.request_payout(49)["ok"] is False   # min $50
     assert d.request_payout(900)["ok"] is False  # > profit
     r = d.request_payout(500)
-    # 80% split + first-payout evaluation-fee refund ($110 for Classic 10K)
-    assert r["ok"] and r["fee_refund_usd"] == 110.0
-    assert r["trader_usd"] == 500 * 0.8 + 110.0
+    # 80% split + first-payout evaluation-fee refund ($85 for Classic 10K)
+    assert r["ok"] and r["fee_refund_usd"] == 85.0
+    assert r["trader_usd"] == 500 * 0.8 + 85.0
     assert led.equity == 10_300.0
     assert d.active().withdrawn_usd == 500.0
     # evaluation accounts can never withdraw
@@ -188,20 +189,20 @@ def test_desk_payouts():
 
 def test_split_upgrade_and_fee_refund():
     from app.prop.plans import SPLIT_UPGRADE_PCT
-    # +20% fee on the published price
-    assert evaluation_fee(PLANS["1step_classic"], 10_000, split_upgrade=True) == 132.0
+    # +20% fee on the published price ($85 * 1.2 = $102)
+    assert evaluation_fee(PLANS["1step_classic"], 10_000, split_upgrade=True) == 102.0
     led = _Ledger()
     d = _desk(led)
     r = d.buy_challenge("1step_classic", 10_000, split_upgrade=True)
     assert r["ok"] and r["account"]["profit_split_pct"] == SPLIT_UPGRADE_PCT
-    assert r["account"]["fee_paid"] == 132.0
+    assert r["account"]["fee_paid"] == 102.0
     led.set(11_000.0)
     d.on_mark(11_000.0, 11_000.0, True, DAY1)    # -> FUNDED, ledger 10000
     led.set(10_800.0)
     # first payout: 90% split + full evaluation-fee refund
     p1 = d.request_payout(500)
     assert p1["ok"] and p1["split_pct"] == 90.0
-    assert p1["fee_refund_usd"] == 132.0 and p1["trader_usd"] == 582.0
+    assert p1["fee_refund_usd"] == 102.0 and p1["trader_usd"] == 552.0
     # second payout: split only, refund is once per account
     p2 = d.request_payout(100)
     assert p2["ok"] and p2["fee_refund_usd"] == 0.0 and p2["trader_usd"] == 90.0
@@ -262,12 +263,14 @@ def test_conduct_monitor():
     led = _Ledger()
     d = _desk(led)
     d.buy_challenge("1step_classic", 10_000)
+    # 리스크는 일일예산(3% of 10k = $300) 밑으로 유지 — martingale 만 격리 검증
+    # (oversize 가 섞이지 않게). 60→120→240 = 2연속 x2 증액.
     mart = [
-        _row(T + 0,    "OPEN",  risk=100),
+        _row(T + 0,    "OPEN",  risk=60),
         _row(T + 600,  "CLOSE", result="LOSS"),
-        _row(T + 1200, "OPEN",  risk=200),
+        _row(T + 1200, "OPEN",  risk=120),
         _row(T + 1800, "CLOSE", result="LOSS"),
-        _row(T + 2400, "OPEN",  risk=400),
+        _row(T + 2400, "OPEN",  risk=240),
     ]
     fresh = d.check_conduct(mart)
     assert len(fresh) == 1 and d.active().status == "evaluation"
@@ -335,7 +338,7 @@ def test_prop_budget_sizing_and_gates():
     assert cfg.prop_mode and cfg.pyramid_enabled is False   # 애드업 기본 OFF
     led = _Ledger(10_000.0)
     d = _desk(led)
-    d.buy_challenge("1step_classic", 10_000)     # daily 4% / DD 6% static
+    d.buy_challenge("1step_classic", 10_000)     # daily 3% / DD 6% static
     d.on_mark(10_000.0, 10_000.0, True, DAY1)    # anchor the day at 10000
 
     risk = RiskManager(cfg, Journal(), BotState())
@@ -343,7 +346,7 @@ def test_prop_budget_sizing_and_gates():
     pm = PositionManager(SYMBOL_SPECS["BTC"], cfg, risk, Journal(),
                          "paper", "t", ledger=led)
     sig = TradeSignal(Side.LONG, "T", 70, stop_price=99_000, entry_hint=100_000)
-    # fresh account: daily room 400 * 25% = 100, DD room 600 * 10% = 60 -> $60
+    # fresh account: daily room 300 * 25% = 75, DD room 600 * 10% = 60 -> $60 (DD-bound)
     assert pm.try_open(sig, 100_000, 500.0, DAY1)
     assert abs(pm.pos.initial_risk_usd - 60.0) < 1e-6
 
@@ -358,12 +361,12 @@ def test_prop_budget_sizing_and_gates():
     pm2 = PositionManager(SYMBOL_SPECS["BTC"], cfg, risk2, Journal(),
                           "paper", "t", ledger=led2)
     assert pm2.try_open(sig, 100_000, 500.0, DAY1)
-    # daily room 200 * 25% = 50, DD room 400 * 10% = 40 -> $40
-    assert abs(pm2.pos.initial_risk_usd - 40.0) < 1e-6
+    # daily room 100 * 25% = 25, DD room 400 * 10% = 40 -> $25 (daily-bound, tighter)
+    assert abs(pm2.pos.initial_risk_usd - 25.0) < 1e-6
 
     # budget guard: open risk total may not exceed 50% of remaining daily room
     ok, why = risk2.allow_entry(0, 80.0, 40.0, equity_usd=9_800)
-    assert not ok and "prop budget guard" in why  # 120 > 200 * 0.5
+    assert not ok and "prop budget guard" in why  # 120 > 100 * 0.5
 
     # daily stop: 3 losses today freeze entries for the day
     j = Journal()
