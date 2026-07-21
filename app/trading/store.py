@@ -43,6 +43,8 @@ SIGNAL_FIELDS = [
     # MFE/MAE — 미결 동안 봉마다 누적한 최대 유리/불리 이동 (R). 스탑·타겟 배수의
     # 적정성 검증용: 진 거래의 큰 MFE = 타겟이 멀다, 이긴 거래의 큰 MAE = 스탑이 아슬.
     "mfe_r", "mae_r",
+    # 예상 리스크 — 시그널 시점 프롭 예산으로 계산한 진입 리스크(%·$). 체결 시엔 실제값.
+    "risk_pct", "risk_usd",
 ]
 SIGNAL_OPEN = ("", "OPEN")                      # 미결(추적 중)
 SIGNAL_RESULTS = ("WIN", "LOSS")               # 결과가 확정된 시그널
