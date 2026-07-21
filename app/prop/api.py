@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/prop", tags=["prop"])
 
 
 class ChallengeRequest(BaseModel):
-    plan: str = "1step_classic"
+    plan: str = "1step_turbo"        # 기본: MDL 3% · MDD 3% (Turbo)
     size: float = 10_000
     split_upgrade: bool = False      # 90% split add-on (+20% fee)
 

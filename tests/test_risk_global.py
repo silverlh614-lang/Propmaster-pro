@@ -43,7 +43,7 @@ def test_concurrent_cap_across_symbols():
 def test_open_risk_cap_across_symbols():
     """The open-risk cap must sum risk across symbols: BTC $2 on the table +
     ETH $1.8 new > 1.5% cap ($3 on $200) -> ETH blocked."""
-    cfg = TradingConfig()
+    cfg = TradingConfig(equity_usd=200)       # $2/$3 산술을 $200 기준으로 고정
     cfg.max_concurrent_positions = 2
     cfg.max_total_open_risk_pct = 1.5
     risk, btc, eth = _pair(cfg)
@@ -58,7 +58,7 @@ def test_open_risk_cap_across_symbols():
 def test_restart_reregisters_without_double_count():
     """A bot restart builds a NEW PositionManager for the same symbol — the
     book must be replaced, not appended, or every restart doubles exposure."""
-    cfg = TradingConfig()
+    cfg = TradingConfig(equity_usd=200)       # r==2.0 기대를 $200 기준으로 고정
     risk, btc, _eth = _pair(cfg)
     assert btc.try_open(SIG_BTC, 100, 2.0, 0)
     st = btc.to_state()
