@@ -62,6 +62,14 @@ def _r(v) -> str:
         return str(v)
 
 
+def _qty(v) -> str:
+    """수량 표기 — 불필요한 소수 0 을 떼고 읽기 쉽게 (예: 1192.7, 24450, 0.5)."""
+    try:
+        return f"{float(v):g}"
+    except (TypeError, ValueError):
+        return str(v)
+
+
 def _risk_line(risk_pct, risk_usd) -> str:
     """'예상 리스크 ≈X% ($Y)' 한 줄 — 값이 없으면 빈 문자열(줄 생략)."""
     try:
@@ -187,6 +195,9 @@ class TelegramNotifier:
             lines = [head, _SEP]
             if row.get("exit_price", "") not in ("", None):
                 lines.append(f"청산가   {_px(row.get('exit_price'))}")
+            # 부분익절 행은 이번에 청산한 수량을 싣는다 (전량 청산 행엔 qty 없음)
+            if event == "PARTIAL" and row.get("qty", "") not in ("", None):
+                lines.append(f"익절수량 {_qty(row.get('qty'))}")
             rr = row.get("r_multiple", "")
             tail = f" ({_r(rr)})" if rr not in ("", None) else ""
             lines.append(f"손익     {_money(row.get('pnl_usd', ''))}{tail}")

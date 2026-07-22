@@ -61,9 +61,13 @@ def test_format_close():
     assert "손절" in loss and "-1.90 USDT" in loss
     partial = TelegramNotifier.format({"event": "PARTIAL", "symbol": "ETH",
                                        "mode": "paper", "pnl_usd": 1.1,
-                                       "r_multiple": 1.0, "exit_price": 3450})
+                                       "r_multiple": 1.0, "exit_price": 3450,
+                                       "qty": 0.5})
     assert "부분익절" in partial
-    print("ok  format CLOSE/PARTIAL (result label, signed pnl + R)")
+    assert "익절수량" in partial and "0.5" in partial   # 청산한 수량 표시
+    # 전량 청산(CLOSE)엔 qty 가 없어 익절수량 줄이 뜨지 않는다
+    assert "익절수량" not in TelegramNotifier.format(_close_row("WIN"))
+    print("ok  format CLOSE/PARTIAL (result label, signed pnl + R, 익절수량)")
 
 
 # ------------------------------------------------------------- event filter
