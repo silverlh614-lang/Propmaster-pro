@@ -195,11 +195,42 @@ def test_htf_support_bounce():
     print("ok  htf_support (trend-aligned bounce, break rejects, zone required)")
 
 
+def test_vwap_pullback():
+    """vwap_pullback: 상승추세에서 가격이 세션 VWAP로 눌렸다가(존 터치) 위로 마감
+    (반등)하고 직전봉이 이미 VWAP 위(진짜 되돌림)면 LONG. 눌림 없으면(가격이 VWAP
+    위로만) 관망. VWAP 는 당일(UTC) 거래량가중평균가 — 동적 레벨."""
+    from app.trading.models import Side
+    cfg = TradingConfig()                      # vwap_min_bars=10, vwap_band_atr=0.25
+    strat = make_strategy("vwap_pullback", cfg)
+    htf = [_c(i * 3600000, 100 + i, 101 + i, 99 + i, 100.5 + i)
+           for i in range(30)]                 # rising -> LONG
+    # 같은 UTC일(ts < 86_400_000): 저가 앵커 20봉이 VWAP를 ~100에 고정, 이후 상승
+    anchor = [_c(i * 900000, 100, 100.6, 99.4, 100) for i in range(20)]
+    rise = [_c(20 * 900000, 100, 101.5, 100, 101.3),
+            _c(21 * 900000, 101.3, 102.5, 101, 102.2),
+            _c(22 * 900000, 102.2, 103, 101.8, 102.6),
+            _c(23 * 900000, 102.6, 103, 102, 102.4)]     # prev: VWAP 위 마감(leg)
+    # cur: VWAP(~100.4) 존까지 눌렸다가(low 100.4) 위로 마감(close 101.6) = 반등
+    dip = anchor + rise + [_c(24 * 900000, 102.4, 102.6, 100.4, 101.6)]
+    sig = strat.evaluate(_ctx(htf, dip))
+    assert sig is not None and sig.side is Side.LONG
+    assert sig.signal_type == "VWAP_PULLBACK" and sig.stop_price < sig.entry_hint
+    d = strat.diagnose(_ctx(htf, dip))
+    assert d["ready"] and any(x["key"] == "vwap" and x["ok"] for x in d["gates"])
+    # 눌림 없음: cur 가 VWAP 위에만 머물면(저가 102) 터치 실패 -> 관망
+    nodip = anchor + rise + [_c(24 * 900000, 102.4, 103, 102, 102.7)]
+    assert strat.evaluate(_ctx(htf, nodip)) is None
+    # 데이터 부족(세션/ATR 표본 미달)이면 크래시 없이 관망
+    assert strat.evaluate(_ctx(htf, anchor[:6])) is None
+    print("ok  vwap_pullback (dynamic VWAP bounce, no-dip stands aside)")
+
+
 def test_registry_and_replay_smoke():
     """The registry is prop-only, rejects unknown names, and every listed
     strategy replays a synthetic series without crashing."""
     from app.trading.backtest.engine import replay
-    assert list(STRATEGIES) == ["prop_breakout", "vbo", "mean_revert", "htf_support"]
+    assert list(STRATEGIES) == ["prop_breakout", "vbo", "mean_revert",
+                                "htf_support", "vwap_pullback"]
     try:
         make_strategy("trend_breakout", TradingConfig())
         assert False, "legacy strategy should be gone"
