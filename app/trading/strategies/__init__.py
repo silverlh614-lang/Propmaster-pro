@@ -4,12 +4,14 @@ from .htf_support import HtfSupportStrategy
 from .mean_revert import MeanRevertStrategy
 from .prop_breakout import PropBreakoutStrategy
 from .vbo import VolatilityBreakoutStrategy
+from .vwap_pullback import VwapPullbackStrategy
 
 STRATEGIES = {
     "prop_breakout": PropBreakoutStrategy,
     "vbo": VolatilityBreakoutStrategy,
     "mean_revert": MeanRevertStrategy,
     "htf_support": HtfSupportStrategy,
+    "vwap_pullback": VwapPullbackStrategy,
 }
 
 

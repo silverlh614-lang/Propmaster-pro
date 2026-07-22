@@ -101,6 +101,11 @@ class TradingConfig:
     support_lookback: int = 55            # 지지·저항 레벨 산정 HTF 봉 수
     support_zone_atr: float = 1.0         # 레벨 근접 존 = N×ATR (이 안까지 꼬리내리면 터치)
 
+    # vwap_pullback: 세션(UTC일) VWAP 눌림 반등. 동적 레벨이라 달아나는 추세를
+    # 놓치지 않고 눌림에 진입(정적 리테스트의 한계 보완). 백테스트 게이트로만 채택.
+    vwap_min_bars: int = 10               # VWAP 신뢰 최소 세션 봉 수 (초반 불안정 방지)
+    vwap_band_atr: float = 0.25           # VWAP 근접 존 = N×ATR (이 안까지 꼬리내리면 터치)
+
     # 선택 필터 (기본 OFF — 백테스트 게이트 A/B로만 켠다, hand-tune 금지)
     pump_filter_pct: float = 0.0          # 채널 저점 대비 급등 % 초과 돌파 스킵 (NFI 펌프 필터)
     squeeze_gate: bool = False            # 직전 봉 BB(20,2) ⊂ Keltner(20,1.5ATR) 요구
