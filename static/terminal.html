@@ -329,6 +329,10 @@
     border-radius:3px;padding:4px 6px;font:11px var(--mono);text-align:right}
   .warn{background:#161206;border:1px solid #3a2f10;color:var(--yel);padding:8px 12px;border-radius:4px;
     font-size:11px;margin-bottom:10px;letter-spacing:.03em}
+  .warn-x{float:right;background:none;border:1px solid #3a2f10;color:var(--yel);cursor:pointer;
+    font:inherit;font-size:10px;padding:1px 8px;border-radius:3px;margin-left:8px;opacity:.75}
+  .warn-x:hover{opacity:1}
+  .warn.collapsed #phaseWarnTxt{display:none}   /* 접힌 배너: 한 줄 요약만 */
   .note{color:var(--dim);font-size:11px;min-height:16px}
   .foot{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;gap:18px;align-items:center;overflow:hidden;
     padding:6px 14px calc(6px + env(safe-area-inset-bottom));background:rgba(6,8,9,.96);
@@ -384,8 +388,14 @@
     #allposTbl td.muted{color:var(--dim)}          /* 스탑·목표 값도 읽히게 */
     .panel[data-panel="allpos"] .scroll{max-height:none;overflow:visible}
 
-    /* 심볼 탭 행: 모바일에서 전체 너비 차지 → 많은 종목이 깔끔히 줄바꿈 */
-    .strip .symrow{flex:1 1 100%}
+    /* 심볼 탭 행: 모바일에서 전체 너비 + 칩은 가로 스크롤 1줄 — 19개 칩이
+       6줄로 첫 화면 40%를 먹던 문제 제거 (계좌·챌린지가 바로 보이게) */
+    .strip .symrow{flex:1 1 100%;flex-wrap:nowrap!important} /* 인라인 wrap 무효화 */
+    .symtabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
+      -webkit-overflow-scrolling:touch;flex:1 1 auto}
+    .symtabs::-webkit-scrollbar{display:none}
+    .symtabs button{flex:none}
+    #symPickBtn{flex:none}
 
     /* 모바일 가로 스크롤 방지 2: 종목 선택 칩을 더 촘촘히 (wrap 유지) */
     .sympick{padding:8px 11px;gap:5px}
@@ -534,9 +544,10 @@
 <div class="ticker"><div class="rail" id="rail"><span class="it">로딩 중…</span></div></div>
 
 <div class="wrap">
-  <div class="warn" id="phaseWarn">⚠️ <b>Phase 1 — 페이퍼 전용.</b> 공개 kline(Binance→OKX)으로 실시간 시뮬레이션만 하며
+  <div class="warn" id="phaseWarn">⚠️ <b>Phase 1 — 페이퍼 전용.</b><span id="phaseWarnTxt"> 공개 kline(Binance→OKX)으로 실시간 시뮬레이션만 하며
     <b>실주문은 전송되지 않습니다.</b> 리스크는 프롭 룰 예산(일일손실·최대DD)에서 나오고, 브리치·가디언·행위 감시가
-    상시 가동됩니다 — 실거래는 백테스트 게이트 통과 후 Phase 3.</div>
+    상시 가동됩니다 — 실거래는 백테스트 게이트 통과 후 Phase 3.</span>
+    <button class="warn-x" id="phaseWarnBtn" onclick="togglePhaseWarn()">접기</button></div>
 
   <div class="lay-tray" id="layTray" style="display:none"></div>
   <div class="grid">
@@ -611,6 +622,25 @@
     </section>
 
     <!-- 라이브 차트 -->
+    <!-- 시그널 게이트 — 첫 행 3열(프롭·계좌·게이트)을 채운다 (우상단 공백 제거) -->
+    <section data-panel="gates" class="panel col-4">
+      <div class="phead"><span class="mk">◆</span> 시그널 게이트 <span class="sp"></span>
+        <span class="r" id="gDir">–</span></div>
+      <div class="pbody">
+        <div class="gatewrap">
+          <div class="gates" id="gates"><div class="note">대기 중…</div></div>
+          <div style="text-align:center">
+            <div class="ring"><svg width="104" height="104" viewBox="0 0 104 104">
+              <circle cx="52" cy="52" r="46" fill="none" stroke="#161b21" stroke-width="8"></circle>
+              <circle id="ringArc" cx="52" cy="52" r="46" fill="none" stroke="var(--brand)"
+                stroke-width="8" stroke-linecap="round" stroke-dasharray="289" stroke-dashoffset="289"></circle>
+            </svg><div class="num"><b id="ringNum">0/4</b><small>GATES</small></div></div>
+            <div class="ready-tag" id="readyTag">대기</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section data-panel="chart" class="panel col8">
       <div class="phead"><span class="mk">◆</span> 라이브 차트 · 15m + EMA + 채널 + 포지션
         <span class="sp"></span><span class="r" id="chTf">BTCUSDT</span></div>
@@ -628,25 +658,6 @@
           <canvas id="chart"></canvas>
           <div class="chart-cross" id="chartCross"></div>
           <div class="chart-tip" id="chartTip"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 시그널 게이트 -->
-    <section data-panel="gates" class="panel col-4">
-      <div class="phead"><span class="mk">◆</span> 시그널 게이트 <span class="sp"></span>
-        <span class="r" id="gDir">–</span></div>
-      <div class="pbody">
-        <div class="gatewrap">
-          <div class="gates" id="gates"><div class="note">대기 중…</div></div>
-          <div style="text-align:center">
-            <div class="ring"><svg width="104" height="104" viewBox="0 0 104 104">
-              <circle cx="52" cy="52" r="46" fill="none" stroke="#161b21" stroke-width="8"></circle>
-              <circle id="ringArc" cx="52" cy="52" r="46" fill="none" stroke="var(--brand)"
-                stroke-width="8" stroke-linecap="round" stroke-dasharray="289" stroke-dashoffset="289"></circle>
-            </svg><div class="num"><b id="ringNum">0/4</b><small>GATES</small></div></div>
-            <div class="ready-tag" id="readyTag">대기</div>
-          </div>
         </div>
       </div>
     </section>
@@ -1838,6 +1849,16 @@ function toggleLayoutEdit(){
   renderLayTray();
 }
 applyLayout();
+
+// Phase 1 배너 접기 — 상태는 localStorage 로 기억 (매 방문마다 4줄 차지하지 않게)
+function togglePhaseWarn(){
+  const w=$("phaseWarn"),on=w.classList.toggle("collapsed");
+  $("phaseWarnBtn").textContent=on?"펼치기":"접기";
+  try{localStorage.setItem("phasewarn_v1",on?"1":"0");}catch(e){}
+}
+if(localStorage.getItem("phasewarn_v1")==="1"){
+  $("phaseWarn").classList.add("collapsed");$("phaseWarnBtn").textContent="펼치기";
+}
 
 renderBell();loadConfig();loadPropPlans();refresh();loadCandles();loadJournal();
 setInterval(refresh,2500);
