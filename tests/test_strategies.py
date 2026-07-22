@@ -75,6 +75,47 @@ def test_prop_breakout_optional_filters():
     print("ok  prop_breakout optional pump/squeeze filters")
 
 
+def test_prop_breakout_retest_confirm():
+    """retest_confirm: 초기 단일 돌파(찌름) 대신 '돌파→레벨 되돌림→재장악'을 진입
+    트리거로 요구. 기본 off 면 기존 돌파 그대로. 되돌림이 없는 급등은 on 에서 관망."""
+    from app.trading.models import Side
+    htf = [_c(i * 3600000, 100 + i, 101 + i, 99 + i, 100.5 + i)
+           for i in range(30)]                          # rising -> LONG
+    flat = [_c(i * 900000, 105, 106, 104, 105) for i in range(21)]  # 사전채널 high=106
+
+    def on_cfg():
+        c = TradingConfig(); c.donchian_lookback = 20
+        c.retest_confirm = True; c.retest_window = 5; c.retest_band_atr = 0.5
+        return c
+
+    # (A) 돌파 후 되돌림 없이 계단식 상승(갭업): 되돌림 미검증 -> on 은 관망
+    climb = flat + [
+        _c(21 * 900000, 109, 110, 108.5, 109.8),
+        _c(22 * 900000, 109.8, 111, 109.4, 110.8),
+        _c(23 * 900000, 110.8, 112, 110.4, 111.8),
+        _c(24 * 900000, 111.8, 113, 111.4, 112.8),
+        _c(25 * 900000, 112.8, 114, 112.4, 113.8),
+        _c(26 * 900000, 113.8, 115, 113.4, 114.8)]      # cur: 채널 재돌파
+    assert make_strategy("prop_breakout", on_cfg()).evaluate(_ctx(htf, climb)) is None
+    # 같은 급등을 retest off(기본)로 보면 돌파로 발화 -> 게이트가 필터임을 증명
+    off = TradingConfig(); off.donchian_lookback = 20
+    assert make_strategy("prop_breakout", off).evaluate(_ctx(htf, climb)) is not None
+
+    # (B) 돌파 -> 레벨(106) 되돌림 -> 재장악: on 에서 발화
+    retest = flat + [
+        _c(21 * 900000, 106.2, 108.5, 106.0, 108.0),    # 브레이크 (close 108>106)
+        _c(22 * 900000, 108.0, 108.0, 106.4, 106.7),    # 되돌림 (low 106.4 ~ 레벨)
+        _c(23 * 900000, 106.7, 107.0, 106.3, 106.6),
+        _c(24 * 900000, 106.6, 107.2, 106.4, 106.9),
+        _c(25 * 900000, 106.9, 107.3, 106.5, 107.0),
+        _c(26 * 900000, 107.0, 109.0, 106.8, 108.5)]    # cur: 재장악 (close 108.5>106)
+    sig = make_strategy("prop_breakout", on_cfg()).evaluate(_ctx(htf, retest))
+    assert sig is not None and sig.side is Side.LONG and sig.stop_price < 108.5
+    d = make_strategy("prop_breakout", on_cfg()).diagnose(_ctx(htf, retest))
+    assert any(x["key"] == "retest" and x["ok"] for x in d["gates"])
+    print("ok  prop_breakout retest confirm (break->pullback->reclaim, off=base)")
+
+
 def test_vbo_volatility_breakout():
     """vbo: Larry Williams K-rule — break of open + K*prior-range in the HTF
     direction, distinct from Donchian's extreme break."""

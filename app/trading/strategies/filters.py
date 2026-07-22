@@ -1,4 +1,4 @@
-"""@responsibility 추세강화 확인 게이트 — 거래량·장악형 몸통·횡보 플립 필터, 돌파 전략 공용 (기본 OFF)
+"""@responsibility 확인 게이트 — 거래량·장악형·횡보·ADX·브레이크리테스트 필터, 돌파 전략 공용 (기본 OFF)
 
 Trend-reinforcement confirmation gates shared by the breakout strategies.
 The source theory's defense against box-range (박스권) whipsaw, as four
@@ -22,7 +22,41 @@ through the Phase 2 backtest gate (no hand-tuning):
 from __future__ import annotations
 
 from ..indicators import adx, ema_flip_count, sma
-from ..models import Candle
+from ..models import Candle, Side
+
+
+def retest_confirmed(cfg, ef: list[Candle], allowed: Side,
+                     atr_val: float | None) -> tuple[bool, dict]:
+    """브레이크-리테스트 확인 (stateless, 최근 봉 윈도우 패턴). retest_confirm off 면
+    항상 (True, …) — 기저 동작 그대로. on 이면 세 조건 모두 충족 시 True:
+      (1) 브레이크 — 최근 retest_window 봉 중 하나가 '사전 채널'(최근 봉 제외) 극단을
+          종가로 돌파,
+      (2) 리테스트 — 같은 구간에서 가격이 그 레벨 ±band(=retest_band_atr×ATR) 존까지
+          되돌림,
+      (3) 재장악 — 현재 봉 종가가 다시 레벨 너머.
+    초기 찌름(찌르고 붕괴하는 가짜돌파)을 걸러 진입을 '검증된 되돌림 후 재장악'으로 미룬다."""
+    if not cfg.retest_confirm:
+        return True, {"level": None}
+    r, lb = cfg.retest_window, cfg.donchian_lookback
+    if len(ef) < lb + r + 2 or not atr_val or atr_val <= 0:
+        return False, {"level": None}
+    pre = ef[-(lb + r + 1):-(r + 1)]          # 브레이크 이전 채널 (최근 r봉 제외)
+    recent = ef[-(r + 1):-1]                   # 최근 r봉 = 브레이크+리테스트 구간 (현재 제외)
+    cur = ef[-1]
+    band = cfg.retest_band_atr * atr_val
+    if allowed is Side.LONG:
+        level = max(x.high for x in pre)
+        broke = any(x.close > level for x in recent)
+        retested = min(x.low for x in recent) <= level + band
+        held = cur.close > level
+    else:
+        level = min(x.low for x in pre)
+        broke = any(x.close < level for x in recent)
+        retested = max(x.high for x in recent) >= level - band
+        held = cur.close < level
+    ok = bool(broke and retested and held)
+    return ok, {"level": level, "broke": broke,
+                "retested": retested, "held": held}
 
 
 def confirmation_gates(cfg, htf: list[Candle], ef: list[Candle]) -> dict:
