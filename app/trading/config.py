@@ -105,6 +105,10 @@ class TradingConfig:
     pump_filter_pct: float = 0.0          # 채널 저점 대비 급등 % 초과 돌파 스킵 (NFI 펌프 필터)
     squeeze_gate: bool = False            # 직전 봉 BB(20,2) ⊂ Keltner(20,1.5ATR) 요구
     breakeven_at_r: float = 0.0           # N R 도달 시 손절→본전 (0=off, 부분익절 전 단계)
+    # 브레이크-리테스트 확인 진입 (가짜돌파 필터 — 초기 찌름 대신 되돌림 후 재장악 시 진입)
+    retest_confirm: bool = False          # on: 사전채널 돌파→레벨 되돌림→재장악 확인 후 진입
+    retest_window: int = 5                # 브레이크+리테스트를 찾는 최근 봉 수
+    retest_band_atr: float = 0.5          # 되돌림이 레벨에 근접해야 하는 폭 = N×ATR
 
     # --- 추세강화 확인 게이트 (박스권 휩쏘 방어 — 전 돌파 전략 공용, 기본 OFF) ---
     # 출처 이론: 거래량=세력(돌파 확인), 장악형 몸통(변동성 군집·range 에너지),

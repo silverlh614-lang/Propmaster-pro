@@ -352,3 +352,29 @@ PF 1.05 → 0.71, 승률 36.8→42.1%. **더 악화.** 승률↑·expR↓ 조합
 
 > 후속(선택): 백테스트 엔진에 flatten 을 구현하면 실가격 경로로 확정 판정 가능하나,
 > 구조 분석상 효과 미미가 예상돼 우선순위 낮음. 현재는 종결.
+
+## 브레이크-리테스트 확인 진입 가설 등록 (2026-07-22) — 스캔 대기
+
+리더보드 상위권 다수가 쓰는 "Break & Retest"(초기 돌파 대신 되돌림 후 재장악에서 진입)를
+가짜돌파 필터로 검증. 전략(진입조건) 레벨이라 **백테스트 A/B 가능**(flatten 과 달리).
+
+- 구현: `strategies/filters.py::retest_confirmed` (stateless, 최근 봉 윈도우 패턴).
+  세 조건 AND — (1) 최근 `retest_window` 봉이 사전채널(최근봉 제외) 극단을 종가 돌파,
+  (2) 같은 구간 저가가 레벨 ±`retest_band_atr`×ATR 존까지 되돌림, (3) 현재 봉 종가 재장악.
+- 노브(전부 기본 OFF, hand-tune 금지): `retest_confirm=0` · `retest_window=5` ·
+  `retest_band_atr=0.5`. off 면 기존 돌파 트리거 그대로(회귀 없음, 테스트로 고정).
+- 가설: 초기 찌름을 걸러 **승률↑·PF↑**, 대신 거래수↓(진입 지연). 프롭 관점에선
+  가짜돌파 후 즉시 손절 연쇄(일일 브리치 유발)를 줄이는 게 기대 효과.
+
+**실행 (배포에서, 12mo 로스터 전종목 A/B):**
+```
+# baseline
+/api/trading/backtest/scan?months=12
+# retest on (기본 파라미터)
+/api/trading/backtest/scan?months=12&retest_confirm=1
+# (선택) 밴드/윈도우 민감도
+/api/trading/backtest/scan?months=12&retest_confirm=1&retest_window=8&retest_band_atr=0.75
+```
+두 스캔 JSON 을 붙여넣으면 종목별 expR/PF/거래수 델타로 채택 판정. **채택 기준:
+균일(또는 최소 비악화) 개선 — chop/adx 처럼 코어(ETH 등)를 탈락시키면 기각.**
+현재는 미채택(등록만).

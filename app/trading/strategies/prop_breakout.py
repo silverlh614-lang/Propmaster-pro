@@ -25,7 +25,7 @@ from __future__ import annotations
 from ..indicators import atr, ema
 from ..models import Side, TradeSignal
 from .base import TradingContext, TradingStrategy
-from .filters import confirmation_gates, confirmation_rows
+from .filters import confirmation_gates, confirmation_rows, retest_confirmed
 
 
 class PropBreakoutStrategy(TradingStrategy):
@@ -72,13 +72,17 @@ class PropBreakoutStrategy(TradingStrategy):
                     else cur.close + a * c.atr_stop_mult)
 
         conf = confirmation_gates(c, htf, ef)   # 추세강화 게이트 (기본 전부 OFF)
+        retest_ok, r_meta = retest_confirmed(c, ef, allowed, a)
+        # retest_confirm on 이면 초기 돌파(broke) 대신 '되돌림 후 재장악'이 진입 트리거
+        trigger = retest_ok if c.retest_confirm else broke
 
         return {
             "allowed": allowed, "htf_ema": htf_ema,
             "channel_hi": ch_hi, "channel_lo": ch_lo,
             "broke": broke, "atr": a, "stop": stop,
             "pump_ok": pump_ok, "squeeze_ok": squeeze_ok, "conf": conf,
-            "ready": bool(broke and pump_ok and squeeze_ok and conf["ok"]
+            "retest_ok": retest_ok, "retest": r_meta, "trigger": trigger,
+            "ready": bool(trigger and pump_ok and squeeze_ok and conf["ok"]
                           and stop is not None),
             "entry_ref": cur.close,
         }
@@ -119,6 +123,12 @@ class PropBreakoutStrategy(TradingStrategy):
         if self.cfg.squeeze_gate:
             gates.append({"key": "squeeze", "label": "변동성 스퀴즈",
                           "ok": bool(g["squeeze_ok"]), "info": "BB⊂KC"})
+        if self.cfg.retest_confirm:
+            rm = g["retest"]
+            gates.append({"key": "retest", "label": "브레이크-리테스트 확인",
+                          "ok": bool(g["retest_ok"]),
+                          "info": ("돌파→되돌림→재장악"
+                                   if rm.get("level") is not None else "표본 부족")})
         gates += confirmation_rows(self.cfg, g["conf"])
         passed = sum(1 for x in gates if x["ok"])
         return {"allowed": allowed, "ready": g["ready"],
