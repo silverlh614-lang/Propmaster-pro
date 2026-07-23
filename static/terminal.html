@@ -758,6 +758,17 @@
       <div class="pbody"><div class="feed" id="feed"><div class="note">거래 없음</div></div></div>
     </section>
 
+    <!-- 청산 이벤트 (표시 전용 참고 정보 — 매매 판단에 미사용) -->
+    <section data-panel="liq" class="panel col-4">
+      <div class="phead"><span class="mk">◆</span> 청산 이벤트 <span class="sp"></span>
+        <span class="r muted" id="liqState" style="font-size:10px">연결 중…</span></div>
+      <div class="pbody">
+        <div class="subline" id="liqHour" style="margin-bottom:7px">–</div>
+        <div class="feed" id="liqFeed"><div class="note">강제청산 대기 — Binance 선물 전 종목,
+          $5K 이상만 표시. <b>참고 전용</b>이며 매매 판단에 쓰이지 않습니다.</div></div>
+      </div>
+    </section>
+
     <!-- 시그널 피드 · 전진검증 -->
     <section data-panel="signals" class="panel full">
       <div class="phead"><span class="mk">◆</span> 시그널 피드 · 전진검증 <span class="sp"></span>
@@ -1860,12 +1871,33 @@ if(localStorage.getItem("phasewarn_v1")==="1"){
   $("phaseWarn").classList.add("collapsed");$("phaseWarnBtn").textContent="펼치기";
 }
 
+// ---- 청산 이벤트 (표시 전용 — 매매 판단에 미사용) ----
+const _liqUsd=v=>v>=1e6?"$"+(v/1e6).toFixed(2)+"M":v>=1e3?"$"+(v/1e3).toFixed(0)+"K":"$"+v.toFixed(0);
+async function loadLiq(){
+  let d;try{d=await api("/api/trading/liquidations?limit=30");}catch(e){return;}
+  $("liqState").innerHTML=d.connected?'<span class="up">● LIVE</span>':'<span class="muted">○ 끊김</span>';
+  const h=d.hour||{};
+  $("liqHour").innerHTML=`최근 1시간 <b>${h.count||0}건</b> · `
+    +`롱청산 <b class="dn">${_liqUsd(h.long_usd||0)}</b> · 숏청산 <b class="up">${_liqUsd(h.short_usd||0)}</b>`;
+  const rows=d.events||[];
+  if(!rows.length)return;   // 이벤트 전엔 안내문 유지
+  $("liqFeed").innerHTML=rows.map(e=>{
+    const t=new Date(e.ts*1000),hh=String(t.getUTCHours()).padStart(2,"0"),mm=String(t.getUTCMinutes()).padStart(2,"0");
+    const base=String(e.symbol||"").replace(/USDT$/,""),mine=UNIV.includes(base);
+    const lab=e.side==="LONG_LIQ"?'<span class="dn">롱청산</span>':'<span class="up">숏청산</span>';
+    return `<div class="frow"><span class="ts">${hh}:${mm}</span>`
+      +`<span class="fd">${mine?"<b>":""}${base}${mine?"</b>":""} ${lab} `
+      +`<b>${_liqUsd(e.notional_usd||0)}</b> @ ${fmt(e.price,4)}</span></div>`;
+  }).join("");
+}
+
 renderBell();loadConfig();loadPropPlans();refresh();loadCandles();loadJournal();
 setInterval(refresh,2500);
 setInterval(loadCandles,7000);
 setInterval(loadJournal,6000);
 setInterval(loadSignals,6000);loadSignals();
 setInterval(loadNotify,30000);loadNotify();
+setInterval(loadLiq,8000);loadLiq();
 </script>
 </body>
 </html>
