@@ -1880,7 +1880,13 @@ async function loadLiq(){
   $("liqHour").innerHTML=`최근 1시간 <b>${h.count||0}건</b> · `
     +`롱청산 <b class="dn">${_liqUsd(h.long_usd||0)}</b> · 숏청산 <b class="up">${_liqUsd(h.short_usd||0)}</b>`;
   const rows=d.events||[];
-  if(!rows.length)return;   // 이벤트 전엔 안내문 유지
+  if(!rows.length){
+    // 진단 힌트: 연결됐고 프레임은 오는데 표시 0 = 전부 $5K 미만(정상) —
+    // 수신 0이면 스트림 자체가 조용하거나 서버 재기동 직후
+    if(d.connected)$("liqFeed").innerHTML=`<div class="note">수신 ${d.rx||0}프레임 · `
+      +`$${((d.min_notional_usd||5000)/1000)}K 이상 청산 없음 — <b>참고 전용</b>, 매매 판단에 쓰이지 않습니다.</div>`;
+    return;
+  }
   $("liqFeed").innerHTML=rows.map(e=>{
     const t=new Date(e.ts*1000),hh=String(t.getUTCHours()).padStart(2,"0"),mm=String(t.getUTCMinutes()).padStart(2,"0");
     const base=String(e.symbol||"").replace(/USDT$/,""),mine=UNIV.includes(base);

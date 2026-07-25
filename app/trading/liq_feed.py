@@ -34,11 +34,11 @@ _BUF_MAX = 120
 _HOUR = 3600.0
 
 
-def _parse(raw: str) -> dict | None:
-    """forceOrder 원문 한 건 → 표시용 이벤트. 형식이 다르거나 최소 노셔널
-    미만이면 None (파싱 실패가 피드를 죽이지 않도록 예외는 삼킨다)."""
+def _parse_one(item) -> dict | None:
+    """forceOrder 항목 하나({"o":{...}} 또는 o 딕셔너리 자체) → 표시용 이벤트.
+    형식이 다르거나 최소 노셔널 미만이면 None (예외는 삼킨다)."""
     try:
-        o = json.loads(raw).get("o", {})
+        o = item.get("o", item)          # {"o":{...}} 래핑 또는 o 자체 수용
         price = float(o["ap"] or o["p"])
         qty = float(o["q"])
         notional = price * qty
@@ -56,6 +56,26 @@ def _parse(raw: str) -> dict | None:
         return None
 
 
+def parse_events(raw: str) -> list[dict]:
+    """웹소켓 원문 한 프레임 → 이벤트 목록. Binance 페이로드의 모든 변형을
+    수용한다: 단일 객체 / @arr 배열 / combined-stream {"data": ...} 래핑
+    (초기 구현이 단일 객체만 받아 배열 프레임이 전량 드랍되던 버그의 수정)."""
+    try:
+        d = json.loads(raw)
+    except Exception:                    # noqa: BLE001
+        return []
+    if isinstance(d, dict) and "data" in d:
+        d = d["data"]                    # combined-stream 래핑 해제
+    items = d if isinstance(d, list) else [d]
+    out = []
+    for it in items:
+        if isinstance(it, dict):
+            e = _parse_one(it)
+            if e is not None:
+                out.append(e)
+    return out
+
+
 class LiquidationFeed:
     """백그라운드 데몬 스레드에서 웹소켓을 유지하는 롤링 버퍼. 매매 경로와
     공유하는 상태가 없다 — status() 만 읽힌다."""
@@ -66,6 +86,7 @@ class LiquidationFeed:
         self._thread: threading.Thread | None = None
         self.connected = False
         self.last_error = ""
+        self.rx = 0                      # 수신 프레임 수 — "연결됨인데 0건" 진단용
 
     # ------------------------------------------------------------- ingest
 
@@ -113,8 +134,8 @@ class LiquidationFeed:
                     self.last_error = ""
                     backoff = 5.0
                     async for raw in ws:
-                        evt = _parse(raw)
-                        if evt is not None:
+                        self.rx += 1
+                        for evt in parse_events(raw):
                             self._ingest(evt)
             except Exception as e:       # noqa: BLE001 — 재연결 백오프
                 self.connected = False
@@ -128,7 +149,7 @@ class LiquidationFeed:
         with self._lock:
             rows = list(self._events)[-limit:][::-1]
         return {"connected": self.connected, "last_error": self.last_error,
-                "min_notional_usd": _MIN_NOTIONAL,
+                "min_notional_usd": _MIN_NOTIONAL, "rx": self.rx,
                 "hour": self._hour_totals(), "events": rows}
 
 
