@@ -7,26 +7,44 @@ import json
 import time
 
 from app.trading import liq_feed
-from app.trading.liq_feed import LiquidationFeed, _parse
+from app.trading.liq_feed import LiquidationFeed, parse_events
 
 
-def _raw(sym="BTCUSDT", side="SELL", qty="1.0", ap="50000", t=None):
-    return json.dumps({"e": "forceOrder", "o": {
+def _obj(sym="BTCUSDT", side="SELL", qty="1.0", ap="50000", t=None):
+    return {"e": "forceOrder", "o": {
         "s": sym, "S": side, "q": qty, "p": ap, "ap": ap,
-        "T": int((t if t is not None else time.time()) * 1000)}})
+        "T": int((t if t is not None else time.time()) * 1000)}}
+
+
+def _raw(**kw):
+    return json.dumps(_obj(**kw))
 
 
 def test_parse_sides_and_notional():
     """SELL 체결 = 롱 강제청산, BUY = 숏. 노셔널은 ap×q, 최소 $5K 미만은 버림,
-    깨진 페이로드는 None (피드는 절대 안 죽는다)."""
-    e = _parse(_raw(side="SELL", qty="2.0", ap="3000"))
-    assert e is not None and e["side"] == "LONG_LIQ"
+    깨진 페이로드는 빈 목록 (피드는 절대 안 죽는다)."""
+    (e,) = parse_events(_raw(side="SELL", qty="2.0", ap="3000"))
+    assert e["side"] == "LONG_LIQ"
     assert e["notional_usd"] == 6000.0 and e["symbol"] == "BTCUSDT"
-    assert _parse(_raw(side="BUY"))["side"] == "SHORT_LIQ"
-    assert _parse(_raw(qty="0.01", ap="1000")) is None      # $10 — 먼지 컷
-    assert _parse("not json") is None
-    assert _parse(json.dumps({"o": {"s": "X"}})) is None     # 필드 누락
+    assert parse_events(_raw(side="BUY"))[0]["side"] == "SHORT_LIQ"
+    assert parse_events(_raw(qty="0.01", ap="1000")) == []   # $10 — 먼지 컷
+    assert parse_events("not json") == []
+    assert parse_events(json.dumps({"o": {"s": "X"}})) == []  # 필드 누락
     print("ok  parse (side mapping, notional floor, malformed swallowed)")
+
+
+def test_parse_payload_shapes():
+    """실스트림 페이로드 변형 전부 수용: @arr 배열 / combined-stream data 래핑 /
+    o 없는 항목 혼재 — 단일 객체만 받던 초기 버그(LIVE인데 0건)의 회귀 방지."""
+    arr = json.dumps([_obj(sym="ETHUSDT"), _obj(sym="SUIUSDT", side="BUY"),
+                      {"e": "other"}])
+    evts = parse_events(arr)
+    assert [e["symbol"] for e in evts] == ["ETHUSDT", "SUIUSDT"]
+    wrapped = json.dumps({"stream": "!forceOrder@arr", "data": _obj(sym="SOLUSDT")})
+    assert parse_events(wrapped)[0]["symbol"] == "SOLUSDT"
+    wrapped_arr = json.dumps({"data": [_obj(sym="XRPUSDT")]})
+    assert parse_events(wrapped_arr)[0]["symbol"] == "XRPUSDT"
+    print("ok  payload shapes (array, combined-stream wrap, mixed items)")
 
 
 def test_buffer_and_hour_totals():
@@ -73,6 +91,7 @@ def test_module_import_does_not_start_thread():
 
 def main():
     test_parse_sides_and_notional()
+    test_parse_payload_shapes()
     test_buffer_and_hour_totals()
     test_status_view_offline()
     test_module_import_does_not_start_thread()
