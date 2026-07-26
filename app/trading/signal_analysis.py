@@ -19,13 +19,16 @@ from __future__ import annotations
 from .store import SIGNAL_RESULTS, _CF_MIN_RESOLVED
 
 # 종목별 백테스트 baseline expR — 매핑된 전략의 12mo 게이트 스캔값 (docs/phase2_results.md,
-# 2026-07-20 재스캔). "엣지가 유지되면 라이브가 도달해야 할 기대값"의 기준선.
+# 2026-07-22 스캔, A/B 로 2회 동일 재현). "엣지가 유지되면 라이브가 도달해야 할
+# 기대값"의 기준선. 주요 갱신: ETH 0.80→0.138 · AVAX 0.793→0.083 (구값은 소표본/
+# 이전 창 아웃라이어 — 구 기준선 유지 시 라이브가 최신 백테스트보다 좋아도
+# 'eroding' 오경보가 나는 방향 오류가 있었다).
 BACKTEST_BASELINE_R: dict[str, float] = {
-    "ETH": 0.80, "AVAX": 0.793, "HYPE": 0.416, "ARB": 0.325, "SUI": 0.31,
-    "DOT": 0.261, "ZEC": 0.241, "POPCAT": 0.215, "RENDER": 0.211, "WLD": 0.21,
-    "XRP": 0.203, "TAO": 0.198, "PNUT": 0.196, "TRUMP": 0.192, "S": 0.192,
-    "SOL": 0.185, "OP": 0.159, "STX": 0.146, "LDO": 0.137, "JTO": 0.134,
-    "ALGO": 0.133, "NEAR": 0.116,
+    "HYPE": 0.416, "ARB": 0.325, "SUI": 0.31, "DOT": 0.261, "ZEC": 0.24,
+    "POPCAT": 0.215, "RENDER": 0.211, "WLD": 0.21, "XRP": 0.203, "TAO": 0.198,
+    "PNUT": 0.196, "S": 0.192, "TRUMP": 0.191, "SOL": 0.184, "OP": 0.159,
+    "STX": 0.146, "ETH": 0.138, "LDO": 0.136, "JTO": 0.133, "ALGO": 0.133,
+    "NEAR": 0.115, "AVAX": 0.083,
 }
 # 라이브 expR 이 baseline 의 이 분율 미만이면 'eroding' — 감쇠 경보 문턱(모니터링
 # 휴리스틱, 매매 임계값 아님). 0 미만은 'decaying'(엣지 소멸)로 더 강하게.

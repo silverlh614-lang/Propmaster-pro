@@ -1157,7 +1157,7 @@ function drawChart(){
     const fd=window._feed||{};
     let msg="봉 워밍업 중… kline 수집 중";
     if(fd.source&&fd.source!=="none") msg="봉 워밍업 중… ("+fd.source+" 연결됨, 캔들 대기)";
-    else if(fd.last_error) msg="⚠ kline 소스 연결 실패 — "+fd.last_error;
+    else if(fd.last_error) msg="⚠ kline 소스 연결 실패 — "+String(fd.last_error).slice(0,80);
     g.fillStyle=fd.last_error?"#ff6b74":"#4e5864";g.font="12px monospace";g.fillText(msg,16,H/2);return;}
   const cs=data.candles, ema=data.ema||[];
   const ov=window._overlay||{};
@@ -1371,7 +1371,11 @@ async function refresh(){
     fc.className="v"+(col.divergence?" neg":"");}
   $("fAtr").textContent=dg&&dg.atr!=null?fmt(dg.atr,2):"–";
   $("fBars").textContent=(col.entry_bars||0)+" / "+(col.htf_bars||0);
-  $("fPolls").textContent=col.polls||0;$("fErr").textContent=col.last_error||"없음";
+  $("fPolls").textContent=col.polls||0;
+  // 에러는 요약만 표시(전문은 title 툴팁) — raw 스택이 패널을 밀어내지 않게
+  const fe=$("fErr"),err=col.last_error||"";
+  fe.textContent=err?(err.length>48?err.slice(0,48)+"…":err):"없음";
+  fe.title=err;
 
   // ticker
   const dirTxt=dg?dg.allowed:"–";

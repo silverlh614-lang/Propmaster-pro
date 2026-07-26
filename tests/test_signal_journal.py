@@ -243,18 +243,19 @@ def test_baseline_anchored_drift():
     assert _drift_verdict(12, -0.1, 0.80) == "decaying"     # 음수 — 소멸
     assert _drift_verdict(5, 0.30, 0.80) == "insufficient"  # 표본 부족
     assert _drift_verdict(12, 0.30, None) == "holding"      # baseline 없음 → 0 기준
-    # forward_breakdown 이 baseline_r 을 싣고 eroding 판정 (ETH baseline 0.80)
+    # forward_breakdown 이 baseline_r 을 싣고 eroding 판정 (HYPE baseline 0.416 —
+    # 2026-07-22 스캔 갱신 후 최대 baseline. ETH 는 0.138 로 재측정되어 이동)
     j = _fresh()
 
     def rec(o, r):
-        j.append({"symbol": "ETH", "strategy": "prop_breakout", "side": "LONG",
+        j.append({"symbol": "HYPE", "strategy": "vbo", "side": "LONG",
                   "signal_type": "X", "blocked": "", "entered": True,
                   "outcome": o, "r_result": r})
     for _ in range(5): rec("WIN", 2.0)
-    for _ in range(7): rec("LOSS", -1.0)            # er = (10-7)/12 = 0.25 < 0.40
-    b = forward_breakdown(j._rows(), "symbol")["ETH"]
-    assert b["baseline_r"] == BACKTEST_BASELINE_R["ETH"] == 0.80
-    assert 0 < b["expectancy_r"] < 0.40 and b["verdict"] == "eroding", b
+    for _ in range(8): rec("LOSS", -1.0)            # er = (10-8)/13 ≈ 0.154 < 0.208
+    b = forward_breakdown(j._rows(), "symbol")["HYPE"]
+    assert b["baseline_r"] == BACKTEST_BASELINE_R["HYPE"] == 0.416
+    assert 0 < b["expectancy_r"] < 0.416 * 0.5 and b["verdict"] == "eroding", b
     print("ok  baseline-anchored drift (eroding vs decaying vs holding)")
 
 
