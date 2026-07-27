@@ -202,7 +202,9 @@ class Journal:
                 close_reason(r.get("reason", "")),
                 {"trades": 0, "wins": 0, "pnl": 0.0, "rs": []})
             b["trades"] += 1
-            b["wins"] += 1 if r["result"] == "WIN" else 0
+            # 승 = 순손익 양수 (result 라벨 아님) — CLOSED(부분익절+트레일, 보통
+            # 수익)가 패로 집계돼 스탑 버킷 승률이 왜곡되던 것을 바로잡는다.
+            b["wins"] += 1 if float(r.get("pnl_usd") or 0) > 0 else 0
             b["pnl"] += float(r["pnl_usd"] or 0)
             if r["r_multiple"] not in ("", None):
                 b["rs"].append(float(r["r_multiple"]))
