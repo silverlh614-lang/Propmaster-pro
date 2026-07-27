@@ -758,17 +758,6 @@
       <div class="pbody"><div class="feed" id="feed"><div class="note">거래 없음</div></div></div>
     </section>
 
-    <!-- 청산 이벤트 (표시 전용 참고 정보 — 매매 판단에 미사용) -->
-    <section data-panel="liq" class="panel col-4">
-      <div class="phead"><span class="mk">◆</span> 청산 이벤트 <span class="sp"></span>
-        <span class="r muted" id="liqState" style="font-size:10px">연결 중…</span></div>
-      <div class="pbody">
-        <div class="subline" id="liqHour" style="margin-bottom:7px">–</div>
-        <div class="feed" id="liqFeed"><div class="note">강제청산 대기 — Binance 선물 전 종목,
-          $5K 이상만 표시. <b>참고 전용</b>이며 매매 판단에 쓰이지 않습니다.</div></div>
-      </div>
-    </section>
-
     <!-- 시그널 피드 · 전진검증 -->
     <section data-panel="signals" class="panel full">
       <div class="phead"><span class="mk">◆</span> 시그널 피드 · 전진검증 <span class="sp"></span>
@@ -782,6 +771,7 @@
     <!-- 승패 분석: 청산사유 · 차단 반사실 · MFE/MAE -->
     <section data-panel="analysis" class="panel full">
       <div class="phead"><span class="mk">◆</span> 승패 분석 <span class="sp"></span>
+        <span class="r"><a class="dl" onclick="exportAnalysis()" title="현재 분석 결과를 리포트 파일로 저장">📄 결과 출력</a></span>
         <span class="r muted" style="font-size:10px">백테스트 스윕 가설 재료 · 손튜닝 아님</span></div>
       <div class="pbody">
         <div class="asub">청산 사유별 승패 <span class="muted" style="font-weight:400;text-transform:none">— 손실이 어디서 오나</span></div>
@@ -1430,7 +1420,9 @@ async function loadJournal(){let d;try{d=await api("/api/trading/trades?limit=12
 // ---- 승패 분석: 청산 사유별 승패 분해 (by_reason) ----
 const REASON_LABEL={stop:"스탑",time_stop:"시간정지",reset_flatten:"리셋청산",
   prop_breach:"프롭브리치",prop_guard:"프롭가드",manual:"수동",other:"기타"};
+let _lastBr={};
 function renderByReason(br){
+  _lastBr=br||{};
   const rows=Object.entries(br);
   $("brBody").innerHTML=rows.length?rows.map(([name,b])=>{
     const wr=b.win_rate==null?"–":(b.win_rate*100).toFixed(0)+"%";
@@ -1500,9 +1492,11 @@ function renderSigFeed(){
       `<span class="fd"><b>${_sesc(r.symbol||"")} ${side}</b> ${fmt(r.entry,4)} → 목 ${fmt(r.target,4)} · 손 ${fmt(r.stop,4)} ${rr}${blk} <span class="scaret">${open?"▾":"▸"}</span></span></div>${det}`;
   }).join("");
 }
+let _lastStats={};
 async function loadSignals(){
   let d;try{d=await api("/api/trading/signals?limit=80");}catch(e){return;}
   const s=d.stats||{},rows=d.rows||[];
+  _lastStats=s;
   const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const wr=s.win_rate==null?"–":(s.win_rate*100).toFixed(0)+"%";
   const ex=s.expectancy_r==null?"–":(s.expectancy_r>=0?"+":"")+fmt(s.expectancy_r,2)+"R";
@@ -1550,7 +1544,9 @@ const VERDICT={gate_skipping_winners:["승자 유실 의심","bad"],
 const _erN=v=>v==null?"–":(v>=0?"+":"")+fmt(v,2)+"R";
 const _erC=v=>v==null?"muted":v>0?"up":v<0?"dn":"muted";
 const _wr=v=>v==null?"–":(v*100).toFixed(0)+"%";
+let _lastCf={};
 function renderCounterfactual(cf){
+  _lastCf=cf||{};
   const e=cf.entered||{},b=cf.blocked||{};
   const v=VERDICT[cf.verdict]||["–","neu"],vt=$("cfVerdict");
   vt.className="tag "+v[1];vt.textContent=v[0];
@@ -1577,6 +1573,42 @@ function renderAnalysisHint(cf){
   else if(v==="gate_dodging_losers")h="✅ 막힌 시그널이 −기대값 — 관문이 패자를 회피 중(계좌 보호). 정상.";
   else if(v==="insufficient")h="차단 확정 표본이 10건 미만 — 반사실 판단 보류(노이즈 방지).";
   $("aHint").textContent=h;
+}
+// ---- 승패 분석 결과 출력: 현재 패널 데이터 → 마크다운 리포트 다운로드 ----
+function exportAnalysis(){
+  const R=v=>v==null?"–":(v>=0?"+":"")+Number(v).toFixed(2)+"R";
+  const P=v=>v==null?"–":(v*100).toFixed(0)+"%";
+  const now=new Date(),pad=n=>String(n).padStart(2,"0");
+  const ts=`${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())} UTC`;
+  const s=_lastStats||{},cf=_lastCf||{},e=cf.entered||{},b=cf.blocked||{},x=_lastExc||{};
+  const L=[`# 승패 분석 리포트 — ${ts}`,"",
+    "## 전진검증 요약",
+    `- 전진 승률 **${P(s.win_rate)}** · 라이브 기대값 **${R(s.expectancy_r)}**`,
+    `- 확정 ${s.wins||0}W / ${s.losses||0}L · 미결 ${s.open||0} · 진입 ${s.entered||0} / 차단 ${s.blocked||0}`,"",
+    "## 청산 사유별 승패","| 사유 | 건수 | 승/패 | 승률 | PnL$ | 평균R |","|---|---|---|---|---|---|"];
+  const brRows=Object.entries(_lastBr||{});
+  if(brRows.length)brRows.forEach(([k,v])=>L.push(`| ${REASON_LABEL[k]||k} | ${v.trades} | ${v.wins}/${v.losses} | ${P(v.win_rate)} | ${(v.pnl_usd>=0?"+":"")+Number(v.pnl_usd||0).toFixed(2)} | ${R(v.avg_r)} |`));
+  else L.push("| (확정 거래 없음) | | | | | |");
+  L.push("","## 차단 시그널 반사실",
+    `- 판정: **${(VERDICT[cf.verdict]||["–"])[0]}**`,
+    `- 진입 기대값 ${R(e.expectancy_r)} (승률 ${P(e.win_rate)}, ${e.resolved||0}건) · 차단 기대값 ${R(b.expectancy_r)} (승률 ${P(b.win_rate)}, ${b.resolved||0}건)`,"",
+    "## MFE / MAE",
+    `- 진 거래 평균 MFE ${R(x.loss_avg_mfe_r)} · 이긴 거래 평균 MAE ${R(x.win_avg_mae_r)}`,
+    `- 전체 MFE ${R(x.avg_mfe_r)} / MAE ${R(x.avg_mae_r)} · 표본 ${x.samples||0}`);
+  for(const [dim,label] of [["symbol","종목"],["strategy","전략"]]){
+    const g=_bdData[dim]||{},rows=Object.entries(g);
+    L.push("",`## 라이브 엣지 분해 (${label}별)`,
+      `| ${label} | 확정 | 승/패 | 승률 | 라이브R | 기준R | 상태 |`,"|---|---|---|---|---|---|---|");
+    if(rows.length)rows.forEach(([k,v])=>L.push(`| ${k} | ${v.resolved??v.trades??0} | ${v.wins||0}/${v.losses||0} | ${P(v.win_rate)} | ${R(v.expectancy_r)} | ${v.baseline_r!=null?R(v.baseline_r):"–"} | ${v.verdict||"–"} |`));
+    else L.push(`| (확정 시그널 없음) | | | | | | |`);
+  }
+  L.push("",`> 힌트: ${$("aHint").textContent||"없음"}`,
+    "> 본 리포트는 구조화된 의견이며 투자 조언이 아님. 파라미터 변경은 백테스트 게이트로만.");
+  const blob=new Blob([L.join("\n")],{type:"text/markdown"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download=`analysis_${now.getUTCFullYear()}${pad(now.getUTCMonth()+1)}${pad(now.getUTCDate())}_${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}.md`;
+  a.click();URL.revokeObjectURL(a.href);
+  notify("brand","결과 출력","승패 분석 리포트를 저장했습니다 (.md)");
 }
 // 가설 → 백테스트 브리지: MFE/MAE 신호를 백테스트 오버라이드(ATR·R:R)로 프리필하고
 // 백테스트 패널로 이동. 라이브 값을 바꾸는 게 아니라 게이트에 넣을 가설을 세팅할 뿐.
@@ -1875,39 +1907,12 @@ if(localStorage.getItem("phasewarn_v1")==="1"){
   $("phaseWarn").classList.add("collapsed");$("phaseWarnBtn").textContent="펼치기";
 }
 
-// ---- 청산 이벤트 (표시 전용 — 매매 판단에 미사용) ----
-const _liqUsd=v=>v>=1e6?"$"+(v/1e6).toFixed(2)+"M":v>=1e3?"$"+(v/1e3).toFixed(0)+"K":"$"+v.toFixed(0);
-async function loadLiq(){
-  let d;try{d=await api("/api/trading/liquidations?limit=30");}catch(e){return;}
-  $("liqState").innerHTML=d.connected?'<span class="up">● LIVE</span>':'<span class="muted">○ 끊김</span>';
-  const h=d.hour||{};
-  $("liqHour").innerHTML=`최근 1시간 <b>${h.count||0}건</b> · `
-    +`롱청산 <b class="dn">${_liqUsd(h.long_usd||0)}</b> · 숏청산 <b class="up">${_liqUsd(h.short_usd||0)}</b>`;
-  const rows=d.events||[];
-  if(!rows.length){
-    // 진단 힌트: 연결됐고 프레임은 오는데 표시 0 = 전부 $5K 미만(정상) —
-    // 수신 0이면 스트림 자체가 조용하거나 서버 재기동 직후
-    if(d.connected)$("liqFeed").innerHTML=`<div class="note">수신 ${d.rx||0}프레임 · `
-      +`$${((d.min_notional_usd||5000)/1000)}K 이상 청산 없음 — <b>참고 전용</b>, 매매 판단에 쓰이지 않습니다.</div>`;
-    return;
-  }
-  $("liqFeed").innerHTML=rows.map(e=>{
-    const t=new Date(e.ts*1000),hh=String(t.getUTCHours()).padStart(2,"0"),mm=String(t.getUTCMinutes()).padStart(2,"0");
-    const base=String(e.symbol||"").replace(/USDT$/,""),mine=UNIV.includes(base);
-    const lab=e.side==="LONG_LIQ"?'<span class="dn">롱청산</span>':'<span class="up">숏청산</span>';
-    return `<div class="frow"><span class="ts">${hh}:${mm}</span>`
-      +`<span class="fd">${mine?"<b>":""}${base}${mine?"</b>":""} ${lab} `
-      +`<b>${_liqUsd(e.notional_usd||0)}</b> @ ${fmt(e.price,4)}</span></div>`;
-  }).join("");
-}
-
 renderBell();loadConfig();loadPropPlans();refresh();loadCandles();loadJournal();
 setInterval(refresh,2500);
 setInterval(loadCandles,7000);
 setInterval(loadJournal,6000);
 setInterval(loadSignals,6000);loadSignals();
 setInterval(loadNotify,30000);loadNotify();
-setInterval(loadLiq,8000);loadLiq();
 </script>
 </body>
 </html>
