@@ -1560,11 +1560,14 @@ function renderCounterfactual(cf){
 let _lastExc={};
 function renderExcursion(x){
   _lastExc=x||{};
-  const rn=v=>v==null?"–":fmt(v,2)+"R";
+  // MFE/MAE 는 크기(magnitude)로 저장됨 — MAE 는 '불리 방향'이므로 −부호로 표기
+  // (예전 +0.34R 표기가 유리 이동처럼 읽히던 혼란 제거)
+  const rn=v=>v==null?"–":"+"+fmt(Math.abs(v),2)+"R";
+  const rm=v=>v==null?"–":"-"+fmt(Math.abs(v),2)+"R";
   $("excBox").innerHTML=
-    `<div class="sv"><span class="k">진 거래 평균 MFE</span><span class="n">${rn(x.loss_avg_mfe_r)}</span></div>`+
-    `<div class="sv"><span class="k">이긴 거래 평균 MAE</span><span class="n">${rn(x.win_avg_mae_r)}</span></div>`+
-    `<div class="sv"><span class="k">전체 MFE / MAE</span><span class="n">${rn(x.avg_mfe_r)} / ${rn(x.avg_mae_r)}</span></div>`+
+    `<div class="sv"><span class="k">진 거래 평균 MFE</span><span class="n up">${rn(x.loss_avg_mfe_r)}</span></div>`+
+    `<div class="sv"><span class="k">이긴 거래 평균 MAE</span><span class="n dn">${rm(x.win_avg_mae_r)}</span></div>`+
+    `<div class="sv"><span class="k">전체 MFE / MAE</span><span class="n">${rn(x.avg_mfe_r)} / ${rm(x.avg_mae_r)}</span></div>`+
     `<div class="sv"><span class="k">표본</span><span class="n">${x.samples||0}</span></div>`;
 }
 function renderAnalysisHint(cf){
@@ -1592,9 +1595,9 @@ function exportAnalysis(){
   L.push("","## 차단 시그널 반사실",
     `- 판정: **${(VERDICT[cf.verdict]||["–"])[0]}**`,
     `- 진입 기대값 ${R(e.expectancy_r)} (승률 ${P(e.win_rate)}, ${e.resolved||0}건) · 차단 기대값 ${R(b.expectancy_r)} (승률 ${P(b.win_rate)}, ${b.resolved||0}건)`,"",
-    "## MFE / MAE",
-    `- 진 거래 평균 MFE ${R(x.loss_avg_mfe_r)} · 이긴 거래 평균 MAE ${R(x.win_avg_mae_r)}`,
-    `- 전체 MFE ${R(x.avg_mfe_r)} / MAE ${R(x.avg_mae_r)} · 표본 ${x.samples||0}`);
+    "## MFE / MAE (MFE=유리 최대이동 +, MAE=불리 최대이동 −)",
+    `- 진 거래 평균 MFE ${x.loss_avg_mfe_r==null?"–":"+"+Number(Math.abs(x.loss_avg_mfe_r)).toFixed(2)+"R"} · 이긴 거래 평균 MAE ${x.win_avg_mae_r==null?"–":"-"+Number(Math.abs(x.win_avg_mae_r)).toFixed(2)+"R"}`,
+    `- 전체 MFE ${x.avg_mfe_r==null?"–":"+"+Number(Math.abs(x.avg_mfe_r)).toFixed(2)+"R"} / MAE ${x.avg_mae_r==null?"–":"-"+Number(Math.abs(x.avg_mae_r)).toFixed(2)+"R"} · 표본 ${x.samples||0}`);
   for(const [dim,label] of [["symbol","종목"],["strategy","전략"]]){
     const g=_bdData[dim]||{},rows=Object.entries(g);
     L.push("",`## 라이브 엣지 분해 (${label}별)`,
