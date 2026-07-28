@@ -214,6 +214,8 @@ def test_signal_alert_dedup_in_symbolbot():
         def __init__(self, n): self.notifier = n; self._last_signal_side = None
         def _signal_risk(self): return None, None
     _Bot._signal_alert = SymbolBot._signal_alert
+    _Bot._seed_signal_dedup = SymbolBot._seed_signal_dedup
+    _Bot._SEED_WINDOW_SEC = SymbolBot._SEED_WINDOW_SEC
 
     n = _N(); b = _Bot(n)
     lg, sh = _Sig("LONG", "d", 1, 0.9), _Sig("SHORT", "d", 1, 1.1)
@@ -223,7 +225,27 @@ def test_signal_alert_dedup_in_symbolbot():
     b._signal_alert(lg)      # None→LONG  재발송
     b._signal_alert(sh)      # LONG→SHORT 발송
     assert n.sigs == ["LONG", "LONG", "SHORT"]
-    print("ok  signal alert dedup (episode-based, re-fires on flip/clear)")
+
+    # 재시작 디둡: 저널의 90분 내 같은 방향 기록을 복원해 중복 발송/기록을 막는다
+    import datetime as dt
+    now = dt.datetime.now(dt.timezone.utc)
+
+    class _SJ:
+        def __init__(self, age_sec): self.age = age_sec
+        def tail(self, n_, symbol=None):
+            ts = (now - dt.timedelta(seconds=self.age)).isoformat(timespec="seconds")
+            return [{"ts": ts, "side": "LONG"}]
+    fresh = _Bot(_N())                        # 재시작 시뮬 — 인메모리 상태 소실
+    fresh.signal_journal = _SJ(600)           # 10분 전 LONG 기록
+    fresh._signal_alert(lg)                   # 복원된 LONG 과 동일 → 억제
+    assert fresh.notifier.sigs == []
+    fresh._signal_alert(sh)                   # 방향 전환은 정상 발송
+    assert fresh.notifier.sigs == ["SHORT"]
+    stale = _Bot(_N())
+    stale.signal_journal = _SJ(7200)          # 2시간 전 — 창 밖, 복원 안 함
+    stale._signal_alert(lg)
+    assert stale.notifier.sigs == ["LONG"]
+    print("ok  signal alert dedup (episode + restart-seed from journal)")
 
 
 # ------------------------------------------------------------- breach alert
