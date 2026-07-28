@@ -234,12 +234,36 @@ class SymbolBot:
         rp = round(ru / eq * 100.0, 2) if (ru and eq > 0) else None
         return rp, ru
 
+    _SEED_WINDOW_SEC = 5400.0            # 재시작 디둡 복원 창 (90분)
+
+    def _seed_signal_dedup(self) -> None:
+        """재시작 후 첫 알림 전에 저널의 마지막 시그널 방향을 복원한다 — 인메모리
+        에피소드 디둡이 리셋돼 재배포마다 같은 시그널이 중복 기록되던 버그의 수정
+        (배포 데이터에서 비정각 재시작 타임스탬프의 중복 10건 확인). 마지막 기록이
+        90분보다 오래됐으면 복원하지 않는다(다운타임 중 에피소드 소멸 가능성)."""
+        self._sig_seeded = True
+        if self.signal_journal is None or self._last_signal_side is not None:
+            return
+        try:
+            import datetime as _dt
+            rows = self.signal_journal.tail(1, symbol=self.spec.key)
+            if not rows:
+                return
+            last = _dt.datetime.fromisoformat(rows[0]["ts"])
+            age = (_dt.datetime.now(_dt.timezone.utc) - last).total_seconds()
+            if 0 <= age <= self._SEED_WINDOW_SEC:
+                self._last_signal_side = rows[0].get("side") or None
+        except Exception:                # noqa: BLE001 — 복원 실패는 알림만 중복될 뿐
+            pass
+
     def _signal_alert(self, sig, note: str = "") -> None:
         """전략 조건이 충족되는 순간 텔레그램으로 시그널을 즉시 푸시한다 — 실제 체결
         (리스크 관문·동시포지션·예산 캡에 막힐 수 있음)과 무관하게. 목표가는 rr_target
         기하로 계산하고, 진입이 막혔으면 그 사유를 함께 싣는다. 에피소드 디둡: 같은
         방향이 여러 봉 이어져도 1회, 방향 전환·재출현 시 재발송. 알림 실패는 매매 무영향."""
         side = sig.side.value if sig else None
+        if not getattr(self, "_sig_seeded", False):
+            self._seed_signal_dedup()    # 재시작 시 저널에서 에피소드 상태 복원
         if side == self._last_signal_side:
             return
         self._last_signal_side = side
