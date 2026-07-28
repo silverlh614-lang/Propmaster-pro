@@ -188,9 +188,9 @@ class Journal:
         return {s: self.aggregate(symbol=s) for s in symbols}
 
     def by_reason(self, symbol: str | None = None) -> dict:
-        """청산 사유별 승패 분해 — settled CLOSE 를 정규화 사유(close_reason)로
-        그룹핑해 건수·승/패·승률·손익·평균R 을 낸다. 손실이 하드스탑·시간정지·
-        리셋청산·프롭브리치 어디서 오는지 가른다 (백테스트 스윕 가설 재료)."""
+        """청산 사유별 승패 분해 (백테스트 스윕 가설 재료). 승=순손익>0.
+        엔진 청산은 거의 전부 'stop hit'라 스탑을 둘로 가른다 — 수익이면
+        stop_trail(부분익절 후 트레일 청산), 손실이면 stop(하드스탑)."""
         rows = self._rows()
         if symbol:
             rows = [r for r in rows if r["symbol"] == symbol.upper()]
@@ -198,14 +198,14 @@ class Journal:
         for r in rows:
             if r["result"] not in SETTLED_RESULTS:
                 continue
+            pnl = float(r.get("pnl_usd") or 0)
+            name = close_reason(r.get("reason", ""))
+            name = "stop_trail" if (name == "stop" and pnl > 0) else name
             b = buckets.setdefault(
-                close_reason(r.get("reason", "")),
-                {"trades": 0, "wins": 0, "pnl": 0.0, "rs": []})
+                name, {"trades": 0, "wins": 0, "pnl": 0.0, "rs": []})
             b["trades"] += 1
-            # 승 = 순손익 양수 (result 라벨 아님) — CLOSED(부분익절+트레일, 보통
-            # 수익)가 패로 집계돼 스탑 버킷 승률이 왜곡되던 것을 바로잡는다.
-            b["wins"] += 1 if float(r.get("pnl_usd") or 0) > 0 else 0
-            b["pnl"] += float(r["pnl_usd"] or 0)
+            b["wins"] += 1 if pnl > 0 else 0
+            b["pnl"] += pnl
             if r["r_multiple"] not in ("", None):
                 b["rs"].append(float(r["r_multiple"]))
         out = {}

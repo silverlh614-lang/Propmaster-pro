@@ -29,9 +29,12 @@ def test_by_reason_breakdown():
         j.append({"symbol": sym, "event": "CLOSE", "result": res,
                   "pnl_usd": pnl, "r_multiple": r, "reason": note})
     br = j.by_reason()
-    assert list(br)[0] == "stop", br           # 최다 건수 버킷이 앞
-    assert br["stop"]["trades"] == 3 and br["stop"]["wins"] == 2, br["stop"]
-    assert br["stop"]["losses"] == 1 and round(br["stop"]["pnl_usd"], 2) == 0.3
+    # 스탑은 손익으로 분리: 수익 청산(WIN 3.20 + CLOSED 2.10) → stop_trail,
+    # 손실(-5.00) → stop(하드스탑). 최다 건수 버킷(stop_trail 2건)이 앞.
+    assert list(br)[0] == "stop_trail", br
+    assert br["stop_trail"]["trades"] == 2 and br["stop_trail"]["wins"] == 2
+    assert round(br["stop_trail"]["pnl_usd"], 2) == 5.3
+    assert br["stop"]["trades"] == 1 and br["stop"]["losses"] == 1
     assert br["time_stop"]["trades"] == 1 and br["reset_flatten"]["pnl_usd"] == -2.87
     eth = j.by_reason(symbol="ETH")            # 심볼 필터: ETH 는 리셋청산 1건만
     assert set(eth) == {"reset_flatten"} and eth["reset_flatten"]["trades"] == 1, eth
