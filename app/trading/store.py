@@ -166,7 +166,8 @@ class Journal:
         if symbol:
             rows = [r for r in rows if r["symbol"] == symbol.upper()]
         settled = [r for r in rows if r["result"] in SETTLED_RESULTS]
-        wins = sum(1 for r in settled if r["result"] == "WIN")
+        # 승=순손익>0 (by_reason 동일) — CLOSED(트레일 수익)가 패로 잡히던 버그 수정
+        wins = sum(1 for r in settled if float(r.get("pnl_usd") or 0) > 0)
         pnl = sum(float(r["pnl_usd"] or 0) for r in settled)
         fees = sum(float(r["fee_usd"] or 0) for r in rows)
         rs = [float(r["r_multiple"]) for r in settled if r["r_multiple"] not in ("", None)]
@@ -188,9 +189,8 @@ class Journal:
 
     def by_reason(self, symbol: str | None = None) -> dict:
         """청산 사유별 승패 분해 — settled CLOSE 를 정규화 사유(close_reason)로
-        그룹핑해 건수·승/패·승률·손익·평균R 을 낸다. '왜 이겼나/졌나'의 인과
-        절단면: 손실이 하드스탑에서 오는지·시간정지·리셋청산·프롭브리치에서
-        오는지를 가른다 (임계값 조정이 아니라 다음 백테스트 스윕의 가설 재료)."""
+        그룹핑해 건수·승/패·승률·손익·평균R 을 낸다. 손실이 하드스탑·시간정지·
+        리셋청산·프롭브리치 어디서 오는지 가른다 (백테스트 스윕 가설 재료)."""
         rows = self._rows()
         if symbol:
             rows = [r for r in rows if r["symbol"] == symbol.upper()]
