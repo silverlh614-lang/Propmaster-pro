@@ -1418,7 +1418,8 @@ async function loadJournal(){let d;try{d=await api("/api/trading/trades?limit=12
 }
 
 // ---- 승패 분석: 청산 사유별 승패 분해 (by_reason) ----
-const REASON_LABEL={stop:"스탑",time_stop:"시간정지",reset_flatten:"리셋청산",
+const REASON_LABEL={stop:"하드스탑(손절)",stop_trail:"트레일 청산(익절)",
+  time_stop:"시간정지",reset_flatten:"리셋청산",
   prop_breach:"프롭브리치",prop_guard:"프롭가드",manual:"수동",other:"기타"};
 let _lastBr={};
 function renderByReason(br){
@@ -1501,9 +1502,20 @@ async function loadSignals(){
   const wr=s.win_rate==null?"–":(s.win_rate*100).toFixed(0)+"%";
   const ex=s.expectancy_r==null?"–":(s.expectancy_r>=0?"+":"")+fmt(s.expectancy_r,2)+"R";
   const excls=s.expectancy_r>0?"up":s.expectancy_r<0?"dn":"muted";
+  // 최근 7일 창 — 누적 통계는 과거 물량이 앵커라 최근 레짐 변화가 안 보임
+  const cut=Date.now()-7*86400e3;
+  const rec=rows.filter(r=>["WIN","LOSS","EXPIRED"].includes((r.outcome||"").toUpperCase())
+    &&r.resolved_ts&&new Date(r.resolved_ts).getTime()>=cut);
+  const rw=rec.filter(r=>r.outcome==="WIN").length;
+  const rrs=rec.map(r=>Number(r.r_result)).filter(v=>!isNaN(v));
+  const rex=rrs.length?rrs.reduce((a,b)=>a+b,0)/rrs.length:null;
+  const w7=rec.length?`${(rw/rec.length*100).toFixed(0)}% <span class="muted" style="font-size:10px">(${rec.length})</span>`:"–";
+  const e7=rex==null?"–":(rex>=0?"+":"")+fmt(rex,2)+"R";
   $("sigStat").innerHTML=
     `<div class="sv"><span class="k">전진 승률</span><span class="n">${wr}</span></div>`+
     `<div class="sv"><span class="k">기대값(라이브)</span><span class="n ${excls}">${ex}</span></div>`+
+    `<div class="sv"><span class="k">최근7일 승률</span><span class="n">${w7}</span></div>`+
+    `<div class="sv"><span class="k">최근7일 기대값</span><span class="n ${rex>0?'up':rex<0?'dn':'muted'}">${e7}</span></div>`+
     `<div class="sv"><span class="k">확정</span><span class="n">${s.wins||0}W / ${s.losses||0}L</span></div>`+
     `<div class="sv"><span class="k">미결</span><span class="n">${s.open||0}</span></div>`+
     `<div class="sv"><span class="k">진입 / 차단</span><span class="n">${s.entered||0} / ${s.blocked||0}</span></div>`;
