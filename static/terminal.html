@@ -774,10 +774,10 @@
         <span class="r"><a class="dl" onclick="exportAnalysis()" title="현재 분석 결과를 리포트 파일로 저장">📄 결과 출력</a></span>
         <span class="r muted" style="font-size:10px">백테스트 스윕 가설 재료 · 손튜닝 아님</span></div>
       <div class="pbody">
-        <div class="asub">청산 사유별 승패 <span class="muted" style="font-weight:400;text-transform:none">— 손실이 어디서 오나</span></div>
+        <div class="asub">청산 경로 분해 <span class="muted" style="font-weight:400;text-transform:none">— 어디서 벌고 어디서 잃나 (경로=결과라 승률 열은 무의미, 비중이 신호)</span></div>
         <div class="scroll"><table>
-          <thead><tr><th class="l">사유</th><th>건수</th><th>승/패</th><th>승률</th><th>PnL$</th><th>평균R</th></tr></thead>
-          <tbody id="brBody"><tr><td class="l muted" colspan="6">확정 거래 없음</td></tr></tbody>
+          <thead><tr><th class="l">경로</th><th>건수</th><th>비중</th><th>PnL$</th><th>평균R</th></tr></thead>
+          <tbody id="brBody"><tr><td class="l muted" colspan="5">확정 거래 없음</td></tr></tbody>
         </table></div>
         <div class="asub">차단 시그널 반사실 <span id="cfVerdict" class="tag neu">–</span>
           <span class="muted" style="font-weight:400;text-transform:none">— 관문이 승자를 버리나 패자를 피하나</span></div>
@@ -1417,7 +1417,8 @@ async function loadJournal(){let d;try{d=await api("/api/trading/trades?limit=12
   renderByReason(d.by_reason||{});
 }
 
-// ---- 승패 분석: 청산 사유별 승패 분해 (by_reason) ----
+// ---- 승패 분석: 청산 경로 분해 (by_reason) — 경로=결과라 승률은 동어반복,
+// 정보는 비중(트레일로 구조된 비율)과 손익 흐름에 있다 (사용자 지적 반영)
 const REASON_LABEL={stop:"하드스탑(손절)",stop_trail:"트레일 청산(익절)",
   time_stop:"시간정지",reset_flatten:"리셋청산",
   prop_breach:"프롭브리치",prop_guard:"프롭가드",manual:"수동",other:"기타"};
@@ -1425,14 +1426,15 @@ let _lastBr={};
 function renderByReason(br){
   _lastBr=br||{};
   const rows=Object.entries(br);
+  const tot=rows.reduce((a,[,b])=>a+(b.trades||0),0);
   $("brBody").innerHTML=rows.length?rows.map(([name,b])=>{
-    const wr=b.win_rate==null?"–":(b.win_rate*100).toFixed(0)+"%";
+    const sh=tot?((b.trades/tot)*100).toFixed(0)+"%":"–";
     const ar=b.avg_r==null?"–":(b.avg_r>=0?"+":"")+fmt(b.avg_r,2)+"R";
     return `<tr><td class="l">${REASON_LABEL[name]||name}</td>
-      <td>${b.trades}</td><td>${b.wins}/${b.losses}</td><td>${wr}</td>
+      <td>${b.trades}</td><td>${sh}</td>
       <td class="${b.pnl_usd>=0?'up':'dn'}">${money(b.pnl_usd)}</td>
       <td class="${(b.avg_r||0)>=0?'up':'dn'}">${ar}</td></tr>`;
-  }).join(""):'<tr><td class="l muted" colspan="6">확정 거래 없음</td></tr>';
+  }).join(""):'<tr><td class="l muted" colspan="5">확정 거래 없음</td></tr>';
 }
 
 // ---- 시그널 피드 · 전진검증 (기록 A + 성과추적 B) ----
@@ -1600,10 +1602,12 @@ function exportAnalysis(){
     "## 전진검증 요약",
     `- 전진 승률 **${P(s.win_rate)}** · 라이브 기대값 **${R(s.expectancy_r)}**`,
     `- 확정 ${s.wins||0}W / ${s.losses||0}L · 미결 ${s.open||0} · 진입 ${s.entered||0} / 차단 ${s.blocked||0}`,"",
-    "## 청산 사유별 승패","| 사유 | 건수 | 승/패 | 승률 | PnL$ | 평균R |","|---|---|---|---|---|---|"];
+    "## 청산 경로 분해 (경로=결과라 승률은 동어반복 — 비중·손익이 신호)",
+    "| 경로 | 건수 | 비중 | PnL$ | 평균R |","|---|---|---|---|---|"];
   const brRows=Object.entries(_lastBr||{});
-  if(brRows.length)brRows.forEach(([k,v])=>L.push(`| ${REASON_LABEL[k]||k} | ${v.trades} | ${v.wins}/${v.losses} | ${P(v.win_rate)} | ${(v.pnl_usd>=0?"+":"")+Number(v.pnl_usd||0).toFixed(2)} | ${R(v.avg_r)} |`));
-  else L.push("| (확정 거래 없음) | | | | | |");
+  const brTot=brRows.reduce((a,[,v])=>a+(v.trades||0),0);
+  if(brRows.length)brRows.forEach(([k,v])=>L.push(`| ${REASON_LABEL[k]||k} | ${v.trades} | ${brTot?((v.trades/brTot)*100).toFixed(0)+"%":"–"} | ${(v.pnl_usd>=0?"+":"")+Number(v.pnl_usd||0).toFixed(2)} | ${R(v.avg_r)} |`));
+  else L.push("| (확정 거래 없음) | | | | |");
   L.push("","## 차단 시그널 반사실",
     `- 판정: **${(VERDICT[cf.verdict]||["–"])[0]}**`,
     `- 진입 기대값 ${R(e.expectancy_r)} (승률 ${P(e.win_rate)}, ${e.resolved||0}건) · 차단 기대값 ${R(b.expectancy_r)} (승률 ${P(b.win_rate)}, ${b.resolved||0}건)`,"",
