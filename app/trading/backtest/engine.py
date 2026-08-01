@@ -247,10 +247,12 @@ def _gate_pass(m: dict) -> bool:
 
 def scan_universe(symbols: list[str], strategies: list[str],
                   base_cfg: TradingConfig, months: int = 0,
-                  on_progress=None) -> list[dict]:
+                  on_progress=None, daily_fallback: bool = False) -> list[dict]:
     """유니버스 전 심볼을 각 전략으로 백테스트 (디폴트 config). 심볼당 캔들을
     한 번만 받아 여러 전략에 공유하므로 다운로드가 심볼 수만큼만 발생한다.
-    expectancy_r 내림차순(게이트 통과 우선) 정렬된 행 리스트를 반환한다."""
+    expectancy_r 내림차순(게이트 통과 우선) 정렬된 행 리스트를 반환한다.
+    daily_fallback=True 면 월별 미게시 구간(직전 달)을 일별 아카이브로 메운다 —
+    라이브 구간을 그대로 재생해 레짐과 구현누수를 가르는 진단용 opt-in."""
     import copy
 
     from .metrics import compute
@@ -263,8 +265,10 @@ def scan_universe(symbols: list[str], strategies: list[str],
         try:
             if months > 0:
                 from .history import fetch_history
-                entry = fetch_history(spec.symbol, base_cfg.entry_interval, months)
-                htf = fetch_history(spec.symbol, base_cfg.htf_interval, months)
+                entry = fetch_history(spec.symbol, base_cfg.entry_interval, months,
+                                      daily_fallback=daily_fallback)
+                htf = fetch_history(spec.symbol, base_cfg.htf_interval, months,
+                                    daily_fallback=daily_fallback)
             else:
                 entry = fetch_klines(spec.symbol, base_cfg.entry_interval)
                 htf = fetch_klines(spec.symbol, base_cfg.htf_interval)
