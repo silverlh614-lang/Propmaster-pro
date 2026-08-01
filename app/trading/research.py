@@ -133,8 +133,8 @@ def behdark(months: int = 3, tf: str = "60"):
         raise HTTPException(422, "months must be 1..6")
     rows, errors = [], {}
     for sig in SIGNALS:
-        try:
-            candles = fetch_history(sig["symbol"], tf, months)
+        try:                                # 월별 미게시 구간은 일별로 메움
+            candles = fetch_history(sig["symbol"], tf, months, daily_fallback=True)
         except Exception as e:                      # noqa: BLE001 — 심볼별 격리
             errors[sig["symbol"]] = f"{type(e).__name__}: {e}"[:120]
             continue
@@ -142,11 +142,16 @@ def behdark(months: int = 3, tf: str = "60"):
             errors[sig["symbol"]] = "no archive months published"
             continue
         rows.append(judge_signal(sig, candles))
-    filled = [r for r in rows if r["r_ladder"] is not None or r["status"] == "SL"]
-    rs = [r["r_ladder"] for r in filled if r["r_ladder"] is not None]
+    # 체결 여부는 days_to_fill 로 판정한다 — 미결(OPEN)도 체결분이므로 분모에 든다
+    filled = [r for r in rows if r["days_to_fill"] is not None]
+    closed = [r for r in filled if not r["status"].startswith("OPEN")]
+    rs = [r["r_ladder"] if r["r_ladder"] is not None else -1.0 for r in closed]
     tp1 = sum(1 for r in filled if r["tps_hit"] >= 1)
     return {"signals": len(SIGNALS), "judged": len(rows), "errors": errors,
+            "no_data": sum(1 for r in rows if r["status"] == "NO_DATA"),
             "no_fill": sum(1 for r in rows if r["status"].startswith("NO_FILL")),
-            "filled": len(filled), "tp1_rate": round(tp1 / len(filled), 3) if filled else None,
+            "filled": len(filled), "open": len(filled) - len(closed),
+            "closed": len(closed),
+            "tp1_rate": round(tp1 / len(filled), 3) if filled else None,
             "avg_r_ladder": round(sum(rs) / len(rs), 3) if rs else None,
             "total_r": round(sum(rs), 3) if rs else None, "rows": rows}

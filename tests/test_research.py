@@ -113,6 +113,39 @@ def test_dataset_sanity():
     print("ok  embedded dataset sanity (17 signals, ordered zones/ladders)")
 
 
+def test_endpoint_aggregate_counts_open_as_filled():
+    """집계 회귀: 체결 후 미결(OPEN)도 체결분이므로 tp1_rate 분모에 들어가야 한다
+    (이걸 빼면 미결이 통째로 사라져 도달률이 부풀려진다)."""
+    import app.trading.research as R
+
+    fake = {"TP": [(1, "ALL_TP", 2, 1.5, 0.1)], "OPEN": [(1, "OPEN", 0, None, 0.2)]}
+    rows = [dict(symbol=k, side="LONG", status=s, tps_hit=t,
+                 r_ladder=r, days_to_fill=d)
+            for k, v in fake.items() for _, s, t, r, d in v]
+    rows.append(dict(symbol="X", side="LONG", status="NO_FILL", tps_hit=0,
+                     r_ladder=None, days_to_fill=None))
+
+    orig = R.SIGNALS
+    R.SIGNALS = rows                        # fetch 를 타지 않도록 판정을 대체
+    try:
+        R.judge_signal_orig = R.judge_signal
+        R.judge_signal = lambda sig, candles: dict(sig)
+        import app.trading.backtest.history as H
+        fh = H.fetch_history
+        H.fetch_history = lambda *a, **k: [object()]
+        try:
+            out = R.behdark()
+        finally:
+            H.fetch_history = fh
+            R.judge_signal = R.judge_signal_orig
+    finally:
+        R.SIGNALS = orig
+    assert out["filled"] == 2 and out["open"] == 1 and out["closed"] == 1, out
+    assert out["tp1_rate"] == 0.5, out      # 2건 체결 중 1건만 TP1 — 1.0 아님
+    assert out["no_fill"] == 1 and out["avg_r_ladder"] == 1.5, out
+    print("ok  endpoint aggregate (OPEN counted as filled, tp1_rate honest)")
+
+
 if __name__ == "__main__":
     test_ts_kst_conversion()
     test_fill_tp1_then_be()
@@ -123,4 +156,5 @@ if __name__ == "__main__":
     test_short_symmetry()
     test_pre_signal_bars_ignored_and_open()
     test_dataset_sanity()
+    test_endpoint_aggregate_counts_open_as_filled()
     print("\nall research-judge tests passed ✅")

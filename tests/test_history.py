@@ -157,6 +157,54 @@ def test_history_archive():
     print("ok  vision history archive (months, parse, cache)")
 
 
+def test_daily_fallback():
+    """월별 zip 미게시 달은 daily_fallback=True 일 때만 일별 zip 으로 메워지고,
+    진행 중인 달의 끝난 날들도 이어붙는다 (기본 경로는 월별 그대로)."""
+    import datetime as dtm
+    import io
+    import zipfile
+
+    from app.trading.backtest import history as H
+
+    # 끝난 날들만, 오늘(진행 중)은 제외
+    assert H.day_list("2026-08", dtm.date(2026, 8, 4)) == [
+        "2026-08-01", "2026-08-02", "2026-08-03"]
+    assert H.day_list("2026-08", dtm.date(2026, 8, 1)) == []
+    assert len(H.day_list("2026-07", dtm.date(2026, 8, 4))) == 31   # 지난 달 전체
+
+    def make_zip(ts):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("k.csv", f"{ts},100,110,90,105,7,0,0,0,0,0,0")
+        return buf.getvalue()
+
+    seen = []
+
+    def fake_download(url):
+        seen.append(url)
+        if "/monthly/" in url:
+            return None                              # 두 달 다 미게시
+        day = url.rsplit("-", 3)[-3:]                # YYYY-MM-DD 조각
+        d = dtm.date(int(day[0]), int(day[1]), int(day[2].split(".")[0]))
+        return make_zip(int(dtm.datetime(d.year, d.month, d.day).timestamp()) * 1000)
+
+    orig, today = H._download, dtm.date(2026, 8, 3)
+    H._download = fake_download
+    try:
+        # 기본값: 일별로 내려가지 않는다 — 월별 404 면 그냥 빈 결과
+        assert H.fetch_history("FAKEUSDT", "60", 1, today=today) == []
+        assert all("/monthly/" in u for u in seen), seen
+        seen.clear()
+        # opt-in: 7월(31일) + 진행 중인 8월의 끝난 2일 = 33봉
+        cs = H.fetch_history("FAKEUSDT", "60", 1, today=today, daily_fallback=True)
+        assert len(cs) == 33, len(cs)
+        assert [c.ts_ms for c in cs] == sorted(c.ts_ms for c in cs)
+        assert sum(1 for u in seen if "/daily/" in u) == 33, seen[:3]
+    finally:
+        H._download = orig
+    print("ok  vision daily fallback (opt-in only, running month appended)")
+
+
 def test_replay_windowed_equals_full():
     """The sliding-window/incremental-HTF replay must trade identically to
     the naive full-slice version (regression for the months-mode speedup)."""
@@ -236,6 +284,7 @@ if __name__ == "__main__":
     test_kline_source_failover()
     test_kline_cross_validation()
     test_history_archive()
+    test_daily_fallback()
     test_replay_windowed_equals_full()
     test_backtest_fetch_fallback()
     test_sweep_grid()
