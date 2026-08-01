@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from .prop.api import router as prop_router
 from .trading.api import router as trading_router
 from .trading.bot import MANAGER as TRADING_MANAGER
+from .trading.research import router as research_router
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -56,6 +57,7 @@ app = FastAPI(
 )
 app.include_router(trading_router)
 app.include_router(prop_router)
+app.include_router(research_router)  # 연구 전용 — 외부 시그널 사후검증, 매매 무관
 
 
 @app.get("/healthz")
