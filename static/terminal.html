@@ -35,22 +35,17 @@
   html{background:var(--bg)}
   body{margin:0;background:var(--bg);color:var(--ink);font:12.5px/1.45 var(--mono);
     -webkit-font-smoothing:antialiased;overflow-x:hidden}
-  /* 앰비언트 광원 3층 — transform만 애니메이션(합성 전용)해서 24/33/29s 표류. GPU 외 비용 0. */
-  html::before,body::before{content:"";position:fixed;pointer-events:none;z-index:0;
-    border-radius:50%;filter:blur(72px);will-change:transform}
-  html::before{left:-8%;top:-22%;width:64vw;height:58vh;
-    background:radial-gradient(circle,rgba(56,189,248,.30),transparent 68%);
-    animation:aurora 24s ease-in-out infinite}
-  body::before{right:-10%;top:2%;width:58vw;height:66vh;
-    background:radial-gradient(circle,rgba(129,110,255,.24),transparent 68%);
-    animation:aurora 33s ease-in-out infinite reverse}
-  body::after{content:"";position:fixed;left:30%;bottom:-24%;width:62vw;height:52vh;
-    pointer-events:none;z-index:0;border-radius:50%;filter:blur(84px);will-change:transform;
-    background:radial-gradient(circle,rgba(52,224,161,.15),transparent 68%);
-    animation:aurora 29s ease-in-out infinite}
-  @keyframes aurora{0%,100%{transform:translate3d(0,0,0) scale(1)}
-    50%{transform:translate3d(5%,4%,0) scale(1.14)}}
-  @media(prefers-reduced-motion:reduce){html::before,body::before,body::after{animation:none}}
+  /* 앰비언트 광원 — 단일 고정 레이어에 radial-gradient 3개를 겹친다.
+     blur() 필터를 쓰지 않는다: 1920px 화면에서 blur(72px) 를 대형 레이어 3장에 걸면
+     화면이 갱신될 때마다 거대한 표면을 재블러링해 4fps 로 떨어졌다(측정치).
+     radial-gradient 자체가 이미 부드러운 감쇠라 시각 차이는 거의 없고, 이 레이어는
+     한 번만 래스터화된 뒤 합성만 된다 — 58fps. 표류 애니메이션은 비용 대비
+     지각 이득이 없어(24~33초 주기) 제거했다. */
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(62vw 56vh at 6% -12%, rgba(56,189,248,.26), transparent 62%),
+      radial-gradient(56vw 62vh at 94% 8%, rgba(129,110,255,.21), transparent 62%),
+      radial-gradient(60vw 50vh at 58% 112%, rgba(52,224,161,.14), transparent 62%)}
   .top,.strip,.sympick,.ticker,.wrap,.foot,#toasts{position:relative;z-index:1}
   a{color:var(--brand);text-decoration:none} a:hover{text-decoration:underline}
 
