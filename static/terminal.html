@@ -424,7 +424,12 @@
        6줄로 첫 화면 40%를 먹던 문제 제거 (계좌·챌린지가 바로 보이게) */
     .strip .symrow{flex:1 1 100%;flex-wrap:nowrap!important} /* 인라인 wrap 무효화 */
     .symtabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
-      -webkit-overflow-scrolling:touch;flex:1 1 auto}
+      -webkit-overflow-scrolling:touch;flex:1 1 auto;
+      /* 스크롤바를 숨겼으니 "오른쪽에 더 있다"는 유일한 단서는 이 페이드다.
+         끝까지 밀면 .atend 로 걷어내 마지막 칩이 흐려지지 않게 한다. */
+      mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent);
+      -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent)}
+    .symtabs.atend{mask-image:none;-webkit-mask-image:none}
     .symtabs::-webkit-scrollbar{display:none}
     .symtabs button{flex:none}
     #symPickBtn{flex:none}
@@ -872,7 +877,21 @@ function renderSymTabs(){
   if(!SYMS.includes(SYM))SYM=SYMS[0]||"BTC";
   box.innerHTML=SYMS.map(k=>`<button class="${k===SYM?'on':''}" onclick="setSym('${k}')">${k}</button>`).join("");
   $("fSym").textContent=SYM+"USDT";$("chTf").textContent=SYM+"USDT";
+  symFadeSync();                          // 심볼 수가 바뀌면 페이드 필요 여부도 바뀐다
 }
+// 모바일 심볼 탭은 가로 스크롤 스트립(스크롤바 숨김) — 끝에 닿았는지에 따라
+// 오른쪽 페이드를 켜고 끈다. 스크롤이 없으면(데스크톱 wrap) 항상 끈다.
+function symFadeSync(){
+  const box=$("symTabs");if(!box)return;
+  const end=box.scrollLeft+box.clientWidth>=box.scrollWidth-2;
+  box.classList.toggle("atend",end);
+}
+(function(){
+  const box=$("symTabs");if(!box)return;
+  box.addEventListener("scroll",symFadeSync,{passive:true});
+  addEventListener("resize",symFadeSync);
+  symFadeSync();
+})();
 function setSym(k){
   if(k===SYM)return;
   SYM=k;localStorage.setItem("terminal_sym",k);renderSymTabs();
