@@ -26,6 +26,9 @@ from pathlib import Path
 from ..models import Candle
 
 VISION_BASE = "https://data.binance.vision/data/futures/um/monthly/klines"
+# 월별 아카이브는 익월 초에야 게시된다 — 그 공백은 일별 아카이브로만 메울 수 있다
+# (daily_fallback=True 를 명시한 호출자만 사용: 백테스트 기본 경로는 월별 그대로).
+DAILY_BASE = "https://data.binance.vision/data/futures/um/daily/klines"
 
 # engine interval code -> vision folder name
 _VISION_IV = {"1": "1m", "3": "3m", "5": "5m", "15": "15m", "30": "30m",
@@ -47,6 +50,16 @@ def month_list(months: int, today: dt.date | None = None) -> list[str]:
         cur = (cur - dt.timedelta(days=1)).replace(day=1)
         out.append(cur.strftime("%Y-%m"))
     return out[::-1]
+
+
+def day_list(month: str, today: dt.date) -> list[str]:
+    """'YYYY-MM' 안의 FINISHED 일자들 'YYYY-MM-DD' (오늘은 제외 — 진행 중)."""
+    y, m = (int(x) for x in month.split("-"))
+    out, d = [], dt.date(y, m, 1)
+    while d.month == m and d < today:
+        out.append(d.isoformat())
+        d += dt.timedelta(days=1)
+    return out
 
 
 def _download(url: str) -> bytes | None:
@@ -78,14 +91,39 @@ def parse_zip(data: bytes) -> list[Candle]:
     return out
 
 
+def _fetch_daily(symbol: str, iv: str, month: str,
+                 today: dt.date) -> list[Candle]:
+    """월별 zip 이 아직 없는 달을 일별 zip 으로 메운다 (8병렬 — 한 달 31요청)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(day: str) -> list[Candle]:
+        cache = HISTORY_DIR / f"{symbol}-{iv}-{day}.zip"
+        if cache.exists():
+            return parse_zip(cache.read_bytes())
+        data = _download(f"{DAILY_BASE}/{symbol}/{iv}/{symbol}-{iv}-{day}.zip")
+        if data is None:
+            return []                      # 그날 아카이브 없음 — 건너뜀
+        cache.write_bytes(data)
+        return parse_zip(data)
+
+    out: list[Candle] = []
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for cs in ex.map(one, day_list(month, today)):
+            out.extend(cs)
+    return out
+
+
 def fetch_history(symbol: str, interval_code: str, months: int,
-                  today: dt.date | None = None) -> list[Candle]:
+                  today: dt.date | None = None,
+                  daily_fallback: bool = False) -> list[Candle]:
     """Candles for the last `months` finished months, oldest→newest,
-    deduped on open time. Downloads once, then serves from the cache."""
+    deduped on open time. Downloads once, then serves from the cache.
+    daily_fallback=True 면 월별 미게시 달을 일별 아카이브로 메운다."""
     iv = _VISION_IV.get(interval_code)
     if iv is None:
         raise ValueError(f"unsupported interval {interval_code}")
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    today = today or dt.date.today()
     bars: dict[int, Candle] = {}
     for m in month_list(months, today):
         cache = HISTORY_DIR / f"{symbol}-{iv}-{m}.zip"
@@ -93,9 +131,15 @@ def fetch_history(symbol: str, interval_code: str, months: int,
             data = cache.read_bytes()
         else:
             data = _download(f"{VISION_BASE}/{symbol}/{iv}/{symbol}-{iv}-{m}.zip")
-            if data is None:
-                continue                   # month not published — skip
+            if data is None:               # month not published yet
+                if daily_fallback:
+                    for c in _fetch_daily(symbol, iv, m, today):
+                        bars[c.ts_ms] = c
+                continue
             cache.write_bytes(data)
         for c in parse_zip(data):
+            bars[c.ts_ms] = c
+    if daily_fallback:                     # 진행 중인 달의 끝난 날들까지 이어붙임
+        for c in _fetch_daily(symbol, iv, today.strftime("%Y-%m"), today):
             bars[c.ts_ms] = c
     return [bars[k] for k in sorted(bars)]
